@@ -4,7 +4,7 @@ import {
   Wallet, PiggyBank, CreditCard,
   type LucideIcon,
 } from "lucide-react";
-import type { AccountType, Frequency, TransactionStatus } from "./types";
+import type { AccountType, RecurUnit, TransactionStatus } from "./types";
 
 export const T = {
   bg: "#FFFFFF",
@@ -59,16 +59,15 @@ export const ACCOUNT_TYPES: AccountTypeInfo[] = [
 export const accountTypeInfo = (value: AccountType | undefined): AccountTypeInfo =>
   ACCOUNT_TYPES.find((t) => t.value === value) || ACCOUNT_TYPES[0];
 
-export interface FrequencyInfo {
-  value: Frequency;
+export interface RecurUnitInfo {
+  value: RecurUnit;
   label: string;
-  perMonth: number;
 }
 
-export const FREQUENCIES: FrequencyInfo[] = [
-  { value: "monthly", label: "Mensual", perMonth: 1 },
-  { value: "weekly", label: "Semanal", perMonth: 52 / 12 },
-  { value: "yearly", label: "Anual", perMonth: 1 / 12 },
+export const RECUR_UNITS: RecurUnitInfo[] = [
+  { value: "days", label: "Dias" },
+  { value: "months", label: "Meses" },
+  { value: "years", label: "Anos" },
 ];
 
 export const inputStyle: CSSProperties = {

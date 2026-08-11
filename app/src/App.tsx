@@ -1,15 +1,18 @@
 import { useMemo, useState } from "react";
-import { FREQUENCIES, T } from "./theme";
+import { T } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
-import { monthKey, todayISO } from "./lib/format";
+import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
+import { freqPerMonth, monthKey, todayISO } from "./lib/format";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
-import { exportTransactionsCsv, pickAndImportCsv } from "./lib/csv";
+import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type ID, type Transaction } from "./types";
 import { Sidebar, type MainView } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
+import { BulkEditForm } from "./components/BulkEditForm";
+import { SidePanel } from "./components/SidePanel";
 import { TransactionsView, type Filters } from "./components/TransactionsView";
 import { RecurringView } from "./components/RecurringView";
 import { CategoriesView } from "./components/CategoriesView";
@@ -25,6 +28,9 @@ export default function App() {
   const [filters, setFilters] = useState<Filters>({ search: "", category: "all", type: "all", from: "", to: "" });
   const [txDraft, setTxDraft] = useState<TxDraft | null>(null);
   const [evoRange, setEvoRange] = useState<EvoRange>({ from: "", to: "" });
+  const [selectedIds, setSelectedIds] = useState<Set<ID>>(new Set());
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
 
   const accounts = activeDoc?.accounts ?? [];
   const transactions = activeDoc?.transactions ?? [];
@@ -84,9 +90,7 @@ export default function App() {
     let net = 0;
     recurringList.forEach((t) => {
       if (!t.recurring) return;
-      const freq = FREQUENCIES.find((f) => f.value === t.recurring!.frequency);
-      const perMonth = freq ? freq.perMonth : 1;
-      net += (t.type === "income" ? 1 : -1) * Number(t.amount) * perMonth;
+      net += (t.type === "income" ? 1 : -1) * Number(t.amount) * freqPerMonth(t.recurring);
     });
     return net;
   }, [recurringList]);
@@ -124,13 +128,38 @@ export default function App() {
     setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, color } : c)));
   }
   function addSubcategory(catId: ID, name: string, color: string) {
-    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([{ id: genId(), name, color }]) } : c)));
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([{ id: genId(), name, color, subcategories: [] }]) } : c)));
   }
   function removeSubcategory(catId: ID, subId: ID) {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
   }
   function setSubcategoryColor(catId: ID, subId: ID, color: string) {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.map((s) => (s.id === subId ? { ...s, color } : s)) } : c)));
+  }
+  function addSubSubcategory(catId: ID, subId: ID, name: string, color: string) {
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id !== catId
+          ? c
+          : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.concat([{ id: genId(), name, color, subcategories: [] }]) })) },
+      ),
+    );
+  }
+  function removeSubSubcategory(catId: ID, subId: ID, subsubId: ID) {
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id !== catId ? c : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.filter((ss) => ss.id !== subsubId) })) },
+      ),
+    );
+  }
+  function setSubSubcategoryColor(catId: ID, subId: ID, subsubId: ID, color: string) {
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id !== catId
+          ? c
+          : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.map((ss) => (ss.id === subsubId ? { ...ss, color } : ss)) })) },
+      ),
+    );
   }
   function setBudget(catId: ID, value: number | undefined) {
     setBudgets((prev) => ({ ...prev, [catId]: value as number }));
@@ -147,7 +176,7 @@ export default function App() {
   async function handleImport() {
     if (!activeDoc) return;
     try {
-      const result = await pickAndImportCsv(activeDoc);
+      const result = await pickAndImportIcomptaCsv(activeDoc);
       if (!result) return;
       setAccounts(() => result.accounts);
       setCategories(() => result.categories);
@@ -166,13 +195,30 @@ export default function App() {
     if (activeAccount === id) setActiveAccount("all");
   }
 
+  function findLastCategoryForName(name: string): Transaction | null {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const matches = transactions
+      .filter((t) => t.type !== "transfer" && t.type !== "transfer_in" && t.name.toLowerCase() === trimmed.toLowerCase())
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    return matches[0] || null;
+  }
+  function handleDescriptionAutocomplete(name: string) {
+    if (!txDraft || txDraft.id) return; // solo al crear, no al editar
+    const match = findLastCategoryForName(name);
+    if (!match || match.type === "transfer" || match.type === "transfer_in") return;
+    setTxDraft((d) => (d ? { ...d, categoryId: match.categoryId, subcategoryId: match.subcategoryId, subsubcategoryId: match.subsubcategoryId } : d));
+  }
+
   function openNewTxForm() {
     if (!activeDoc || !activeDocId) return;
+    setShowBulkEdit(false);
     setTxDraft(emptyDraft(accounts, activeDocId, categories));
     setShowTxForm(true);
   }
   function openScheduledForm() {
     if (!activeDoc || !activeDocId) return;
+    setShowBulkEdit(false);
     setTxDraft({ ...emptyDraft(accounts, activeDocId, categories), recurringOn: true, status: "programado" });
     setShowTxForm(true);
   }
@@ -192,7 +238,7 @@ export default function App() {
     if (!txDraft || !activeDoc || !activeDocId) return;
     if (!txDraft.name || !txDraft.amount || !txDraft.accountId) return;
     const amount = Number(txDraft.amount);
-    const recurring = txDraft.recurringOn ? { frequency: txDraft.frequency } : null;
+    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit } : null;
 
     if (txDraft.type === "transfer") {
       if (!txDraft.toAccountId) return;
@@ -204,14 +250,14 @@ export default function App() {
       const crossDoc = txDraft.toDocId !== activeDocId;
 
       const legTransfer: Transaction = {
-        id: genId(), seq: genSeq(), accountId: txDraft.accountId, date: txDraft.date, name: txDraft.name || "Transferencia",
-        categoryId: null, subcategoryId: null, amount, type: "transfer", recurring, transferGroupId: groupId, status: txDraft.status,
+        id: genId(), seq: genSeq(), accountId: txDraft.accountId, date: txDraft.date, name: txDraft.name || "Transferencia", comment: txDraft.comment,
+        categoryId: null, subcategoryId: null, subsubcategoryId: null, amount, type: "transfer", recurring, transferGroupId: groupId, status: txDraft.status,
         toAccountId: txDraft.toAccountId, toDocId: txDraft.toDocId,
         toLabel: crossDoc ? (targetDoc ? targetDoc.name : "-") + " - " + targetAccName : targetAccName,
       };
       const legTransferIn: Transaction = {
-        id: genId(), seq: genSeq(), accountId: txDraft.toAccountId, date: txDraft.date, name: txDraft.name || "Transferencia",
-        categoryId: null, subcategoryId: null, amount, type: "transfer_in", recurring, transferGroupId: groupId, status: txDraft.status,
+        id: genId(), seq: genSeq(), accountId: txDraft.toAccountId, date: txDraft.date, name: txDraft.name || "Transferencia", comment: txDraft.comment,
+        categoryId: null, subcategoryId: null, subsubcategoryId: null, amount, type: "transfer_in", recurring, transferGroupId: groupId, status: txDraft.status,
         fromAccountId: txDraft.accountId, fromDocId: activeDocId,
         fromLabel: crossDoc ? activeDoc.name + " - " + sourceAccName : sourceAccName,
       };
@@ -258,8 +304,10 @@ export default function App() {
                 accountId: txDraft.accountId!,
                 date: txDraft.date,
                 name: txDraft.name,
+                comment: txDraft.comment,
                 categoryId: txDraft.categoryId,
                 subcategoryId: txDraft.subcategoryId,
+                subsubcategoryId: txDraft.subsubcategoryId,
                 amount,
                 type: txDraft.type,
                 recurring,
@@ -272,8 +320,9 @@ export default function App() {
       setTransactions((prev) =>
         prev.concat([
           {
-            id: genId(), seq: genSeq(), accountId: txDraft.accountId!, date: txDraft.date, name: txDraft.name,
-            categoryId: txDraft.categoryId, subcategoryId: txDraft.subcategoryId, amount, type: txDraft.type, recurring, status: txDraft.status,
+            id: genId(), seq: genSeq(), accountId: txDraft.accountId!, date: txDraft.date, name: txDraft.name, comment: txDraft.comment,
+            categoryId: txDraft.categoryId, subcategoryId: txDraft.subcategoryId, subsubcategoryId: txDraft.subsubcategoryId,
+            amount, type: txDraft.type, recurring, status: txDraft.status,
           } as Transaction,
         ]),
       );
@@ -283,6 +332,7 @@ export default function App() {
 
   function editTx(t: Transaction) {
     if (!activeDocId) return;
+    setShowBulkEdit(false);
     if (t.type === "transfer" || t.type === "transfer_in") {
       const isIncoming = t.type === "transfer_in";
       setTxDraft({
@@ -291,14 +341,15 @@ export default function App() {
         accountId: isIncoming ? t.fromAccountId : t.accountId,
         toDocId: isIncoming ? activeDocId : t.toDocId || activeDocId,
         toAccountId: isIncoming ? t.accountId : t.toAccountId,
-        date: t.date, name: t.name, categoryId: null, subcategoryId: null, amount: String(t.amount),
-        type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, frequency: t.recurring ? t.recurring.frequency : "monthly",
+        date: t.date, name: t.name, comment: t.comment || "", categoryId: null, subcategoryId: null, subsubcategoryId: null, amount: String(t.amount),
+        type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
       });
     } else {
       setTxDraft({
         id: t.id, accountId: t.accountId, toDocId: activeDocId, toAccountId: accounts[0]?.id ?? null,
-        date: t.date, name: t.name, categoryId: t.categoryId, subcategoryId: t.subcategoryId, amount: String(t.amount),
-        type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, frequency: t.recurring ? t.recurring.frequency : "monthly",
+        date: t.date, name: t.name, comment: t.comment || "", categoryId: t.categoryId, subcategoryId: t.subcategoryId, subsubcategoryId: t.subsubcategoryId,
+        amount: String(t.amount),
+        type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
       });
     }
     setShowTxForm(true);
@@ -340,6 +391,69 @@ export default function App() {
     }
   }
 
+  function toggleSelect(id: ID) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function duplicateSelected() {
+    const items = transactions.filter((t) => selectedIds.has(t.id) && t.type !== "transfer" && t.type !== "transfer_in");
+    if (items.length === 0) return;
+    setTransactions((prev) => prev.concat(items.map((t) => ({ ...t, id: genId(), seq: genSeq(), status: "pendiente" as const }))));
+    setSelectedIds(new Set());
+  }
+
+  function deleteSelected() {
+    const toDelete = transactions.filter((t) => selectedIds.has(t.id));
+    const groupIds = new Set(toDelete.filter(isTransferTx).map((t) => t.transferGroupId));
+    const plainIds = new Set(toDelete.filter((t) => !isTransferTx(t)).map((t) => t.id));
+    const fn = (d: NonNullable<typeof activeDoc>) => ({
+      ...d,
+      transactions: d.transactions.filter((x) => !((isTransferTx(x) && groupIds.has(x.transferGroupId)) || plainIds.has(x.id))),
+    });
+    // Las transferencias seleccionadas pueden apuntar a otro documento: hay que limpiar ese grupo alli tambien.
+    const otherDocIds = new Set(toDelete.filter(isTransferTx).map((t) => otherDocIdOf(t)));
+    applyToDocs(Array.from(new Set([activeDocId as ID, ...otherDocIds])).map((docId) => ({ docId, fn })));
+    setSelectedIds(new Set());
+  }
+
+  function openBulkEdit() {
+    setShowTxForm(false);
+    setBulkEdit(emptyBulkEdit(accounts, categories));
+    setShowBulkEdit(true);
+  }
+
+  function applyBulkEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!activeDocId) return;
+    const selectedTx = transactions.filter((t) => selectedIds.has(t.id));
+    const groupIds = new Set(selectedTx.filter(isTransferTx).map((t) => t.transferGroupId));
+    updateDoc(activeDocId, (d) => {
+      const txs = d.transactions.map((t) => {
+        const isSelected = selectedIds.has(t.id) || (isTransferTx(t) && groupIds.has(t.transferGroupId));
+        if (!isSelected) return t;
+        const isTransferLeg = isTransferTx(t);
+        const patch: Partial<Transaction> = {};
+        if (bulkEdit.dateOn) patch.date = bulkEdit.date;
+        if (bulkEdit.statusOn) patch.status = bulkEdit.status;
+        if (bulkEdit.accountOn && !isTransferLeg && bulkEdit.accountId) patch.accountId = bulkEdit.accountId;
+        if (bulkEdit.categoryOn && !isTransferLeg) {
+          (patch as Record<string, unknown>).categoryId = bulkEdit.categoryId;
+          (patch as Record<string, unknown>).subcategoryId = bulkEdit.subcategoryId;
+          (patch as Record<string, unknown>).subsubcategoryId = bulkEdit.subsubcategoryId;
+        }
+        return { ...t, ...patch } as Transaction;
+      });
+      return { ...d, transactions: txs };
+    });
+    setShowBulkEdit(false);
+    setSelectedIds(new Set());
+  }
+
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.textMuted, fontFamily: "Inter, sans-serif", fontSize: 13 }}>
@@ -375,62 +489,40 @@ export default function App() {
               recurringCount={recurringList.length}
               categoriesCount={categories.length}
             />
-            <main style={{ background: T.bg, display: "flex", flexDirection: "column" }}>
-              {view !== "transactions" && showTxForm && txDraft && (
-                <TransactionForm
-                  txDraft={txDraft}
-                  setTxDraft={(fn) => setTxDraft((d) => (d ? fn(d) : d))}
-                  accounts={accounts}
-                  categories={categories}
-                  documents={documents}
-                  activeDocId={activeDoc.id}
-                  onSubmit={submitTx}
-                  onCancel={resetDraft}
-                />
-              )}
+            <main style={{ background: T.bg, display: "flex", flexDirection: "row", minWidth: 0 }}>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+                {view === "recurring" && (
+                  <RecurringView
+                    docName={activeDoc.name}
+                    recurringList={recurringList}
+                    netPerMonth={forecastNetPerMonth}
+                    categories={categories}
+                    accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
+                    onNewScheduled={openScheduledForm}
+                  />
+                )}
 
-              {view === "recurring" && (
-                <RecurringView
-                  docName={activeDoc.name}
-                  recurringList={recurringList}
-                  netPerMonth={forecastNetPerMonth}
-                  categories={categories}
-                  accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
-                  onNewScheduled={openScheduledForm}
-                />
-              )}
+                {view === "categories" && (
+                  <CategoriesView
+                    docName={activeDoc.name}
+                    categories={categories}
+                    budgets={budgets}
+                    spendByCategory={byCategory}
+                    maxSpend={maxCat}
+                    addCategory={addCategory}
+                    removeCategory={removeCategory}
+                    setCategoryColor={setCategoryColor}
+                    addSubcategory={addSubcategory}
+                    removeSubcategory={removeSubcategory}
+                    setSubcategoryColor={setSubcategoryColor}
+                    addSubSubcategory={addSubSubcategory}
+                    removeSubSubcategory={removeSubSubcategory}
+                    setSubSubcategoryColor={setSubSubcategoryColor}
+                    setBudget={setBudget}
+                  />
+                )}
 
-              {view === "categories" && (
-                <CategoriesView
-                  docName={activeDoc.name}
-                  categories={categories}
-                  budgets={budgets}
-                  spendByCategory={byCategory}
-                  maxSpend={maxCat}
-                  addCategory={addCategory}
-                  removeCategory={removeCategory}
-                  setCategoryColor={setCategoryColor}
-                  addSubcategory={addSubcategory}
-                  removeSubcategory={removeSubcategory}
-                  setSubcategoryColor={setSubcategoryColor}
-                  setBudget={setBudget}
-                />
-              )}
-
-              {view === "transactions" && (
-                <>
-                  {showTxForm && txDraft && (
-                    <TransactionForm
-                      txDraft={txDraft}
-                      setTxDraft={(fn) => setTxDraft((d) => (d ? fn(d) : d))}
-                      accounts={accounts}
-                      categories={categories}
-                      documents={documents}
-                      activeDocId={activeDoc.id}
-                      onSubmit={submitTx}
-                      onCancel={resetDraft}
-                    />
-                  )}
+                {view === "transactions" && (
                   <TransactionsView
                     title={activeAccount === "all" ? "Todas las cuentas" : accounts.find((a) => a.id === activeAccount)?.name ?? "-"}
                     monthIncome={monthIncome}
@@ -441,6 +533,8 @@ export default function App() {
                     setFilters={setFilters}
                     categories={categories}
                     filteredTx={filteredTx}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
                     resultingBalance={resultingBalance}
                     onEdit={editTx}
                     onRemove={removeTx}
@@ -448,11 +542,47 @@ export default function App() {
                     onAdd={openNewTxForm}
                     onExport={handleExport}
                     onImport={handleImport}
+                    onDuplicateSelected={duplicateSelected}
+                    onBulkEditSelected={openBulkEdit}
+                    onDeleteSelected={deleteSelected}
                     footerLabel="Total cuenta actual"
                     footerAmount={activeAccount === "all" ? totalBalance : balances[activeAccount] || 0}
                     chart={<BalanceChart points={evoPoints} ticks={evoTicks} evoRange={evoRange} setEvoRange={setEvoRange} />}
                   />
-                </>
+                )}
+              </div>
+
+              {(showTxForm || showBulkEdit) && (
+                <SidePanel
+                  title={showBulkEdit ? "Editar " + selectedIds.size + " movimientos" : txDraft?.id ? "Editar movimiento" : "Nuevo movimiento"}
+                  onClose={() => (showBulkEdit ? setShowBulkEdit(false) : resetDraft())}
+                >
+                  {showBulkEdit ? (
+                    <BulkEditForm
+                      bulkEdit={bulkEdit}
+                      setBulkEdit={(fn) => setBulkEdit(fn)}
+                      accounts={accounts}
+                      categories={categories}
+                      selectedCount={selectedIds.size}
+                      onSubmit={applyBulkEdit}
+                      onCancel={() => setShowBulkEdit(false)}
+                    />
+                  ) : (
+                    txDraft && (
+                      <TransactionForm
+                        txDraft={txDraft}
+                        setTxDraft={(fn) => setTxDraft((d) => (d ? fn(d) : d))}
+                        accounts={accounts}
+                        categories={categories}
+                        documents={documents}
+                        activeDocId={activeDoc.id}
+                        onDescriptionChange={handleDescriptionAutocomplete}
+                        onSubmit={submitTx}
+                        onCancel={resetDraft}
+                      />
+                    )
+                  )}
+                </SidePanel>
               )}
             </main>
           </>

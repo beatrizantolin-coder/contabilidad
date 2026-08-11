@@ -5,6 +5,8 @@ import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
 
+const GRID_COLUMNS = "74px 118px 1fr 140px 100px 100px 56px";
+
 export interface Filters {
   search: string;
   category: ID | "all";
@@ -23,6 +25,8 @@ export function TransactionsView({
   setFilters,
   categories,
   filteredTx,
+  selectedIds,
+  onToggleSelect,
   resultingBalance,
   onEdit,
   onRemove,
@@ -30,6 +34,9 @@ export function TransactionsView({
   onAdd,
   onExport,
   onImport,
+  onDuplicateSelected,
+  onBulkEditSelected,
+  onDeleteSelected,
   footerLabel,
   footerAmount,
   chart,
@@ -43,6 +50,8 @@ export function TransactionsView({
   setFilters: (fn: (f: Filters) => Filters) => void;
   categories: Category[];
   filteredTx: Transaction[];
+  selectedIds: Set<ID>;
+  onToggleSelect: (id: ID) => void;
   resultingBalance: (t: Transaction) => number;
   onEdit: (t: Transaction) => void;
   onRemove: (t: Transaction) => void;
@@ -50,6 +59,9 @@ export function TransactionsView({
   onAdd: () => void;
   onExport: () => void;
   onImport: () => void;
+  onDuplicateSelected: () => void;
+  onBulkEditSelected: () => void;
+  onDeleteSelected: () => void;
   footerLabel: string;
   footerAmount: number;
   chart?: ReactNode;
@@ -115,11 +127,29 @@ export function TransactionsView({
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", background: "#EAF1FC", borderBottom: "1px solid " + T.border }}>
+          <span style={{ fontSize: 12.5, color: T.accent, fontWeight: 600 }}>
+            {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"}
+          </span>
+          <button onClick={onDuplicateSelected} style={smallBtn(false)}>
+            Duplicar
+          </button>
+          <button onClick={onBulkEditSelected} style={smallBtn(false)}>
+            Editar
+          </button>
+          <button onClick={onDeleteSelected} style={{ ...smallBtn(false), color: T.expense, borderColor: T.expense }}>
+            Eliminar
+          </button>
+        </div>
+      )}
+
       <div style={{ flex: 1, overflow: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "70px 40px 1fr 110px 110px 56px", padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
           <span>Fecha</span>
           <span>Estado</span>
           <span>Descripcion</span>
+          <span>Comentario</span>
           <span style={{ textAlign: "right" }}>Importe</span>
           <span style={{ textAlign: "right" }}>Saldo</span>
           <span />
@@ -132,17 +162,30 @@ export function TransactionsView({
           const isTransferIn = t.type === "transfer_in";
           const isTransfer = isTransferOut || isTransferIn;
           const color = t.type === "income" ? T.income : isTransfer ? T.transfer : T.expense;
-          const info = isTransfer ? { name: "Transferencia", color: T.transfer } : catInfo(categories, t.categoryId, t.subcategoryId);
+          const info = isTransfer ? { name: "Transferencia", color: T.transfer } : catInfo(categories, t.categoryId, t.subcategoryId, t.subsubcategoryId);
           const st = statusInfo(t.status);
           const StIcon = st.icon;
           const voided = t.status === "anulado";
+          const selected = selectedIds.has(t.id);
           return (
-            <div key={t.id} className="accrow" style={{ display: "grid", gridTemplateColumns: "70px 40px 1fr 110px 110px 56px", alignItems: "center", padding: "8px 20px", fontSize: 13, borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : 1 }}>
+            <div
+              key={t.id}
+              className="accrow"
+              onClick={() => onToggleSelect(t.id)}
+              style={{
+                display: "grid", gridTemplateColumns: GRID_COLUMNS, alignItems: "center", padding: "8px 20px", fontSize: 13,
+                borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
+              }}
+            >
               <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>
                 {shortDate(t.date)}
               </span>
-              <button onClick={() => onCycleStatus(t)} title={st.label + " - clic para cambiar"} style={{ display: "flex", alignItems: "center", color: st.color, background: "none", border: "none", padding: 2 }}>
-                <StIcon size={14} />
+              <button
+                onClick={(e) => { e.stopPropagation(); onCycleStatus(t); }}
+                title="Clic para cambiar"
+                style={{ display: "flex", alignItems: "center", gap: 5, color: st.color, background: "none", border: "none", padding: 2 }}
+              >
+                <StIcon size={13} /> <span style={{ fontSize: 11 }}>{st.label}</span>
               </button>
               <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none" }}>
                 <span style={dot(info.color, 8)} />
@@ -152,6 +195,9 @@ export function TransactionsView({
                 {isTransferIn ? " <- " + t.fromLabel : ""}
                 {t.recurring && <Repeat size={11} style={{ color: T.textFaint }} />}
               </span>
+              <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.comment || ""}>
+                {t.comment || ""}
+              </span>
               <span className="amount" style={{ textAlign: "right", color, fontWeight: 500 }}>
                 {t.type === "income" || isTransferIn ? "+" : isTransferOut ? "" : "-"}
                 {fmt(Math.abs(t.amount))}
@@ -160,10 +206,10 @@ export function TransactionsView({
                 {fmt(resultingBalance(t))}
               </span>
               <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
-                <button onClick={() => onEdit(t)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar">
+                <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar">
                   <Pencil size={12} />
                 </button>
-                <button onClick={() => onRemove(t)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Eliminar">
+                <button onClick={(e) => { e.stopPropagation(); onRemove(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Eliminar">
                   <Trash2 size={12} />
                 </button>
               </span>

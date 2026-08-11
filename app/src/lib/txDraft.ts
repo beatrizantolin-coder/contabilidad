@@ -1,4 +1,4 @@
-import type { Account, Category, Frequency, ID, TransactionStatus } from "../types";
+import type { Account, Category, ID, RecurUnit, TransactionStatus } from "../types";
 import { todayISO } from "./format";
 
 export interface TxDraft {
@@ -9,13 +9,16 @@ export interface TxDraft {
   toAccountId: ID | null;
   date: string;
   name: string;
+  comment: string;
   categoryId: ID | null;
   subcategoryId: ID | null;
+  subsubcategoryId: ID | null;
   amount: string;
   type: "income" | "expense" | "transfer";
   status: TransactionStatus;
   recurringOn: boolean;
-  frequency: Frequency;
+  freqInterval: number;
+  freqUnit: RecurUnit;
 }
 
 export function emptyDraft(accounts: Account[], docId: ID, categories: Category[]): TxDraft {
@@ -26,12 +29,15 @@ export function emptyDraft(accounts: Account[], docId: ID, categories: Category[
     toAccountId: accounts[0]?.id ?? null,
     date: todayISO(),
     name: "",
+    comment: "",
     categoryId: categories[0]?.id ?? null,
     subcategoryId: null,
+    subsubcategoryId: null,
     amount: "",
     type: "expense",
     status: "pendiente",
     recurringOn: false,
-    frequency: "monthly",
+    freqInterval: 1,
+    freqUnit: "months",
   };
 }

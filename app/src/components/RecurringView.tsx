@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import type { Category, ID, Transaction } from "../types";
-import { FREQUENCIES, T, dot } from "../theme";
-import { fmt, nextDate, shortDate } from "../lib/format";
+import { T, dot } from "../theme";
+import { fmt, freqLabel, nextDate, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
 
 export function RecurringView({
@@ -47,8 +47,7 @@ export function RecurringView({
         <div style={{ border: "1px solid " + T.border, borderRadius: 10, overflow: "hidden" }}>
           {recurringList.map((t, i) => {
             if (!t.recurring) return null;
-            const freq = FREQUENCIES.find((f) => f.value === t.recurring!.frequency);
-            const info = t.type === "income" || t.type === "expense" ? catInfo(categories, t.categoryId, t.subcategoryId) : { name: "-", color: T.textFaint };
+            const info = t.type === "income" || t.type === "expense" ? catInfo(categories, t.categoryId, t.subcategoryId, t.subsubcategoryId) : { name: "-", color: T.textFaint };
             const color = t.type === "income" ? T.income : t.type === "transfer" ? T.transfer : T.expense;
             return (
               <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: i === recurringList.length - 1 ? "none" : "1px solid " + T.borderSoft }}>
@@ -57,7 +56,7 @@ export function RecurringView({
                   <div>
                     <div style={{ fontSize: 13.5, fontWeight: 500 }}>{t.name}</div>
                     <div style={{ fontSize: 11.5, color: T.textMuted, marginTop: 2 }}>
-                      {info.name} - {freq ? freq.label : t.recurring.frequency} - {accountName(t.accountId)} - proxima {shortDate(nextDate(t.date, t.recurring.frequency))}
+                      {info.name} - {freqLabel(t.recurring)} - {accountName(t.accountId)} - proxima {shortDate(nextDate(t.date, t.recurring))}
                     </div>
                   </div>
                 </div>

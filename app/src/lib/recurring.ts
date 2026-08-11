@@ -3,7 +3,7 @@ import { genId, genSeq } from "./id";
 import { nextDate } from "./format";
 
 function seriesKey(t: Transaction): string {
-  return [t.accountId, t.name, t.categoryId, t.subcategoryId, t.type, t.amount, t.recurring?.frequency].join("|");
+  return [t.accountId, t.name, t.categoryId, t.subcategoryId, t.type, t.amount, t.recurring?.interval, t.recurring?.unit].join("|");
 }
 
 /**
@@ -25,7 +25,7 @@ export function generateDueOccurrences(doc: LedgerDocument, today: string): Tran
   const additions: Transaction[] = [];
   seriesMax.forEach((tx) => {
     if (!tx.recurring) return;
-    const nd = nextDate(tx.date, tx.recurring.frequency);
+    const nd = nextDate(tx.date, tx.recurring);
     if (nd > today) return;
     const exists = txs.some(
       (t) =>

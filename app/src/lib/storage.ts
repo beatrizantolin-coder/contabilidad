@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { LedgerDocument, Manifest } from "../types";
+import { migrateDocument } from "./migrate";
 
 export async function loadManifest(): Promise<Manifest> {
   const raw = await invoke<unknown>("read_manifest");
@@ -16,7 +17,8 @@ export async function saveManifest(manifest: Manifest): Promise<void> {
 }
 
 export async function loadDocument(id: string): Promise<LedgerDocument> {
-  return invoke<LedgerDocument>("read_document", { id });
+  const raw = await invoke<unknown>("read_document", { id });
+  return migrateDocument(raw);
 }
 
 export async function saveDocument(doc: LedgerDocument): Promise<void> {

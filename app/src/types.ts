@@ -14,6 +14,8 @@ export interface Subcategory {
   id: ID;
   name: string;
   color: string;
+  /** Sub-subcategorías (solo se usa un nivel más en la UI). */
+  subcategories: Subcategory[];
 }
 
 export interface Category {
@@ -25,10 +27,11 @@ export interface Category {
 
 export type TransactionStatus = "reconciliado" | "pendiente" | "programado" | "anulado";
 
-export type Frequency = "weekly" | "monthly" | "yearly";
+export type RecurUnit = "days" | "months" | "years";
 
 export interface Recurring {
-  frequency: Frequency;
+  interval: number;
+  unit: RecurUnit;
 }
 
 interface TransactionBase {
@@ -38,6 +41,7 @@ interface TransactionBase {
   accountId: ID;
   date: string;
   name: string;
+  comment: string;
   amount: number;
   status: TransactionStatus;
   recurring: Recurring | null;
@@ -47,12 +51,14 @@ export interface IncomeExpenseTransaction extends TransactionBase {
   type: "income" | "expense";
   categoryId: ID | null;
   subcategoryId: ID | null;
+  subsubcategoryId: ID | null;
 }
 
 export interface TransferOutTransaction extends TransactionBase {
   type: "transfer";
   categoryId: null;
   subcategoryId: null;
+  subsubcategoryId: null;
   transferGroupId: ID;
   toAccountId: ID;
   toDocId: ID;
@@ -63,6 +69,7 @@ export interface TransferInTransaction extends TransactionBase {
   type: "transfer_in";
   categoryId: null;
   subcategoryId: null;
+  subsubcategoryId: null;
   transferGroupId: ID;
   fromAccountId: ID;
   fromDocId: ID;
