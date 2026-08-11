@@ -1,0 +1,56 @@
+@import "./fonts.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.amount {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowbtn {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.accrow:hover .rowbtn {
+  opacity: 1;
+}
+.navitem:hover {
+  background: #eaeaec;
+}
+.doctab:hover .docx {
+  opacity: 1;
+}
+.catcard:hover .catx {
+  opacity: 1;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: #3373dc33;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="checkbox"] {
+  accent-color: #3373dc;
+}
