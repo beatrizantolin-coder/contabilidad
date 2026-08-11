@@ -33,6 +33,8 @@ export interface Recurring {
 
 interface TransactionBase {
   id: ID;
+  /** Orden de creación, usado para desempatar movimientos con la misma fecha. */
+  seq: number;
   accountId: ID;
   date: string;
   name: string;
@@ -68,6 +70,10 @@ export interface TransferInTransaction extends TransactionBase {
 }
 
 export type Transaction = IncomeExpenseTransaction | TransferOutTransaction | TransferInTransaction;
+
+export function isTransferTx(t: Transaction): t is TransferOutTransaction | TransferInTransaction {
+  return t.type === "transfer" || t.type === "transfer_in";
+}
 
 export interface Budgets {
   [categoryId: string]: number;
