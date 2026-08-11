@@ -1,32 +1,34 @@
-# React + TypeScript + Vite
+# Contabilidad
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+App de finanzas personales para macOS (Tauri + React + TypeScript), sin
+servidor, sin cuenta de usuario y sin sincronización en la nube. Cada
+documento se guarda como un archivo JSON local en el directorio de datos
+de la app.
 
-Currently, two official plugins are available:
+## Desarrollo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run tauri dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Generar el instalable (.app / .dmg)
+
+```bash
+npm run tauri build
+```
+
+Consulta las instrucciones completas de instalación de dependencias para
+macOS en el mensaje de la sesión que generó este proyecto, o en la
+documentación oficial de Tauri: <https://v2.tauri.app/start/prerequisites/>.
+
+## Datos
+
+Los documentos se guardan en:
+
+```
+~/Library/Application Support/com.beatrizantolin.contabilidad/
+```
+
+Cada documento es un archivo `documents/<id>.json`; `manifest.json` lista
+los documentos existentes y cuál estaba activo.
