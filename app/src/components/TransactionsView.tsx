@@ -1,4 +1,5 @@
-import { ArrowRightLeft, Pencil, Plus, Repeat, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import type { ReactNode } from "react";
+import { ArrowRightLeft, Download, Pencil, Plus, Repeat, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
 import type { Category, ID, Transaction } from "../types";
 import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
@@ -27,8 +28,11 @@ export function TransactionsView({
   onRemove,
   onCycleStatus,
   onAdd,
+  onExport,
+  onImport,
   footerLabel,
   footerAmount,
+  chart,
 }: {
   title: string;
   monthIncome: number;
@@ -44,8 +48,11 @@ export function TransactionsView({
   onRemove: (t: Transaction) => void;
   onCycleStatus: (t: Transaction) => void;
   onAdd: () => void;
+  onExport: () => void;
+  onImport: () => void;
   footerLabel: string;
   footerAmount: number;
+  chart?: ReactNode;
 }) {
   return (
     <>
@@ -65,6 +72,14 @@ export function TransactionsView({
           <button onClick={() => setShowFilters((s) => !s)} style={smallBtn(showFilters)}>
             <SlidersHorizontal size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
             Filtros
+          </button>
+          <button onClick={onExport} style={smallBtn(false)}>
+            <Download size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
+            Exportar
+          </button>
+          <button onClick={onImport} style={smallBtn(false)}>
+            <Upload size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
+            Importar
           </button>
           <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600 }}>
             <Plus size={14} /> Movimiento
@@ -156,6 +171,8 @@ export function TransactionsView({
           );
         })}
       </div>
+
+      {chart}
 
       <div style={{ borderTop: "1px solid " + T.border, padding: "8px 20px", background: T.bgElevated, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11.5, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{footerLabel}</span>

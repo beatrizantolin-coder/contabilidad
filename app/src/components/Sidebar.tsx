@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { FolderOpen, Plus, Trash2, Wallet, X } from "lucide-react";
+import { FolderOpen, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, ID, LedgerDocument } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
+
+export type MainView = "transactions" | "recurring" | "categories";
 
 export function Sidebar({
   documents,
@@ -18,6 +20,10 @@ export function Sidebar({
   setActiveAccount,
   addAccount,
   removeAccount,
+  view,
+  setView,
+  recurringCount,
+  categoriesCount,
 }: {
   documents: LedgerDocument[];
   activeDocId: string;
@@ -32,6 +38,10 @@ export function Sidebar({
   setActiveAccount: (id: ID | "all") => void;
   addAccount: (name: string, type: AccountType, opening: number) => void;
   removeAccount: (id: ID) => void;
+  view: MainView;
+  setView: (v: MainView) => void;
+  recurringCount: number;
+  categoriesCount: number;
 }) {
   const [showDocForm, setShowDocForm] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
@@ -104,9 +114,9 @@ export function Sidebar({
       </div>
 
       <button
-        onClick={() => setActiveAccount("all")}
+        onClick={() => { setActiveAccount("all"); setView("transactions"); }}
         className="navitem"
-        style={{ width: "100%", textAlign: "left", background: activeAccount === "all" ? "#FFFFFF" : "transparent", boxShadow: activeAccount === "all" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 10px", marginBottom: 2, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}
+        style={{ width: "100%", textAlign: "left", background: activeAccount === "all" && view === "transactions" ? "#FFFFFF" : "transparent", boxShadow: activeAccount === "all" && view === "transactions" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 10px", marginBottom: 2, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}
       >
         <Wallet size={14} style={{ color: T.accent }} /> Todas las cuentas
       </button>
@@ -125,7 +135,7 @@ export function Sidebar({
               const low = (a.warning && bal < a.warning) || bal < 0;
               return (
                 <div key={a.id} className="accrow navitem" style={{ borderRadius: 7, background: activeAccount === a.id ? "#FFFFFF" : "transparent", boxShadow: activeAccount === a.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none", marginBottom: 2, padding: "7px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => setActiveAccount(a.id)} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => { setActiveAccount(a.id); setView("transactions"); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
                     <TypeIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
                     <span style={{ fontSize: 13 }}>{a.name}</span>
                   </button>
@@ -163,6 +173,30 @@ export function Sidebar({
           </div>
         </form>
       )}
+
+      <div style={{ marginTop: 22, padding: "0 10px" }}>
+        <button
+          onClick={() => setView("recurring")}
+          className="navitem"
+          style={{ width: "100%", textAlign: "left", background: view === "recurring" ? "#FFFFFF" : "transparent", boxShadow: view === "recurring" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+            <Repeat size={12} /> Programador
+          </span>
+          {recurringCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{recurringCount}</span>}
+        </button>
+      </div>
+
+      <div style={{ marginTop: 10, padding: "0 10px" }}>
+        <button
+          onClick={() => setView("categories")}
+          className="navitem"
+          style={{ width: "100%", textAlign: "left", background: view === "categories" ? "#FFFFFF" : "transparent", boxShadow: view === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Categorias</span>
+          {categoriesCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{categoriesCount}</span>}
+        </button>
+      </div>
 
       <div style={{ marginTop: "auto", paddingTop: 18 }}>
         <div style={{ borderTop: "1px solid " + T.border, margin: "0 10px", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>

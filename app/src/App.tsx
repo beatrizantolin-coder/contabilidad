@@ -1,27 +1,35 @@
 import { useMemo, useState } from "react";
-import { T } from "./theme";
+import { FREQUENCIES, T } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { monthKey, todayISO } from "./lib/format";
-import { isTransferTx, type Account, type AccountType, type ID, type Transaction } from "./types";
-import { Sidebar } from "./components/Sidebar";
+import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
+import { exportTransactionsCsv, pickAndImportCsv } from "./lib/csv";
+import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type ID, type Transaction } from "./types";
+import { Sidebar, type MainView } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { TransactionsView, type Filters } from "./components/TransactionsView";
+import { RecurringView } from "./components/RecurringView";
+import { CategoriesView } from "./components/CategoriesView";
+import { BalanceChart } from "./components/BalanceChart";
 
 export default function App() {
   const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, removeDocument } = useDocuments();
 
   const [activeAccount, setActiveAccount] = useState<ID | "all">("all");
+  const [view, setView] = useState<MainView>("transactions");
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>({ search: "", category: "all", type: "all", from: "", to: "" });
   const [txDraft, setTxDraft] = useState<TxDraft | null>(null);
+  const [evoRange, setEvoRange] = useState<EvoRange>({ from: "", to: "" });
 
   const accounts = activeDoc?.accounts ?? [];
   const transactions = activeDoc?.transactions ?? [];
   const categories = activeDoc?.categories ?? [];
+  const budgets = activeDoc?.budgets ?? {};
 
   const balances = useMemo(() => computeBalances(accounts, transactions), [accounts, transactions]);
   const totalBalance = accounts.reduce((s, a) => s + (balances[a.id] || 0), 0);
@@ -60,6 +68,35 @@ export default function App() {
   const monthIncome = thisMonthTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const monthExpense = thisMonthTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
 
+  const byCategory = useMemo(() => {
+    const map = new Map<ID, number>();
+    thisMonthTx
+      .filter((t) => t.type === "expense" && t.categoryId)
+      .forEach((t) => map.set(t.categoryId as ID, (map.get(t.categoryId as ID) || 0) + Number(t.amount)));
+    return Array.from(map.entries())
+      .map(([id, val]) => ({ id, val }))
+      .sort((a, b) => b.val - a.val);
+  }, [thisMonthTx]);
+  const maxCat = Math.max(1, ...byCategory.map((c) => c.val));
+
+  const recurringList = useMemo(() => transactions.filter((t) => t.recurring && t.type !== "transfer_in"), [transactions]);
+  const forecastNetPerMonth = useMemo(() => {
+    let net = 0;
+    recurringList.forEach((t) => {
+      if (!t.recurring) return;
+      const freq = FREQUENCIES.find((f) => f.value === t.recurring!.frequency);
+      const perMonth = freq ? freq.perMonth : 1;
+      net += (t.type === "income" ? 1 : -1) * Number(t.amount) * perMonth;
+    });
+    return net;
+  }, [recurringList]);
+
+  const evoPoints = useMemo(
+    () => computeEvoPoints(accounts, chronological, transactions, activeAccount, resultingBalance, evoRange),
+    [accounts, chronological, transactions, activeAccount, runningMaps, evoRange],
+  );
+  const evoTicks = useMemo(() => computeEvoTicks(evoPoints), [evoPoints]);
+
   function setAccounts(fn: (a: Account[]) => Account[]) {
     if (!activeDocId) return;
     updateDoc(activeDocId, (d) => ({ ...d, accounts: fn(d.accounts) }));
@@ -67,6 +104,57 @@ export default function App() {
   function setTransactions(fn: (t: Transaction[]) => Transaction[]) {
     if (!activeDocId) return;
     updateDoc(activeDocId, (d) => ({ ...d, transactions: fn(d.transactions) }));
+  }
+  function setCategories(fn: (c: Category[]) => Category[]) {
+    if (!activeDocId) return;
+    updateDoc(activeDocId, (d) => ({ ...d, categories: fn(d.categories) }));
+  }
+  function setBudgets(fn: (b: Budgets) => Budgets) {
+    if (!activeDocId) return;
+    updateDoc(activeDocId, (d) => ({ ...d, budgets: fn(d.budgets) }));
+  }
+
+  function addCategory(name: string, color: string) {
+    setCategories((prev) => prev.concat([{ id: genId(), name, color, subcategories: [] }]));
+  }
+  function removeCategory(id: ID) {
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+  }
+  function setCategoryColor(id: ID, color: string) {
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, color } : c)));
+  }
+  function addSubcategory(catId: ID, name: string, color: string) {
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([{ id: genId(), name, color }]) } : c)));
+  }
+  function removeSubcategory(catId: ID, subId: ID) {
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
+  }
+  function setSubcategoryColor(catId: ID, subId: ID, color: string) {
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.map((s) => (s.id === subId ? { ...s, color } : s)) } : c)));
+  }
+  function setBudget(catId: ID, value: number | undefined) {
+    setBudgets((prev) => ({ ...prev, [catId]: value as number }));
+  }
+
+  async function handleExport() {
+    if (!activeDoc) return;
+    try {
+      await exportTransactionsCsv(activeDoc.name, filteredTx, accounts, categories);
+    } catch (err) {
+      console.error("Error exportando CSV", err);
+    }
+  }
+  async function handleImport() {
+    if (!activeDoc) return;
+    try {
+      const result = await pickAndImportCsv(activeDoc);
+      if (!result) return;
+      setAccounts(() => result.accounts);
+      setCategories(() => result.categories);
+      setTransactions((prev) => prev.concat(result.transactions));
+    } catch (err) {
+      console.error("Error importando CSV", err);
+    }
   }
 
   function addAccount(name: string, type: AccountType, opening: number) {
@@ -81,6 +169,11 @@ export default function App() {
   function openNewTxForm() {
     if (!activeDoc || !activeDocId) return;
     setTxDraft(emptyDraft(accounts, activeDocId, categories));
+    setShowTxForm(true);
+  }
+  function openScheduledForm() {
+    if (!activeDoc || !activeDocId) return;
+    setTxDraft({ ...emptyDraft(accounts, activeDocId, categories), recurringOn: true, status: "programado" });
     setShowTxForm(true);
   }
   function resetDraft() {
@@ -277,9 +370,13 @@ export default function App() {
               setActiveAccount={setActiveAccount}
               addAccount={addAccount}
               removeAccount={removeAccount}
+              view={view}
+              setView={setView}
+              recurringCount={recurringList.length}
+              categoriesCount={categories.length}
             />
             <main style={{ background: T.bg, display: "flex", flexDirection: "column" }}>
-              {showTxForm && txDraft && (
+              {view !== "transactions" && showTxForm && txDraft && (
                 <TransactionForm
                   txDraft={txDraft}
                   setTxDraft={(fn) => setTxDraft((d) => (d ? fn(d) : d))}
@@ -291,24 +388,72 @@ export default function App() {
                   onCancel={resetDraft}
                 />
               )}
-              <TransactionsView
-                title={activeAccount === "all" ? "Todas las cuentas" : accounts.find((a) => a.id === activeAccount)?.name ?? "-"}
-                monthIncome={monthIncome}
-                monthExpense={monthExpense}
-                showFilters={showFilters}
-                setShowFilters={setShowFilters}
-                filters={filters}
-                setFilters={setFilters}
-                categories={categories}
-                filteredTx={filteredTx}
-                resultingBalance={resultingBalance}
-                onEdit={editTx}
-                onRemove={removeTx}
-                onCycleStatus={cycleStatus}
-                onAdd={openNewTxForm}
-                footerLabel="Total cuenta actual"
-                footerAmount={activeAccount === "all" ? totalBalance : balances[activeAccount] || 0}
-              />
+
+              {view === "recurring" && (
+                <RecurringView
+                  docName={activeDoc.name}
+                  recurringList={recurringList}
+                  netPerMonth={forecastNetPerMonth}
+                  categories={categories}
+                  accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
+                  onNewScheduled={openScheduledForm}
+                />
+              )}
+
+              {view === "categories" && (
+                <CategoriesView
+                  docName={activeDoc.name}
+                  categories={categories}
+                  budgets={budgets}
+                  spendByCategory={byCategory}
+                  maxSpend={maxCat}
+                  addCategory={addCategory}
+                  removeCategory={removeCategory}
+                  setCategoryColor={setCategoryColor}
+                  addSubcategory={addSubcategory}
+                  removeSubcategory={removeSubcategory}
+                  setSubcategoryColor={setSubcategoryColor}
+                  setBudget={setBudget}
+                />
+              )}
+
+              {view === "transactions" && (
+                <>
+                  {showTxForm && txDraft && (
+                    <TransactionForm
+                      txDraft={txDraft}
+                      setTxDraft={(fn) => setTxDraft((d) => (d ? fn(d) : d))}
+                      accounts={accounts}
+                      categories={categories}
+                      documents={documents}
+                      activeDocId={activeDoc.id}
+                      onSubmit={submitTx}
+                      onCancel={resetDraft}
+                    />
+                  )}
+                  <TransactionsView
+                    title={activeAccount === "all" ? "Todas las cuentas" : accounts.find((a) => a.id === activeAccount)?.name ?? "-"}
+                    monthIncome={monthIncome}
+                    monthExpense={monthExpense}
+                    showFilters={showFilters}
+                    setShowFilters={setShowFilters}
+                    filters={filters}
+                    setFilters={setFilters}
+                    categories={categories}
+                    filteredTx={filteredTx}
+                    resultingBalance={resultingBalance}
+                    onEdit={editTx}
+                    onRemove={removeTx}
+                    onCycleStatus={cycleStatus}
+                    onAdd={openNewTxForm}
+                    onExport={handleExport}
+                    onImport={handleImport}
+                    footerLabel="Total cuenta actual"
+                    footerAmount={activeAccount === "all" ? totalBalance : balances[activeAccount] || 0}
+                    chart={<BalanceChart points={evoPoints} ticks={evoTicks} evoRange={evoRange} setEvoRange={setEvoRange} />}
+                  />
+                </>
+              )}
             </main>
           </>
         ) : (
