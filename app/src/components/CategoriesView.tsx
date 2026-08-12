@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
-import type { Category, ID } from "../types";
+import type { Category, CategoryKind, ID } from "../types";
 import { PALETTE, T, dot, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
 import { ColorSwatches } from "./ColorSwatches";
@@ -32,7 +32,7 @@ export function CategoriesView({
   budgets: Record<ID, number>;
   spendByCategory: CategorySpend[];
   maxSpend: number;
-  addCategory: (name: string, color: string) => void;
+  addCategory: (name: string, color: string, kind: CategoryKind) => void;
   removeCategory: (id: ID) => void;
   setCategoryColor: (id: ID, color: string) => void;
   addSubcategory: (catId: ID, name: string, color: string) => void;
@@ -44,7 +44,7 @@ export function CategoriesView({
   setBudget: (catId: ID, value: number | undefined) => void;
 }) {
   const [showCatForm, setShowCatForm] = useState(false);
-  const [catDraft, setCatDraft] = useState({ name: "", color: PALETTE[0] });
+  const [catDraft, setCatDraft] = useState<{ name: string; color: string; kind: CategoryKind }>({ name: "", color: PALETTE[0], kind: "expense" });
   const [subFormFor, setSubFormFor] = useState<string | null>(null);
   const [subDraft, setSubDraft] = useState({ name: "", color: PALETTE[0] });
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
@@ -52,8 +52,8 @@ export function CategoriesView({
   function submitCategory(e: React.FormEvent) {
     e.preventDefault();
     if (!catDraft.name.trim()) return;
-    addCategory(catDraft.name.trim(), catDraft.color);
-    setCatDraft({ name: "", color: PALETTE[0] });
+    addCategory(catDraft.name.trim(), catDraft.color, catDraft.kind);
+    setCatDraft({ name: "", color: PALETTE[0], kind: "expense" });
     setShowCatForm(false);
   }
 
@@ -88,6 +88,29 @@ export function CategoriesView({
       {showCatForm && (
         <form onSubmit={submitCategory} style={{ margin: "16px 0", padding: 14, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 10, display: "flex", flexDirection: "column", gap: 10, maxWidth: 340 }}>
           <input autoFocus placeholder="Nombre de la categoria" value={catDraft.name} onChange={(e) => setCatDraft((d) => ({ ...d, name: e.target.value }))} style={inputStyle} />
+          <div style={{ display: "flex", gap: 6 }}>
+            {(
+              [
+                ["expense", "Gasto"],
+                ["income", "Ingreso"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setCatDraft((d) => ({ ...d, kind: value }))}
+                style={{
+                  flex: 1, padding: "7px 0", borderRadius: 6,
+                  border: "1px solid " + (catDraft.kind === value ? T.accent : T.border),
+                  background: catDraft.kind === value ? "#EAF1FC" : "#FFFFFF",
+                  color: catDraft.kind === value ? T.accent : T.textMuted,
+                  fontSize: 12, fontWeight: 600,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <ColorSwatches value={catDraft.color} onChange={(c) => setCatDraft((d) => ({ ...d, color: c }))} />
           <div style={{ display: "flex", gap: 8 }}>
             <button type="submit" style={{ background: T.accent, border: "none", borderRadius: 6, padding: "7px 14px", color: "#fff", fontWeight: 600, fontSize: 12.5 }}>
@@ -117,6 +140,16 @@ export function CategoriesView({
                     <span style={dot(cat.color, 12)} />
                   </button>
                   <span style={{ fontSize: 14, fontWeight: 600 }}>{cat.name}</span>
+                  <span
+                    style={{
+                      fontSize: 9.5, textTransform: "uppercase", letterSpacing: "0.04em",
+                      color: cat.kind === "income" ? T.income : T.textFaint,
+                      border: "1px solid " + (cat.kind === "income" ? T.income : T.border),
+                      borderRadius: 10, padding: "1px 6px",
+                    }}
+                  >
+                    {cat.kind === "income" ? "Ingreso" : "Gasto"}
+                  </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span className="amount" style={{ fontSize: 13, color: T.textMuted }}>

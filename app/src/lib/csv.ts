@@ -131,7 +131,7 @@ export function parseIcomptaCsv(csvText: string, accounts: Account[], categories
     let accId = accByName.get(normalizeKey(accName));
     if (!accId) {
       accId = genId();
-      nextAccounts.push({ id: accId, name: accName, opening: 0, warning: 0, type: accType });
+      nextAccounts.push({ id: accId, name: accName, opening: 0, warning: 0, type: accType, linkedAccountId: null });
       accByName.set(normalizeKey(accName), accId);
     }
 
@@ -150,9 +150,9 @@ export function parseIcomptaCsv(csvText: string, accounts: Account[], categories
     const catName = (catSegments.length > 1 ? catSegments[1] : catSegments[0]) || "Sin categoria";
     const subName = catSegments.length > 1 ? catSegments[2] : undefined;
 
-    let catIndex = nextCategories.findIndex((c) => normalizeKey(c.name) === normalizeKey(catName));
+    let catIndex = nextCategories.findIndex((c) => normalizeKey(c.name) === normalizeKey(catName) && c.kind === type);
     if (catIndex === -1) {
-      const newCat: Category = { id: genId(), name: catName, color: PALETTE[nextCategories.length % PALETTE.length], subcategories: [] };
+      const newCat: Category = { id: genId(), name: catName, color: PALETTE[nextCategories.length % PALETTE.length], kind: type, subcategories: [] };
       nextCategories.push(newCat);
       catIndex = nextCategories.length - 1;
     }

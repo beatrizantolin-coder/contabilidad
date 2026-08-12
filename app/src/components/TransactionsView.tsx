@@ -1,19 +1,12 @@
 import type { ReactNode } from "react";
-import { ArrowRightLeft, Download, Pencil, Plus, Repeat, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
-import type { Category, ID, Transaction } from "../types";
-import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
+import { ArrowRightLeft, Download, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import type { Category, Filters, ID, Transaction } from "../types";
+import { T, dot, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
+import { FiltersBar } from "./FiltersBar";
 
-const GRID_COLUMNS = "74px 118px 1fr 140px 100px 100px 56px";
-
-export interface Filters {
-  search: string;
-  category: ID | "all";
-  type: "all" | "income" | "expense" | "transfer";
-  from: string;
-  to: string;
-}
+const GRID_COLUMNS = "74px 76px 1fr 140px 100px 100px 56px";
 
 export function TransactionsView({
   title,
@@ -24,9 +17,10 @@ export function TransactionsView({
   filters,
   setFilters,
   categories,
+  onSaveFilter,
   filteredTx,
   selectedIds,
-  onToggleSelect,
+  onRowClick,
   resultingBalance,
   onEdit,
   onRemove,
@@ -49,9 +43,10 @@ export function TransactionsView({
   filters: Filters;
   setFilters: (fn: (f: Filters) => Filters) => void;
   categories: Category[];
+  onSaveFilter: (name: string) => void;
   filteredTx: Transaction[];
   selectedIds: Set<ID>;
-  onToggleSelect: (id: ID) => void;
+  onRowClick: (id: ID, shiftKey: boolean) => void;
   resultingBalance: (t: Transaction) => number;
   onEdit: (t: Transaction) => void;
   onRemove: (t: Transaction) => void;
@@ -99,33 +94,7 @@ export function TransactionsView({
         </div>
       </div>
 
-      {showFilters && (
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: 14, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
-          <div style={{ position: "relative", flex: "1 1 180px" }}>
-            <Search size={13} style={{ position: "absolute", left: 9, top: 10, color: T.textFaint }} />
-            <input placeholder="Buscar descripcion" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} style={{ ...inputStyle, paddingLeft: 28 }} />
-          </div>
-          <select value={filters.category} onChange={(e) => setFilters((f) => ({ ...f, category: e.target.value === "all" ? "all" : e.target.value }))} style={{ ...inputStyle, width: 160 }}>
-            <option value="all">Todas las categorias</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <select value={filters.type} onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value as Filters["type"] }))} style={{ ...inputStyle, width: 130 }}>
-            <option value="all">Todos los tipos</option>
-            <option value="income">Ingreso</option>
-            <option value="expense">Gasto</option>
-            <option value="transfer">Transferencia</option>
-          </select>
-          <input type="date" value={filters.from} onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))} style={{ ...inputStyle, width: 140 }} />
-          <input type="date" value={filters.to} onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))} style={{ ...inputStyle, width: 140 }} />
-          <button onClick={() => setFilters(() => ({ search: "", category: "all", type: "all", from: "", to: "" }))} style={smallBtn(false)}>
-            Limpiar
-          </button>
-        </div>
-      )}
+      {showFilters && <FiltersBar filters={filters} setFilters={setFilters} categories={categories} onSaveFilter={onSaveFilter} />}
 
       {selectedIds.size > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", background: "#EAF1FC", borderBottom: "1px solid " + T.border }}>
@@ -147,7 +116,7 @@ export function TransactionsView({
       <div style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
           <span>Fecha</span>
-          <span>Estado</span>
+          <span style={{ textAlign: "center" }}>Estado</span>
           <span>Descripcion</span>
           <span>Comentario</span>
           <span style={{ textAlign: "right" }}>Importe</span>
@@ -171,7 +140,8 @@ export function TransactionsView({
             <div
               key={t.id}
               className="accrow"
-              onClick={() => onToggleSelect(t.id)}
+              onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
+              onClick={(e) => onRowClick(t.id, e.shiftKey)}
               style={{
                 display: "grid", gridTemplateColumns: GRID_COLUMNS, alignItems: "center", padding: "8px 20px", fontSize: 13,
                 borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
@@ -182,10 +152,10 @@ export function TransactionsView({
               </span>
               <button
                 onClick={(e) => { e.stopPropagation(); onCycleStatus(t); }}
-                title="Clic para cambiar"
-                style={{ display: "flex", alignItems: "center", gap: 5, color: st.color, background: "none", border: "none", padding: 2 }}
+                title={st.label}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", color: st.color, background: "none", border: "none", padding: 2, width: "100%" }}
               >
-                <StIcon size={13} /> <span style={{ fontSize: 11 }}>{st.label}</span>
+                <StIcon size={15} />
               </button>
               <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none" }}>
                 <span style={dot(info.color, 8)} />

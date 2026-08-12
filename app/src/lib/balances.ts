@@ -26,24 +26,22 @@ export function computeChronological(transactions: Transaction[]): Transaction[]
 
 export interface RunningMaps {
   idToTotal: Record<ID, number>;
-  idToAccount: Record<ID, number>;
 }
 
-export function computeRunningMaps(accounts: Account[], chronological: Transaction[]): RunningMaps {
-  const totalOpening = accounts.reduce((s, a) => s + a.opening, 0);
-  const perAccountRunning: Record<ID, number> = {};
-  accounts.forEach((a) => (perAccountRunning[a.id] = a.opening));
+/**
+ * Saldo encadenado cronológico, acumulado solo sobre las cuentas incluidas
+ * en `scopeIds` (el conjunto de cuentas seleccionadas en la barra lateral;
+ * "todas las cuentas" se representa pasando el conjunto completo).
+ */
+export function computeRunningMaps(accounts: Account[], chronological: Transaction[], scopeIds: Set<ID>): RunningMaps {
+  const totalOpening = accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + a.opening, 0);
   let totalRunning = totalOpening;
   const idToTotal: Record<ID, number> = {};
-  const idToAccount: Record<ID, number> = {};
   chronological.forEach((t) => {
-    const delta = signedDelta(t);
-    totalRunning += delta;
-    perAccountRunning[t.accountId] = (perAccountRunning[t.accountId] || 0) + delta;
+    if (scopeIds.has(t.accountId)) totalRunning += signedDelta(t);
     idToTotal[t.id] = totalRunning;
-    idToAccount[t.id] = perAccountRunning[t.accountId];
   });
-  return { idToTotal, idToAccount };
+  return { idToTotal };
 }
 
 export function hasLocalSibling(t: Transaction, transactions: Transaction[]): boolean {
@@ -51,10 +49,16 @@ export function hasLocalSibling(t: Transaction, transactions: Transaction[]): bo
   return transactions.some((x) => x.type === "transfer" && x.transferGroupId === t.transferGroupId);
 }
 
-export function pairedTransferId(t: Transaction, transactions: Transaction[]): ID {
+/**
+ * Id de movimiento a usar para leer el saldo encadenado de una transferencia:
+ * si ambos extremos estan dentro del alcance seleccionado, se usa el id del
+ * leg de entrada (para no contar el movimiento dos veces en la misma
+ * columna); si no, cada leg lee su propio saldo acumulado.
+ */
+export function pairedTransferId(t: Transaction, transactions: Transaction[], scopeIds: Set<ID>): ID {
   if (t.type === "transfer" && t.transferGroupId) {
     const match = transactions.find((x) => x.type === "transfer_in" && x.transferGroupId === t.transferGroupId);
-    return match ? match.id : t.id;
+    if (match && scopeIds.has(t.accountId) && scopeIds.has(match.accountId)) return match.id;
   }
   return t.id;
 }

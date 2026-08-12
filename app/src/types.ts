@@ -8,7 +8,11 @@ export interface Account {
   opening: number;
   warning: number;
   type: AccountType;
+  /** Solo relevante para tarjetas de credito: cuenta a la que esta asociada. */
+  linkedAccountId: ID | null;
 }
+
+export type CategoryKind = "expense" | "income";
 
 export interface Subcategory {
   id: ID;
@@ -22,6 +26,8 @@ export interface Category {
   id: ID;
   name: string;
   color: string;
+  /** Gasto o ingreso: no se mezclan entre movimientos de distinto tipo. */
+  kind: CategoryKind;
   subcategories: Subcategory[];
 }
 
@@ -86,6 +92,21 @@ export interface Budgets {
   [categoryId: string]: number;
 }
 
+export interface Filters {
+  search: string;
+  categories: ID[];
+  subcategories: ID[];
+  type: "all" | "income" | "expense" | "transfer";
+  from: string;
+  to: string;
+}
+
+export interface SavedFilter {
+  id: ID;
+  name: string;
+  filters: Filters;
+}
+
 export interface LedgerDocument {
   id: ID;
   name: string;
@@ -93,6 +114,7 @@ export interface LedgerDocument {
   categories: Category[];
   transactions: Transaction[];
   budgets: Budgets;
+  savedFilters: SavedFilter[];
 }
 
 export interface Manifest {

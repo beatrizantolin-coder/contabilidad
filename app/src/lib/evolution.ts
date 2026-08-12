@@ -16,22 +16,18 @@ export function computeEvoPoints(
   accounts: Account[],
   chronological: Transaction[],
   transactions: Transaction[],
-  activeAccount: ID | "all",
+  scopeIds: Set<ID>,
   resultingBalance: (t: Transaction) => number,
   evoRange: EvoRange,
 ): EvoPoint[] {
-  const openingSum = accounts.reduce((s, a) => s + a.opening, 0);
-  const accOpening = activeAccount === "all" ? openingSum : accounts.find((a) => a.id === activeAccount)?.opening || 0;
-  const fullSrc =
-    activeAccount === "all"
-      ? chronological.filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions))
-      : chronological.filter((t) => t.accountId === activeAccount && (t.type !== "transfer_in" || !hasLocalSibling(t, transactions)));
+  const openingSum = accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + a.opening, 0);
+  const fullSrc = chronological.filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t, transactions)));
   if (fullSrc.length === 0) return [];
 
   const rangeFrom = evoRange.from || null;
   const rangeTo = evoRange.to || null;
 
-  let startBalance = accOpening;
+  let startBalance = openingSum;
   fullSrc.forEach((t) => {
     if (!rangeFrom || t.date < rangeFrom) startBalance = resultingBalance(t);
   });

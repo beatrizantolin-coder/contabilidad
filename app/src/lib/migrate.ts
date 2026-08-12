@@ -1,4 +1,4 @@
-import type { Account, AccountType, Category, LedgerDocument, Recurring, Subcategory, Transaction, TransactionStatus } from "../types";
+import type { Account, AccountType, Category, CategoryKind, Filters, LedgerDocument, Recurring, SavedFilter, Subcategory, Transaction, TransactionStatus } from "../types";
 import { genSeq } from "./id";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -17,6 +17,7 @@ function migrateCategory(raw: any): Category {
     id: raw.id,
     name: raw.name,
     color: raw.color,
+    kind: (raw.kind as CategoryKind) || "expense",
     subcategories: Array.isArray(raw.subcategories) ? raw.subcategories.map(migrateSubcategory) : [],
   };
 }
@@ -39,6 +40,7 @@ function migrateAccount(raw: any): Account {
     opening: Number(raw.opening) || 0,
     warning: Number(raw.warning) || 0,
     type: (raw.type as AccountType) || "checking",
+    linkedAccountId: raw.linkedAccountId ?? null,
   };
 }
 
@@ -66,11 +68,27 @@ function migrateTransaction(raw: any): Transaction {
   } as Transaction;
 }
 
+function migrateFilters(raw: any): Filters {
+  return {
+    search: typeof raw?.search === "string" ? raw.search : "",
+    categories: Array.isArray(raw?.categories) ? raw.categories : [],
+    subcategories: Array.isArray(raw?.subcategories) ? raw.subcategories : [],
+    type: raw?.type === "income" || raw?.type === "expense" || raw?.type === "transfer" ? raw.type : "all",
+    from: typeof raw?.from === "string" ? raw.from : "",
+    to: typeof raw?.to === "string" ? raw.to : "",
+  };
+}
+
+function migrateSavedFilter(raw: any): SavedFilter {
+  return { id: raw.id, name: raw.name, filters: migrateFilters(raw.filters) };
+}
+
 /**
  * Normaliza un documento tal como viene del disco (que puede ser de una
  * versión anterior del formato: categorías de 2 niveles, recurrencia con
- * `frequency` fija, sin `comment`/`subsubcategoryId`) al esquema actual.
- * Se aplica siempre al cargar, sea el documento viejo o nuevo.
+ * `frequency` fija, sin `comment`/`subsubcategoryId`/`kind`/`linkedAccountId`/
+ * `savedFilters`) al esquema actual. Se aplica siempre al cargar, sea el
+ * documento viejo o nuevo.
  */
 export function migrateDocument(raw: any): LedgerDocument {
   return {
@@ -80,5 +98,6 @@ export function migrateDocument(raw: any): LedgerDocument {
     categories: Array.isArray(raw.categories) ? raw.categories.map(migrateCategory) : [],
     transactions: Array.isArray(raw.transactions) ? raw.transactions.map(migrateTransaction) : [],
     budgets: raw.budgets && typeof raw.budgets === "object" ? raw.budgets : {},
+    savedFilters: Array.isArray(raw.savedFilters) ? raw.savedFilters.map(migrateSavedFilter) : [],
   };
 }

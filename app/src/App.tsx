@@ -8,27 +8,31 @@ import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
 import { freqPerMonth, monthKey, todayISO } from "./lib/format";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
-import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type ID, type Transaction } from "./types";
+import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type SavedFilter, type Transaction } from "./types";
 import { Sidebar, type MainView } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
 import { SidePanel } from "./components/SidePanel";
-import { TransactionsView, type Filters } from "./components/TransactionsView";
+import { TransactionsView } from "./components/TransactionsView";
 import { RecurringView } from "./components/RecurringView";
 import { CategoriesView } from "./components/CategoriesView";
+import { FiltersView } from "./components/FiltersView";
 import { BalanceChart } from "./components/BalanceChart";
+
+const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
 
 export default function App() {
   const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, removeDocument } = useDocuments();
 
-  const [activeAccount, setActiveAccount] = useState<ID | "all">("all");
+  const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [view, setView] = useState<MainView>("transactions");
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<Filters>({ search: "", category: "all", type: "all", from: "", to: "" });
+  const [filters, setFilters] = useState<Filters>(emptyFilters());
   const [txDraft, setTxDraft] = useState<TxDraft | null>(null);
   const [evoRange, setEvoRange] = useState<EvoRange>({ from: "", to: "" });
   const [selectedIds, setSelectedIds] = useState<Set<ID>>(new Set());
+  const [lastClickedId, setLastClickedId] = useState<ID | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
 
@@ -36,31 +40,29 @@ export default function App() {
   const transactions = activeDoc?.transactions ?? [];
   const categories = activeDoc?.categories ?? [];
   const budgets = activeDoc?.budgets ?? {};
+  const savedFilters = activeDoc?.savedFilters ?? [];
 
   const balances = useMemo(() => computeBalances(accounts, transactions), [accounts, transactions]);
   const totalBalance = accounts.reduce((s, a) => s + (balances[a.id] || 0), 0);
 
+  const scopeIds = useMemo(() => (activeAccounts.size === 0 ? new Set(accounts.map((a) => a.id)) : activeAccounts), [activeAccounts, accounts]);
+  const scopedTotal = useMemo(() => accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + (balances[a.id] || 0), 0), [accounts, scopeIds, balances]);
+
   const chronological = useMemo(() => computeChronological(transactions), [transactions]);
-  const runningMaps = useMemo(() => computeRunningMaps(accounts, chronological), [accounts, chronological]);
+  const runningMaps = useMemo(() => computeRunningMaps(accounts, chronological, scopeIds), [accounts, chronological, scopeIds]);
 
   function resultingBalance(t: Transaction): number {
-    if (activeAccount === "all") {
-      if (t.type === "transfer") return runningMaps.idToTotal[pairedTransferId(t, transactions)];
-      return runningMaps.idToTotal[t.id];
-    }
-    if (t.accountId === activeAccount) return runningMaps.idToAccount[t.id];
-    return runningMaps.idToAccount[pairedTransferId(t, transactions)];
+    if (t.type === "transfer") return runningMaps.idToTotal[pairedTransferId(t, transactions, scopeIds)];
+    return runningMaps.idToTotal[t.id];
   }
 
-  const scoped = useMemo(
-    () => (activeAccount === "all" ? transactions : transactions.filter((t) => t.accountId === activeAccount)),
-    [transactions, activeAccount],
-  );
+  const scoped = useMemo(() => transactions.filter((t) => scopeIds.has(t.accountId)), [transactions, scopeIds]);
 
   const filteredTx = useMemo(() => {
     return scoped
       .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions))
-      .filter((t) => filters.category === "all" || t.categoryId === filters.category)
+      .filter((t) => filters.categories.length === 0 || (t.categoryId && filters.categories.includes(t.categoryId)))
+      .filter((t) => filters.subcategories.length === 0 || (t.subcategoryId && filters.subcategories.includes(t.subcategoryId)))
       .filter((t) => filters.type === "all" || (filters.type === "transfer" ? t.type === "transfer" || t.type === "transfer_in" : t.type === filters.type))
       .filter((t) => !filters.from || t.date >= filters.from)
       .filter((t) => !filters.to || t.date <= filters.to)
@@ -96,8 +98,8 @@ export default function App() {
   }, [recurringList]);
 
   const evoPoints = useMemo(
-    () => computeEvoPoints(accounts, chronological, transactions, activeAccount, resultingBalance, evoRange),
-    [accounts, chronological, transactions, activeAccount, runningMaps, evoRange],
+    () => computeEvoPoints(accounts, chronological, transactions, scopeIds, resultingBalance, evoRange),
+    [accounts, chronological, transactions, scopeIds, runningMaps, evoRange],
   );
   const evoTicks = useMemo(() => computeEvoTicks(evoPoints), [evoPoints]);
 
@@ -117,9 +119,13 @@ export default function App() {
     if (!activeDocId) return;
     updateDoc(activeDocId, (d) => ({ ...d, budgets: fn(d.budgets) }));
   }
+  function setSavedFilters(fn: (sf: SavedFilter[]) => SavedFilter[]) {
+    if (!activeDocId) return;
+    updateDoc(activeDocId, (d) => ({ ...d, savedFilters: fn(d.savedFilters) }));
+  }
 
-  function addCategory(name: string, color: string) {
-    setCategories((prev) => prev.concat([{ id: genId(), name, color, subcategories: [] }]));
+  function addCategory(name: string, color: string, kind: CategoryKind) {
+    setCategories((prev) => prev.concat([{ id: genId(), name, color, kind, subcategories: [] }]));
   }
   function removeCategory(id: ID) {
     setCategories((prev) => prev.filter((c) => c.id !== id));
@@ -186,13 +192,32 @@ export default function App() {
     }
   }
 
-  function addAccount(name: string, type: AccountType, opening: number) {
-    setAccounts((prev) => prev.concat([{ id: genId(), name, opening, warning: 0, type }]));
+  function addAccount(name: string, type: AccountType, opening: number, linkedAccountId: ID | null) {
+    setAccounts((prev) => prev.concat([{ id: genId(), name, opening, warning: 0, type, linkedAccountId: type === "credit" ? linkedAccountId : null }]));
+  }
+  function updateAccount(id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) {
+    setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, name, type, opening, linkedAccountId: type === "credit" ? linkedAccountId : null } : a)));
   }
   function removeAccount(id: ID) {
     setAccounts((prev) => prev.filter((a) => a.id !== id));
     setTransactions((prev) => prev.filter((t) => t.accountId !== id));
-    if (activeAccount === id) setActiveAccount("all");
+    setActiveAccounts((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+  function toggleAccountSelect(id: ID) {
+    setActiveAccounts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearAccountSelection() {
+    setActiveAccounts(new Set());
   }
 
   function findLastCategoryForName(name: string): Transaction | null {
@@ -400,6 +425,27 @@ export default function App() {
     });
   }
 
+  function handleRowClick(id: ID, shiftKey: boolean) {
+    if (shiftKey && lastClickedId !== null) {
+      const ids = filteredTx.map((t) => t.id);
+      const lastIdx = ids.indexOf(lastClickedId);
+      const curIdx = ids.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const start = Math.min(lastIdx, curIdx);
+        const end = Math.max(lastIdx, curIdx);
+        const rangeIds = ids.slice(start, end + 1);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          rangeIds.forEach((rid) => next.add(rid));
+          return next;
+        });
+        return;
+      }
+    }
+    toggleSelect(id);
+    setLastClickedId(id);
+  }
+
   function duplicateSelected() {
     const items = transactions.filter((t) => selectedIds.has(t.id) && t.type !== "transfer" && t.type !== "transfer_in");
     if (items.length === 0) return;
@@ -437,11 +483,9 @@ export default function App() {
         const isSelected = selectedIds.has(t.id) || (isTransferTx(t) && groupIds.has(t.transferGroupId));
         if (!isSelected) return t;
         const isTransferLeg = isTransferTx(t);
-        const patch: Partial<Transaction> = {};
-        if (bulkEdit.dateOn) patch.date = bulkEdit.date;
-        if (bulkEdit.statusOn) patch.status = bulkEdit.status;
-        if (bulkEdit.accountOn && !isTransferLeg && bulkEdit.accountId) patch.accountId = bulkEdit.accountId;
-        if (bulkEdit.categoryOn && !isTransferLeg) {
+        const patch: Partial<Transaction> = { date: bulkEdit.date, status: bulkEdit.status };
+        if (!isTransferLeg) {
+          (patch as Record<string, unknown>).accountId = bulkEdit.accountId;
           (patch as Record<string, unknown>).categoryId = bulkEdit.categoryId;
           (patch as Record<string, unknown>).subcategoryId = bulkEdit.subcategoryId;
           (patch as Record<string, unknown>).subsubcategoryId = bulkEdit.subsubcategoryId;
@@ -454,17 +498,32 @@ export default function App() {
     setSelectedIds(new Set());
   }
 
+  function saveCurrentFilter(name: string) {
+    setSavedFilters((prev) => prev.concat([{ id: genId(), name, filters: { ...filters } }]));
+  }
+  function applySavedFilter(sf: SavedFilter) {
+    setFilters({ ...sf.filters });
+    setShowFilters(true);
+    setView("transactions");
+  }
+  function removeSavedFilter(id: ID) {
+    setSavedFilters((prev) => prev.filter((sf) => sf.id !== id));
+  }
+
   if (loading) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.textMuted, fontFamily: "Inter, sans-serif", fontSize: 13 }}>
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.textMuted, fontFamily: "Inter, sans-serif", fontSize: 13 }}>
         Cargando tus datos...
       </div>
     );
   }
 
+  const accountsTitle =
+    activeAccounts.size === 0 ? "Todas las cuentas" : activeAccounts.size === 1 ? accounts.find((a) => a.id === [...activeAccounts][0])?.name ?? "-" : activeAccounts.size + " cuentas seleccionadas";
+
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", minHeight: "100vh" }}>
+    <div style={{ height: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif", overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", height: "100%" }}>
         {activeDoc ? (
           <>
             <Sidebar
@@ -472,7 +531,8 @@ export default function App() {
               activeDocId={activeDoc.id}
               setActiveDocId={(id) => {
                 setActiveDocId(id);
-                setActiveAccount("all");
+                clearAccountSelection();
+                setView("transactions");
               }}
               activeDoc={activeDoc}
               createDocument={createDocument}
@@ -480,17 +540,20 @@ export default function App() {
               accounts={accounts}
               balances={balances}
               totalBalance={totalBalance}
-              activeAccount={activeAccount}
-              setActiveAccount={setActiveAccount}
+              activeAccounts={activeAccounts}
+              toggleAccountSelect={toggleAccountSelect}
+              clearAccountSelection={clearAccountSelection}
               addAccount={addAccount}
+              updateAccount={updateAccount}
               removeAccount={removeAccount}
               view={view}
               setView={setView}
               recurringCount={recurringList.length}
               categoriesCount={categories.length}
+              savedFiltersCount={savedFilters.length}
             />
-            <main style={{ background: T.bg, display: "flex", flexDirection: "row", minWidth: 0 }}>
-              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+            <main style={{ background: T.bg, display: "flex", flexDirection: "row", minWidth: 0, minHeight: 0 }}>
+              <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
                 {view === "recurring" && (
                   <RecurringView
                     docName={activeDoc.name}
@@ -522,9 +585,11 @@ export default function App() {
                   />
                 )}
 
+                {view === "filters" && <FiltersView docName={activeDoc.name} savedFilters={savedFilters} onApply={applySavedFilter} onRemove={removeSavedFilter} />}
+
                 {view === "transactions" && (
                   <TransactionsView
-                    title={activeAccount === "all" ? "Todas las cuentas" : accounts.find((a) => a.id === activeAccount)?.name ?? "-"}
+                    title={accountsTitle}
                     monthIncome={monthIncome}
                     monthExpense={monthExpense}
                     showFilters={showFilters}
@@ -532,9 +597,10 @@ export default function App() {
                     filters={filters}
                     setFilters={setFilters}
                     categories={categories}
+                    onSaveFilter={saveCurrentFilter}
                     filteredTx={filteredTx}
                     selectedIds={selectedIds}
-                    onToggleSelect={toggleSelect}
+                    onRowClick={handleRowClick}
                     resultingBalance={resultingBalance}
                     onEdit={editTx}
                     onRemove={removeTx}
@@ -545,8 +611,8 @@ export default function App() {
                     onDuplicateSelected={duplicateSelected}
                     onBulkEditSelected={openBulkEdit}
                     onDeleteSelected={deleteSelected}
-                    footerLabel="Total cuenta actual"
-                    footerAmount={activeAccount === "all" ? totalBalance : balances[activeAccount] || 0}
+                    footerLabel="Total seleccionado"
+                    footerAmount={scopedTotal}
                     chart={<BalanceChart points={evoPoints} ticks={evoTicks} evoRange={evoRange} setEvoRange={setEvoRange} />}
                   />
                 )}

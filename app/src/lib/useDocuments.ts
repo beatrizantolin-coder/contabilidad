@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LedgerDocument } from "../types";
 import { genId } from "./id";
 import { todayISO } from "./format";
-import { generateDueOccurrences } from "./recurring";
+import { applyRecurringDueLogic } from "./recurring";
 import { createDebouncer, deleteDocumentFile, loadDocument, loadManifest, saveDocument, saveManifest } from "./storage";
 
 const debounceSave = createDebouncer(400);
 
 export function emptyDocument(name: string): LedgerDocument {
-  return { id: genId(), name, accounts: [], categories: [], transactions: [], budgets: {} };
+  return { id: genId(), name, accounts: [], categories: [], transactions: [], budgets: {}, savedFilters: [] };
 }
 
 export function useDocuments() {
@@ -70,20 +70,21 @@ export function useDocuments() {
     });
   }, [documents, activeDocId]);
 
-  // Autogeneracion de recurrentes: por cada documento, si alguna serie
-  // recurrente tiene una ocurrencia vencida, la anade con estado
-  // "programado". Al depender de `documents`, cada tanda generada dispara
-  // una nueva pasada, lo que permite ponerse al dia con varias ocurrencias
-  // pendientes si la app llevaba tiempo sin abrirse.
+  // Autogeneracion de recurrentes + vencimiento automatico: por cada
+  // documento, cualquier movimiento "programado" cuya fecha ya llego pasa a
+  // "pendiente", y si alguna serie recurrente tiene una ocurrencia vencida,
+  // se anade con estado "programado". Al depender de `documents`, cada
+  // tanda generada dispara una nueva pasada, lo que permite ponerse al dia
+  // con varias ocurrencias pendientes si la app llevaba tiempo sin abrirse.
   useEffect(() => {
     if (!hydratedRef.current) return;
     const today = todayISO();
     let changed = false;
     const next = documents.map((doc) => {
-      const additions = generateDueOccurrences(doc, today);
-      if (additions.length === 0) return doc;
+      const nextTxs = applyRecurringDueLogic(doc, today);
+      if (!nextTxs) return doc;
       changed = true;
-      return { ...doc, transactions: doc.transactions.concat(additions) };
+      return { ...doc, transactions: nextTxs };
     });
     if (changed) setDocuments(next);
   }, [documents]);

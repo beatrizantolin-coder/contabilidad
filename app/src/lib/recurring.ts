@@ -1,4 +1,4 @@
-import type { LedgerDocument, Transaction } from "../types";
+import { isTransferTx, type LedgerDocument, type Transaction } from "../types";
 import { genId, genSeq } from "./id";
 import { nextDate } from "./format";
 
@@ -41,4 +41,32 @@ export function generateDueOccurrences(doc: LedgerDocument, today: string): Tran
     additions.push({ ...tx, id: genId(), seq: genSeq(), date: nd, status: "programado" } as Transaction);
   });
   return additions;
+}
+
+/**
+ * Aplica, para un documento, las dos transiciones automaticas ligadas a la
+ * fecha de hoy: (1) cualquier movimiento "programado" cuya fecha ya llego
+ * pasa a "pendiente" (ya no es solo un plan futuro), y (2) se generan las
+ * siguientes ocurrencias vencidas de cada serie recurrente. Devuelve el
+ * nuevo array de transacciones, o `null` si no habia nada que cambiar.
+ */
+export function applyRecurringDueLogic(doc: LedgerDocument, today: string): Transaction[] | null {
+  let txs = doc.transactions;
+  let changed = false;
+
+  const dueFlip = txs.filter((t) => t.status === "programado" && t.date <= today);
+  if (dueFlip.length > 0) {
+    const flipIds = new Set(dueFlip.map((t) => t.id));
+    const flipGroupIds = new Set(dueFlip.filter(isTransferTx).map((t) => t.transferGroupId));
+    txs = txs.map((t) => (flipIds.has(t.id) || (isTransferTx(t) && flipGroupIds.has(t.transferGroupId)) ? { ...t, status: "pendiente" } : t));
+    changed = true;
+  }
+
+  const additions = generateDueOccurrences({ ...doc, transactions: txs }, today);
+  if (additions.length > 0) {
+    txs = txs.concat(additions);
+    changed = true;
+  }
+
+  return changed ? txs : null;
 }

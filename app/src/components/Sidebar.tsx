@@ -1,10 +1,32 @@
 import { useState } from "react";
-import { FolderOpen, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
+import { CreditCard, FolderOpen, PiggyBank, Pencil, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, ID, LedgerDocument } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
 
-export type MainView = "transactions" | "recurring" | "categories";
+export type MainView = "transactions" | "recurring" | "categories" | "filters";
+
+interface AccountSection {
+  key: AccountType;
+  label: string;
+  icon: typeof Wallet;
+}
+
+const ACCOUNT_SECTIONS: AccountSection[] = [
+  { key: "checking", label: "Cuentas", icon: Wallet },
+  { key: "savings", label: "Ahorro", icon: PiggyBank },
+  { key: "credit", label: "Tarjetas", icon: CreditCard },
+];
+
+interface AccDraft {
+  id: ID | null;
+  name: string;
+  opening: string;
+  type: AccountType;
+  linkedAccountId: ID | null;
+}
+
+const emptyAccDraft = (type: AccountType): AccDraft => ({ id: null, name: "", opening: "", type, linkedAccountId: null });
 
 export function Sidebar({
   documents,
@@ -16,14 +38,17 @@ export function Sidebar({
   accounts,
   balances,
   totalBalance,
-  activeAccount,
-  setActiveAccount,
+  activeAccounts,
+  toggleAccountSelect,
+  clearAccountSelection,
   addAccount,
+  updateAccount,
   removeAccount,
   view,
   setView,
   recurringCount,
   categoriesCount,
+  savedFiltersCount,
 }: {
   documents: LedgerDocument[];
   activeDocId: string;
@@ -34,19 +59,22 @@ export function Sidebar({
   accounts: Account[];
   balances: Record<ID, number>;
   totalBalance: number;
-  activeAccount: ID | "all";
-  setActiveAccount: (id: ID | "all") => void;
-  addAccount: (name: string, type: AccountType, opening: number) => void;
+  activeAccounts: Set<ID>;
+  toggleAccountSelect: (id: ID) => void;
+  clearAccountSelection: () => void;
+  addAccount: (name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
+  updateAccount: (id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
   removeAccount: (id: ID) => void;
   view: MainView;
   setView: (v: MainView) => void;
   recurringCount: number;
   categoriesCount: number;
+  savedFiltersCount: number;
 }) {
   const [showDocForm, setShowDocForm] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
   const [showAccForm, setShowAccForm] = useState(false);
-  const [accDraft, setAccDraft] = useState<{ name: string; opening: string; type: AccountType }>({ name: "", opening: "", type: "checking" });
+  const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking"));
 
   function submitDoc(e: React.FormEvent) {
     e.preventDefault();
@@ -56,21 +84,37 @@ export function Sidebar({
     setShowDocForm(false);
   }
 
+  function openAccountForm(type: AccountType, existing: Account | null) {
+    if (existing) {
+      setAccDraft({ id: existing.id, name: existing.name, opening: String(existing.opening), type: existing.type, linkedAccountId: existing.linkedAccountId });
+    } else {
+      setAccDraft(emptyAccDraft(type));
+    }
+    setShowAccForm(true);
+  }
+
   function submitAccount(e: React.FormEvent) {
     e.preventDefault();
     if (!accDraft.name) return;
-    addAccount(accDraft.name, accDraft.type, Number(accDraft.opening) || 0);
-    setAccDraft({ name: "", opening: "", type: "checking" });
+    const opening = Number(accDraft.opening) || 0;
+    const linkedAccountId = accDraft.type === "credit" ? accDraft.linkedAccountId : null;
+    if (accDraft.id) updateAccount(accDraft.id, accDraft.name, accDraft.type, opening, linkedAccountId);
+    else addAccount(accDraft.name, accDraft.type, opening, linkedAccountId);
+    setAccDraft(emptyAccDraft("checking"));
     setShowAccForm(false);
   }
 
+  const goToAccounts = () => setView("transactions");
+
   return (
-    <aside style={{ background: T.sidebar, borderRight: "1px solid " + T.border, padding: "12px 10px", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+    <aside style={{ background: T.sidebar, borderRight: "1px solid " + T.border, padding: "12px 10px", overflowY: "auto", height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, margin: "2px 10px 6px" }}>
+        Documentos
+      </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
         {documents.map((d) => (
           <div
             key={d.id}
-            className="doctab"
             style={{
               display: "flex", alignItems: "center", gap: 3,
               background: d.id === activeDocId ? "#FFFFFF" : "transparent",
@@ -79,14 +123,14 @@ export function Sidebar({
             }}
           >
             <button
-              onClick={() => { setActiveDocId(d.id); setActiveAccount("all"); }}
+              onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
               style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}
             >
               <FolderOpen size={11} /> {d.name}
             </button>
             {documents.length > 1 && (
-              <button onClick={() => removeDocument(d.id)} className="docx" style={{ opacity: 0, background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
-                <X size={10} />
+              <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
+                <Trash2 size={10} />
               </button>
             )}
           </div>
@@ -106,43 +150,45 @@ export function Sidebar({
 
       <div style={{ padding: "2px 8px 14px", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>{activeDoc.name}</div>
 
-      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, margin: "4px 10px 6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>Cuentas</span>
-        <button onClick={() => setShowAccForm(true)} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label="Anadir cuenta">
-          <Plus size={13} />
-        </button>
-      </div>
-
       <button
-        onClick={() => { setActiveAccount("all"); setView("transactions"); }}
+        onClick={() => { clearAccountSelection(); goToAccounts(); }}
         className="navitem"
-        style={{ width: "100%", textAlign: "left", background: activeAccount === "all" && view === "transactions" ? "#FFFFFF" : "transparent", boxShadow: activeAccount === "all" && view === "transactions" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 10px", marginBottom: 2, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}
+        style={{ width: "100%", textAlign: "left", background: activeAccounts.size === 0 && view === "transactions" ? "#FFFFFF" : "transparent", boxShadow: activeAccounts.size === 0 && view === "transactions" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 10px", marginBottom: 6, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}
       >
         <Wallet size={14} style={{ color: T.accent }} /> Todas las cuentas
       </button>
 
-      {ACCOUNT_TYPES.map((typeInfo) => {
-        const group = accounts.filter((a) => (a.type || "checking") === typeInfo.value);
-        if (group.length === 0) return null;
-        const TypeIcon = typeInfo.icon;
+      {ACCOUNT_SECTIONS.map((section) => {
+        const SectionIcon = section.icon;
+        const group = accounts.filter((a) => (a.type || "checking") === section.key);
         return (
-          <div key={typeInfo.value} style={{ marginBottom: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600, padding: "6px 10px 2px" }}>
-              <TypeIcon size={10} /> {typeInfo.label}
+          <div key={section.key} style={{ marginBottom: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 2px" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600 }}>
+                <SectionIcon size={10} /> {section.label}
+              </span>
+              <button onClick={() => openAccountForm(section.key, null)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
+                <Plus size={11} />
+              </button>
             </div>
+            {group.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "2px 10px 4px" }}>Sin cuentas.</div>}
             {group.map((a) => {
               const bal = balances[a.id] || 0;
               const low = (a.warning && bal < a.warning) || bal < 0;
+              const highlighted = activeAccounts.has(a.id);
               return (
-                <div key={a.id} className="accrow navitem" style={{ borderRadius: 7, background: activeAccount === a.id ? "#FFFFFF" : "transparent", boxShadow: activeAccount === a.id ? "0 1px 2px rgba(0,0,0,0.06)" : "none", marginBottom: 2, padding: "7px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => { setActiveAccount(a.id); setView("transactions"); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                    <TypeIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13 }}>{a.name}</span>
+                <div key={a.id} className="accrow navitem" style={{ borderRadius: 7, background: highlighted ? "#FFFFFF" : "transparent", boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none", marginBottom: 2, padding: "7px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => { toggleAccountSelect(a.id); goToAccounts(); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                    <SectionIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                   </button>
-                  <span className="amount" style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA" }}>
+                  <span className="amount" style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA", flexShrink: 0 }}>
                     {fmt(bal)}
                   </span>
-                  <button onClick={() => removeAccount(a.id)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Eliminar " + a.name}>
+                  <button onClick={() => openAccountForm(a.type, a)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Editar " + a.name}>
+                    <Pencil size={11} />
+                  </button>
+                  <button onClick={() => removeAccount(a.id)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Eliminar " + a.name}>
                     <Trash2 size={12} />
                   </button>
                 </div>
@@ -155,17 +201,31 @@ export function Sidebar({
       {showAccForm && (
         <form onSubmit={submitAccount} style={{ marginTop: 8, padding: 10, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
           <input autoFocus placeholder="Nombre de la cuenta" value={accDraft.name} onChange={(e) => setAccDraft((d) => ({ ...d, name: e.target.value }))} style={inputStyle} />
-          <select value={accDraft.type} onChange={(e) => setAccDraft((d) => ({ ...d, type: e.target.value as AccountType }))} style={inputStyle}>
+          <select
+            value={accDraft.type}
+            onChange={(e) => setAccDraft((d) => ({ ...d, type: e.target.value as AccountType, linkedAccountId: e.target.value === "credit" ? d.linkedAccountId : null }))}
+            style={inputStyle}
+          >
             {ACCOUNT_TYPES.map((t) => (
               <option key={t.value} value={t.value}>
                 {t.label}
               </option>
             ))}
           </select>
+          {accDraft.type === "credit" && (
+            <select value={accDraft.linkedAccountId ?? ""} onChange={(e) => setAccDraft((d) => ({ ...d, linkedAccountId: e.target.value || null }))} style={inputStyle}>
+              <option value="">Sin cuenta asociada</option>
+              {accounts.filter((a) => a.id !== accDraft.id).map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
           <input placeholder="Saldo inicial" type="number" step="0.01" value={accDraft.opening} onChange={(e) => setAccDraft((d) => ({ ...d, opening: e.target.value }))} style={inputStyle} />
           <div style={{ display: "flex", gap: 8 }}>
             <button type="submit" style={{ flex: 1, background: T.accent, border: "none", borderRadius: 6, padding: "7px 0", color: "#fff", fontWeight: 600, fontSize: 12.5 }}>
-              Crear
+              {accDraft.id ? "Guardar" : "Crear"}
             </button>
             <button type="button" onClick={() => setShowAccForm(false)} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "7px 9px", color: T.textMuted }}>
               <X size={12} />
@@ -195,6 +255,17 @@ export function Sidebar({
         >
           <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Categorias</span>
           {categoriesCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{categoriesCount}</span>}
+        </button>
+      </div>
+
+      <div style={{ marginTop: 10, padding: "0 10px" }}>
+        <button
+          onClick={() => setView("filters")}
+          className="navitem"
+          style={{ width: "100%", textAlign: "left", background: view === "filters" ? "#FFFFFF" : "transparent", boxShadow: view === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Filtros</span>
+          {savedFiltersCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{savedFiltersCount}</span>}
         </button>
       </div>
 

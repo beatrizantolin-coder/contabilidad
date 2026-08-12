@@ -27,6 +27,7 @@ export function TransactionForm({
   const targetDocAccounts = (documents.find((d) => d.id === txDraft.toDocId) || documents.find((d) => d.id === activeDocId))?.accounts ?? [];
   const selectedCategory = categories.find((c) => c.id === txDraft.categoryId);
   const selectedSubcategory = selectedCategory?.subcategories.find((s) => s.id === txDraft.subcategoryId);
+  const formCategoryOptions = txDraft.type === "income" ? categories.filter((c) => c.kind === "income") : categories.filter((c) => c.kind !== "income");
 
   return (
     <form onSubmit={onSubmit} style={{ padding: 16, display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
@@ -85,7 +86,21 @@ export function TransactionForm({
             <button
               key={value}
               type="button"
-              onClick={() => setTxDraft((d) => ({ ...d, type: value }))}
+              onClick={() =>
+                setTxDraft((d) => {
+                  const wantKind = value === "income" ? "income" : value === "expense" ? "expense" : null;
+                  const currentCat = categories.find((c) => c.id === d.categoryId);
+                  const stillValid = !!wantKind && !!currentCat && currentCat.kind === wantKind;
+                  const nextCat = stillValid ? currentCat : wantKind ? categories.find((c) => c.kind === wantKind) : undefined;
+                  return {
+                    ...d,
+                    type: value,
+                    categoryId: nextCat ? nextCat.id : d.categoryId,
+                    subcategoryId: stillValid ? d.subcategoryId : null,
+                    subsubcategoryId: stillValid ? d.subsubcategoryId : null,
+                  };
+                })
+              }
               style={{
                 flex: 1,
                 padding: "8px 0",
@@ -168,8 +183,8 @@ export function TransactionForm({
             onChange={(e) => setTxDraft((d) => ({ ...d, categoryId: e.target.value || null, subcategoryId: null, subsubcategoryId: null }))}
             style={inputStyle}
           >
-            {categories.length === 0 && <option value="">Sin categorias</option>}
-            {categories.map((c) => (
+            {formCategoryOptions.length === 0 && <option value="">Sin categorias</option>}
+            {formCategoryOptions.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
