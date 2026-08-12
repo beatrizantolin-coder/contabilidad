@@ -321,8 +321,15 @@ export default function App() {
       };
 
       const linkedGroupId = txDraft.linkedGroupId;
+      const editedId = txDraft.id;
+      // Al editar, hay que quitar lo que había antes: si ya era una
+      // transferencia, las dos patas del grupo antiguo; si era un
+      // movimiento normal (Gasto/Ingreso) que se está convirtiendo en
+      // transferencia, el propio movimiento original por su id.
       const removeOldGroup = (d: typeof activeDoc) =>
-        txDraft.id ? { ...d, transactions: d.transactions.filter((x) => !isTransferTx(x) || x.transferGroupId !== linkedGroupId) } : d;
+        editedId
+          ? { ...d, transactions: d.transactions.filter((x) => (!isTransferTx(x) || x.transferGroupId !== linkedGroupId) && x.id !== editedId) }
+          : d;
 
       if (!crossDoc) {
         applyToDocs([

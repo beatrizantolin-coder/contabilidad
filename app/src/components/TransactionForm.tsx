@@ -140,9 +140,17 @@ export function TransactionForm({
                   const currentCat = categories.find((c) => c.id === d.categoryId);
                   const stillValid = !!wantKind && !!currentCat && currentCat.kind === wantKind;
                   const nextCat = stillValid ? currentCat : wantKind ? categories.find((c) => c.kind === wantKind) : undefined;
+                  // Al pasar a Transferencia, la cuenta destino no puede coincidir con
+                  // la de origen (si no, "guardar" no haría nada silenciosamente).
+                  const toAccountId =
+                    value === "transfer" && (d.toAccountId === d.accountId || !d.toAccountId)
+                      ? (accounts.find((a) => a.id !== d.accountId)?.id ?? d.toAccountId)
+                      : d.toAccountId;
                   return {
                     ...d,
                     type: value,
+                    toDocId: value === "transfer" ? activeDocId : d.toDocId,
+                    toAccountId,
                     categoryId: nextCat ? nextCat.id : d.categoryId,
                     subcategoryId: stillValid ? d.subcategoryId : null,
                     subsubcategoryId: stillValid ? d.subsubcategoryId : null,
