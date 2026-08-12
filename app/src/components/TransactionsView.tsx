@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, Download, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, Download, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
@@ -7,7 +7,7 @@ import { catInfo } from "../lib/categories";
 import { FiltersBar } from "./FiltersBar";
 import { MovementsRangeBar } from "./MovementsRangeBar";
 
-const GRID_COLUMNS = "74px 76px 1fr 140px 100px 28px 100px 56px";
+const GRID_COLUMNS = "18px 74px 76px 1fr 140px 100px 28px 100px 56px";
 
 export function TransactionsView({
   title,
@@ -35,6 +35,8 @@ export function TransactionsView({
   onToggleLink,
   sortBy,
   onSort,
+  dateSortEnabled,
+  onReorderSameDay,
   onAdd,
   onSave,
   onUndo,
@@ -76,6 +78,8 @@ export function TransactionsView({
   onToggleLink: (t: Transaction) => void;
   sortBy: SortState | null;
   onSort: (column: SortColumn) => void;
+  dateSortEnabled: boolean;
+  onReorderSameDay: (draggedId: ID, targetId: ID) => void;
   onAdd: () => void;
   onSave: () => void;
   onUndo: () => void;
@@ -92,6 +96,42 @@ export function TransactionsView({
   footerAmount: number;
   chart?: ReactNode;
 }) {
+  const [draggedTxId, setDraggedTxId] = useState<ID | null>(null);
+  const [dragOverTxId, setDragOverTxId] = useState<ID | null>(null);
+
+  // Reordenar movimientos del mismo dia por arrastre: seguimiento manual del
+  // raton (igual que las cuentas del sidebar), en vez de HTML5 drag-and-drop
+  // nativo, por la misma fiabilidad bajo WebKitGTK.
+  useEffect(() => {
+    if (!draggedTxId) return;
+    const draggedDate = filteredTx.find((t) => t.id === draggedTxId)?.date;
+    function onMove(e: MouseEvent) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const row = el?.closest("[data-tx-id]") as HTMLElement | null;
+      const rowId = row?.dataset.txId;
+      const rowDate = row?.dataset.txDate;
+      if (rowId && rowId !== draggedTxId && rowDate === draggedDate) {
+        setDragOverTxId(rowId);
+      } else {
+        setDragOverTxId(null);
+      }
+    }
+    function onUp() {
+      if (dragOverTxId && draggedTxId && dragOverTxId !== draggedTxId) {
+        onReorderSameDay(draggedTxId, dragOverTxId);
+      }
+      setDraggedTxId(null);
+      setDragOverTxId(null);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggedTxId, dragOverTxId]);
+
   return (
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid " + T.border, gap: 10, flexWrap: "wrap" }}>
@@ -171,6 +211,7 @@ export function TransactionsView({
 
       <div style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
+          <span />
           <SortableHeader label="Fecha" column="date" sortBy={sortBy} onSort={onSort} />
           <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />
           <SortableHeader label="Descripcion" column="name" sortBy={sortBy} onSort={onSort} />
@@ -193,17 +234,35 @@ export function TransactionsView({
           const StIcon = st.icon;
           const voided = t.status === "anulado";
           const selected = selectedIds.has(t.id);
+          const isDragging = draggedTxId === t.id;
+          const isDragOver = dragOverTxId === t.id && draggedTxId !== t.id;
           return (
             <div
               key={t.id}
               className="accrow"
+              data-tx-id={t.id}
+              data-tx-date={t.date}
               onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
               onClick={(e) => (e.shiftKey ? onShiftSelect(t.id) : onEdit(t))}
               style={{
                 display: "grid", gridTemplateColumns: GRID_COLUMNS, alignItems: "center", padding: "8px 20px", fontSize: 13,
-                borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
+                borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
+                borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
               }}
             >
+              {dateSortEnabled ? (
+                <GripVertical
+                  size={11}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDraggedTxId(t.id);
+                  }}
+                  style={{ color: T.textFaint, cursor: "grab" }}
+                />
+              ) : (
+                <span />
+              )}
               <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>
                 {shortDate(t.date)}
               </span>

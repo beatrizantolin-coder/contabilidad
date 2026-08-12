@@ -159,7 +159,7 @@ export default function App() {
       .filter((t) => !filters.search || t.name.toLowerCase().includes(filters.search.toLowerCase()))
       .slice();
     if (!sortBy) {
-      return base.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+      return base.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.seq - a.seq));
     }
     const dir = sortBy.dir === "asc" ? 1 : -1;
     return base.sort((a, b) => {
@@ -167,9 +167,32 @@ export default function App() {
       const vb = sortValue(b, sortBy.column);
       if (va < vb) return -1 * dir;
       if (va > vb) return 1 * dir;
+      if (sortBy.column === "date") return (a.seq - b.seq) * dir;
       return 0;
     });
   }, [scoped, filters, transactions, sortBy, runningMaps, effectiveViewRange.from, effectiveViewRange.to]);
+
+  // Cuando la tabla esta ordenada por fecha (o sin orden explicito, que
+  // ordena por fecha desc por defecto), el empate entre movimientos del
+  // mismo dia se resuelve por `seq`; arrastrar una fila reasigna el `seq`
+  // de todo el grupo de ese dia para reflejar el nuevo orden visual.
+  const dateSortEnabled = !sortBy || sortBy.column === "date";
+  function reorderSameDay(draggedId: ID, targetId: ID) {
+    if (draggedId === targetId) return;
+    const dragged = filteredTx.find((t) => t.id === draggedId);
+    const target = filteredTx.find((t) => t.id === targetId);
+    if (!dragged || !target || dragged.date !== target.date) return;
+    const dayItems = filteredTx.filter((t) => t.date === dragged.date);
+    const withoutDragged = dayItems.filter((t) => t.id !== draggedId);
+    const targetIdx = withoutDragged.findIndex((t) => t.id === targetId);
+    const newVisualOrder = withoutDragged.slice();
+    newVisualOrder.splice(targetIdx, 0, dragged);
+    const dir = sortBy && sortBy.column === "date" && sortBy.dir === "asc" ? 1 : -1;
+    const ascendingOrder = dir === 1 ? newVisualOrder : newVisualOrder.slice().reverse();
+    const newSeqById = new Map<ID, number>();
+    ascendingOrder.forEach((t) => newSeqById.set(t.id, genSeq()));
+    setTransactions((prev) => prev.map((t) => (newSeqById.has(t.id) ? { ...t, seq: newSeqById.get(t.id) as number } : t)));
+  }
 
   const curMonthKey = monthKey(todayISO());
   const thisMonthTx = scoped.filter((t) => monthKey(t.date) === curMonthKey);
@@ -842,6 +865,8 @@ export default function App() {
                     onToggleLink={toggleTransferLink}
                     sortBy={sortBy}
                     onSort={handleSort}
+                    dateSortEnabled={dateSortEnabled}
+                    onReorderSameDay={reorderSameDay}
                     showMovementsRange={showMovementsRange}
                     setShowMovementsRange={setShowMovementsRange}
                     onApplyMovementsRange={applyMovementsRange}
