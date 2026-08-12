@@ -8,7 +8,7 @@ import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
 import { currentWeekRange, freqPerMonth, monthKey, shortDate, todayISO } from "./lib/format";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
-import { pickOpenDocumentPath, readDocumentFromPath } from "./lib/docFile";
+import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
 import { ACCOUNT_SECTIONS, Sidebar, type MainView } from "./components/Sidebar";
@@ -25,7 +25,7 @@ import { WelcomeScreen } from "./components/WelcomeScreen";
 const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
 
 export default function App() {
-  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument } = useDocuments();
+  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument, getSavedPath, setSavedPath } = useDocuments();
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [lastClickedAccountId, setLastClickedAccountId] = useState<ID | null>(null);
@@ -230,6 +230,21 @@ export default function App() {
     setBudgets((prev) => ({ ...prev, [catId]: value as number }));
   }
 
+  async function handleSave() {
+    if (!activeDoc) return;
+    try {
+      let path = getSavedPath(activeDoc.id);
+      if (!path) {
+        const picked = await pickSaveDocumentPath(activeDoc.name);
+        if (!picked) return;
+        path = picked;
+        setSavedPath(activeDoc.id, path);
+      }
+      await writeDocumentToPath(activeDoc, path);
+    } catch (err) {
+      console.error("Error guardando el documento", err);
+    }
+  }
   async function handleExport() {
     if (!activeDoc) return;
     try {
@@ -762,6 +777,7 @@ export default function App() {
                     viewRangeLabel={shortDate(effectiveViewRange.from) + " - " + shortDate(effectiveViewRange.to)}
                     onResetMovementsRange={resetMovementsRange}
                     onAdd={openNewTxForm}
+                    onSave={handleSave}
                     onExport={handleExport}
                     onImport={handleImport}
                     onClearSelection={clearSelection}
