@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { CreditCard, FolderOpen, PiggyBank, Pencil, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CreditCard, FolderOpen, GripVertical, PiggyBank, Pencil, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, ID, LedgerDocument } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -44,6 +44,7 @@ export function Sidebar({
   addAccount,
   updateAccount,
   removeAccount,
+  onReorderAccounts,
   view,
   setView,
   recurringCount,
@@ -65,6 +66,7 @@ export function Sidebar({
   addAccount: (name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
   updateAccount: (id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
   removeAccount: (id: ID) => void;
+  onReorderAccounts: (draggedId: ID, targetId: ID) => void;
   view: MainView;
   setView: (v: MainView) => void;
   recurringCount: number;
@@ -75,6 +77,41 @@ export function Sidebar({
   const [docNameDraft, setDocNameDraft] = useState("");
   const [showAccForm, setShowAccForm] = useState(false);
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking"));
+  const [draggedAccountId, setDraggedAccountId] = useState<ID | null>(null);
+  const [dragOverAccountId, setDragOverAccountId] = useState<ID | null>(null);
+
+  // Reordenar cuentas por arrastre: se sigue el raton manualmente (en vez de
+  // usar el HTML5 drag-and-drop nativo) porque bajo WebKitGTK el gesto de
+  // arrastre nativo no siempre se dispara de forma fiable.
+  useEffect(() => {
+    if (!draggedAccountId) return;
+    function onMove(e: MouseEvent) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const row = el?.closest("[data-account-id]") as HTMLElement | null;
+      const rowId = row?.dataset.accountId;
+      const rowType = row?.dataset.accountType;
+      const draggedType = accounts.find((a) => a.id === draggedAccountId)?.type || "checking";
+      if (rowId && rowId !== draggedAccountId && rowType === draggedType) {
+        setDragOverAccountId(rowId);
+      } else {
+        setDragOverAccountId(null);
+      }
+    }
+    function onUp() {
+      if (dragOverAccountId && draggedAccountId && dragOverAccountId !== draggedAccountId) {
+        onReorderAccounts(draggedAccountId, dragOverAccountId);
+      }
+      setDraggedAccountId(null);
+      setDragOverAccountId(null);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggedAccountId, dragOverAccountId]);
 
   function submitDoc(e: React.FormEvent) {
     e.preventDefault();
@@ -174,8 +211,36 @@ export function Sidebar({
               const bal = balances[a.id] || 0;
               const low = (a.warning && bal < a.warning) || bal < 0;
               const highlighted = activeAccounts.has(a.id);
+              const isDragging = draggedAccountId === a.id;
+              const isDragOver = dragOverAccountId === a.id && draggedAccountId !== a.id;
               return (
-                <div key={a.id} className="accrow navitem" style={{ borderRadius: 7, background: highlighted ? "#FFFFFF" : "transparent", boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none", marginBottom: 2, padding: "7px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                <div
+                  key={a.id}
+                  className="accrow navitem"
+                  data-account-id={a.id}
+                  data-account-type={a.type || "checking"}
+                  style={{
+                    borderRadius: 7,
+                    background: highlighted ? "#FFFFFF" : "transparent",
+                    boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                    marginBottom: 2,
+                    padding: "7px 10px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 6,
+                    opacity: isDragging ? 0.4 : 1,
+                    borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
+                  }}
+                >
+                  <GripVertical
+                    size={11}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setDraggedAccountId(a.id);
+                    }}
+                    style={{ color: T.textFaint, flexShrink: 0, cursor: "grab" }}
+                  />
                   <button onClick={(e) => { onAccountClick(a.id, e.shiftKey); goToAccounts(); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                     <SectionIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
                     <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>

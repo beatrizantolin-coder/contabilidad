@@ -333,6 +333,19 @@ export default function App() {
       return next;
     });
   }
+  function reorderAccounts(draggedId: ID, targetId: ID) {
+    if (draggedId === targetId) return;
+    setAccounts((prev) => {
+      const draggedIdx = prev.findIndex((a) => a.id === draggedId);
+      const targetIdx = prev.findIndex((a) => a.id === targetId);
+      if (draggedIdx === -1 || targetIdx === -1) return prev;
+      const next = prev.slice();
+      const [item] = next.splice(draggedIdx, 1);
+      const insertIdx = next.findIndex((a) => a.id === targetId);
+      next.splice(insertIdx, 0, item);
+      return next;
+    });
+  }
   function handleAccountClick(id: ID, shiftKey: boolean) {
     if (!shiftKey) {
       setActiveAccounts(new Set([id]));
@@ -766,6 +779,7 @@ export default function App() {
               addAccount={addAccount}
               updateAccount={updateAccount}
               removeAccount={removeAccount}
+              onReorderAccounts={reorderAccounts}
               view={view}
               setView={setView}
               recurringCount={recurringList.length}
