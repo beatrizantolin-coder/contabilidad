@@ -20,7 +20,7 @@ export function TransactionsView({
   onSaveFilter,
   filteredTx,
   selectedIds,
-  onRowClick,
+  onShiftSelect,
   resultingBalance,
   onEdit,
   onRemove,
@@ -28,6 +28,7 @@ export function TransactionsView({
   onAdd,
   onExport,
   onImport,
+  onClearSelection,
   onDuplicateSelected,
   onBulkEditSelected,
   onDeleteSelected,
@@ -46,7 +47,7 @@ export function TransactionsView({
   onSaveFilter: (name: string) => void;
   filteredTx: Transaction[];
   selectedIds: Set<ID>;
-  onRowClick: (id: ID, shiftKey: boolean) => void;
+  onShiftSelect: (id: ID) => void;
   resultingBalance: (t: Transaction) => number;
   onEdit: (t: Transaction) => void;
   onRemove: (t: Transaction) => void;
@@ -54,6 +55,7 @@ export function TransactionsView({
   onAdd: () => void;
   onExport: () => void;
   onImport: () => void;
+  onClearSelection: () => void;
   onDuplicateSelected: () => void;
   onBulkEditSelected: () => void;
   onDeleteSelected: () => void;
@@ -101,6 +103,9 @@ export function TransactionsView({
           <span style={{ fontSize: 12.5, color: T.accent, fontWeight: 600 }}>
             {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"}
           </span>
+          <button onClick={onClearSelection} style={smallBtn(false)}>
+            Borrar
+          </button>
           <button onClick={onDuplicateSelected} style={smallBtn(false)}>
             Duplicar
           </button>
@@ -141,7 +146,7 @@ export function TransactionsView({
               key={t.id}
               className="accrow"
               onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
-              onClick={(e) => onRowClick(t.id, e.shiftKey)}
+              onClick={(e) => (e.shiftKey ? onShiftSelect(t.id) : onEdit(t))}
               style={{
                 display: "grid", gridTemplateColumns: GRID_COLUMNS, alignItems: "center", padding: "8px 20px", fontSize: 13,
                 borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { T } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
@@ -427,17 +427,13 @@ export default function App() {
     }
   }
 
-  function toggleSelect(id: ID) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setLastClickedId(null);
   }
 
-  function handleRowClick(id: ID, shiftKey: boolean) {
-    if (shiftKey && lastClickedId !== null) {
+  function handleShiftSelect(id: ID) {
+    if (lastClickedId !== null) {
       const ids = filteredTx.map((t) => t.id);
       const lastIdx = ids.indexOf(lastClickedId);
       const curIdx = ids.indexOf(id);
@@ -450,10 +446,15 @@ export default function App() {
           rangeIds.forEach((rid) => next.add(rid));
           return next;
         });
+        setLastClickedId(id);
         return;
       }
     }
-    toggleSelect(id);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     setLastClickedId(id);
   }
 
@@ -477,6 +478,22 @@ export default function App() {
     applyToDocs(Array.from(new Set([activeDocId as ID, ...otherDocIds])).map((docId) => ({ docId, fn })));
     setSelectedIds(new Set());
   }
+
+  // Supr/Delete elimina los movimientos seleccionados, salvo si el foco esta
+  // en un campo editable (para no interferir con borrar texto en un input).
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (selectedIds.size === 0) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      e.preventDefault();
+      deleteSelected();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedIds, transactions, activeDocId]);
 
   function openBulkEdit() {
     setShowTxForm(false);
@@ -625,7 +642,7 @@ export default function App() {
                     onSaveFilter={saveCurrentFilter}
                     filteredTx={filteredTx}
                     selectedIds={selectedIds}
-                    onRowClick={handleRowClick}
+                    onShiftSelect={handleShiftSelect}
                     resultingBalance={resultingBalance}
                     onEdit={editTx}
                     onRemove={removeTx}
@@ -633,6 +650,7 @@ export default function App() {
                     onAdd={openNewTxForm}
                     onExport={handleExport}
                     onImport={handleImport}
+                    onClearSelection={clearSelection}
                     onDuplicateSelected={duplicateSelected}
                     onBulkEditSelected={openBulkEdit}
                     onDeleteSelected={deleteSelected}
