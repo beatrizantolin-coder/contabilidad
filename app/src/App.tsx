@@ -5,7 +5,7 @@ import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
-import { freqPerMonth, monthKey, todayISO } from "./lib/format";
+import { currentWeekRange, freqPerMonth, monthKey, shortDate, todayISO } from "./lib/format";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, readDocumentFromPath } from "./lib/docFile";
@@ -33,6 +33,8 @@ export default function App() {
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters());
+  const [showMovementsRange, setShowMovementsRange] = useState(false);
+  const [viewRange, setViewRange] = useState<{ from: string; to: string } | null>(null);
   const [txDraft, setTxDraft] = useState<TxDraft | null>(null);
   const [evoRange, setEvoRange] = useState<EvoRange>({ from: "", to: "" });
   const [selectedIds, setSelectedIds] = useState<Set<ID>>(new Set());
@@ -43,6 +45,14 @@ export default function App() {
 
   function handleSort(column: SortColumn) {
     setSortBy((prev) => (prev && prev.column === column ? { column, dir: prev.dir === "asc" ? "desc" : "asc" } : { column, dir: "asc" }));
+  }
+
+  function applyMovementsRange(from: string, to: string) {
+    setViewRange({ from, to });
+    setShowMovementsRange(false);
+  }
+  function resetMovementsRange() {
+    setViewRange(null);
   }
 
   const accounts = activeDoc?.accounts ?? [];
@@ -88,9 +98,12 @@ export default function App() {
     }
   }
 
+  const effectiveViewRange = viewRange ?? currentWeekRange();
+
   const filteredTx = useMemo(() => {
     const base = scoped
       .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions))
+      .filter((t) => t.date >= effectiveViewRange.from && t.date <= effectiveViewRange.to)
       .filter((t) => filters.categories.length === 0 || (t.categoryId && filters.categories.includes(t.categoryId)))
       .filter((t) => filters.subcategories.length === 0 || (t.subcategoryId && filters.subcategories.includes(t.subcategoryId)))
       .filter((t) => filters.type === "all" || (filters.type === "transfer" ? t.type === "transfer" || t.type === "transfer_in" : t.type === filters.type))
@@ -109,7 +122,7 @@ export default function App() {
       if (va > vb) return 1 * dir;
       return 0;
     });
-  }, [scoped, filters, transactions, sortBy, runningMaps]);
+  }, [scoped, filters, transactions, sortBy, runningMaps, effectiveViewRange.from, effectiveViewRange.to]);
 
   const curMonthKey = monthKey(todayISO());
   const thisMonthTx = scoped.filter((t) => monthKey(t.date) === curMonthKey);
@@ -742,6 +755,12 @@ export default function App() {
                     onToggleLink={toggleTransferLink}
                     sortBy={sortBy}
                     onSort={handleSort}
+                    showMovementsRange={showMovementsRange}
+                    setShowMovementsRange={setShowMovementsRange}
+                    onApplyMovementsRange={applyMovementsRange}
+                    viewRangeIsDefault={viewRange === null}
+                    viewRangeLabel={shortDate(effectiveViewRange.from) + " - " + shortDate(effectiveViewRange.to)}
+                    onResetMovementsRange={resetMovementsRange}
                     onAdd={openNewTxForm}
                     onExport={handleExport}
                     onImport={handleImport}

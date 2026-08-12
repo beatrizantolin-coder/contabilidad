@@ -15,6 +15,30 @@ export const shortDate = (iso: string): string => {
 
 export const monthKey = (iso: string): string => iso.slice(0, 7);
 
+/** Rango lunes-domingo de la semana en curso (vista por defecto de la tabla de movimientos). */
+export const currentWeekRange = (): { from: string; to: string } => {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: fmtDate(monday), to: fmtDate(sunday) };
+};
+
+export const monthsAgoISO = (n: number): string => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - n);
+  return d.toISOString().slice(0, 10);
+};
+
+export const endOfYearISO = (): string => {
+  const d = new Date();
+  return d.getFullYear() + "-12-31";
+};
+
 export const nextDate = (iso: string, recurring: Recurring): string => {
   const d = new Date(iso + "T00:00:00");
   const interval = Number(recurring.interval) || 1;

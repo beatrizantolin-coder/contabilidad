@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowRightLeft, Download, Link2, Link2Off, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, Download, Link2, Link2Off, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { FiltersBar } from "./FiltersBar";
+import { MovementsRangeBar } from "./MovementsRangeBar";
 
 const GRID_COLUMNS = "74px 76px 1fr 140px 100px 28px 100px 56px";
 
@@ -18,6 +19,12 @@ export function TransactionsView({
   setFilters,
   categories,
   onSaveFilter,
+  showMovementsRange,
+  setShowMovementsRange,
+  onApplyMovementsRange,
+  viewRangeIsDefault,
+  viewRangeLabel,
+  onResetMovementsRange,
   filteredTx,
   selectedIds,
   onShiftSelect,
@@ -48,6 +55,12 @@ export function TransactionsView({
   setFilters: (fn: (f: Filters) => Filters) => void;
   categories: Category[];
   onSaveFilter: (name: string) => void;
+  showMovementsRange: boolean;
+  setShowMovementsRange: (fn: (s: boolean) => boolean) => void;
+  onApplyMovementsRange: (from: string, to: string) => void;
+  viewRangeIsDefault: boolean;
+  viewRangeLabel: string;
+  onResetMovementsRange: () => void;
   filteredTx: Transaction[];
   selectedIds: Set<ID>;
   onShiftSelect: (id: ID) => void;
@@ -74,12 +87,20 @@ export function TransactionsView({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid " + T.border, gap: 10, flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
-          <div style={{ display: "flex", gap: 14, marginTop: 3 }}>
+          <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center" }}>
             <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
               <TrendingUp size={12} /> <span className="amount">{fmt(monthIncome)}</span>
             </span>
             <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
               <TrendingDown size={12} /> <span className="amount">{fmt(monthExpense)}</span>
+            </span>
+            <span style={{ fontSize: 11, color: T.textFaint }}>
+              {viewRangeIsDefault ? "Semana en curso" : viewRangeLabel}
+              {!viewRangeIsDefault && (
+                <button onClick={onResetMovementsRange} style={{ marginLeft: 6, background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>
+                  Ver semana actual
+                </button>
+              )}
             </span>
           </div>
         </div>
@@ -87,6 +108,10 @@ export function TransactionsView({
           <button onClick={() => setShowFilters((s) => !s)} style={smallBtn(showFilters)}>
             <SlidersHorizontal size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
             Filtros
+          </button>
+          <button onClick={() => setShowMovementsRange((s) => !s)} style={smallBtn(showMovementsRange)}>
+            <CalendarRange size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
+            Movimientos
           </button>
           <button onClick={onExport} style={smallBtn(false)}>
             <Download size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
@@ -103,6 +128,7 @@ export function TransactionsView({
       </div>
 
       {showFilters && <FiltersBar filters={filters} setFilters={setFilters} categories={categories} onSaveFilter={onSaveFilter} />}
+      {showMovementsRange && <MovementsRangeBar onApply={onApplyMovementsRange} />}
 
       {selectedIds.size > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", background: "#EAF1FC", borderBottom: "1px solid " + T.border }}>
