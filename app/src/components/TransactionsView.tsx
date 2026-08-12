@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { ArrowRightLeft, Download, Link2, Link2Off, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
-import type { Category, Filters, ID, Transaction } from "../types";
+import { ArrowDown, ArrowUp, ArrowRightLeft, Download, Link2, Link2Off, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
@@ -26,6 +26,8 @@ export function TransactionsView({
   onRemove,
   onCycleStatus,
   onToggleLink,
+  sortBy,
+  onSort,
   onAdd,
   onExport,
   onImport,
@@ -54,6 +56,8 @@ export function TransactionsView({
   onRemove: (t: Transaction) => void;
   onCycleStatus: (t: Transaction) => void;
   onToggleLink: (t: Transaction) => void;
+  sortBy: SortState | null;
+  onSort: (column: SortColumn) => void;
   onAdd: () => void;
   onExport: () => void;
   onImport: () => void;
@@ -122,13 +126,13 @@ export function TransactionsView({
 
       <div style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
-          <span>Fecha</span>
-          <span style={{ textAlign: "center" }}>Estado</span>
-          <span>Descripcion</span>
-          <span>Comentario</span>
-          <span style={{ textAlign: "right" }}>Importe</span>
+          <SortableHeader label="Fecha" column="date" sortBy={sortBy} onSort={onSort} />
+          <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />
+          <SortableHeader label="Descripcion" column="name" sortBy={sortBy} onSort={onSort} />
+          <SortableHeader label="Comentario" column="comment" sortBy={sortBy} onSort={onSort} />
+          <SortableHeader label="Importe" column="amount" sortBy={sortBy} onSort={onSort} align="right" />
           <span />
-          <span style={{ textAlign: "right" }}>Saldo</span>
+          <SortableHeader label="Saldo" column="balance" sortBy={sortBy} onSort={onSort} align="right" />
           <span />
         </div>
 
@@ -216,5 +220,33 @@ export function TransactionsView({
         </span>
       </div>
     </>
+  );
+}
+
+function SortableHeader({
+  label,
+  column,
+  sortBy,
+  onSort,
+  align,
+}: {
+  label: string;
+  column: SortColumn;
+  sortBy: SortState | null;
+  onSort: (column: SortColumn) => void;
+  align?: "left" | "center" | "right";
+}) {
+  const active = sortBy?.column === column;
+  return (
+    <button
+      onClick={() => onSort(column)}
+      style={{
+        display: "flex", alignItems: "center", gap: 3, justifyContent: align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start",
+        background: "none", border: "none", padding: 0, margin: 0, font: "inherit", color: active ? T.text : "inherit", textTransform: "inherit", letterSpacing: "inherit", cursor: "pointer",
+      }}
+    >
+      {label}
+      {active && (sortBy!.dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+    </button>
   );
 }

@@ -106,6 +106,12 @@ export interface Filters {
   to: string;
 }
 
+export type SortColumn = "date" | "status" | "name" | "comment" | "amount" | "balance";
+export interface SortState {
+  column: SortColumn;
+  dir: "asc" | "desc";
+}
+
 export interface SavedFilter {
   id: ID;
   name: string;

@@ -10,7 +10,7 @@ import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolutio
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, readDocumentFromPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
-import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type SavedFilter, type Transaction } from "./types";
+import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
 import { ACCOUNT_SECTIONS, Sidebar, type MainView } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
@@ -39,6 +39,11 @@ export default function App() {
   const [lastClickedId, setLastClickedId] = useState<ID | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
+  const [sortBy, setSortBy] = useState<SortState | null>(null);
+
+  function handleSort(column: SortColumn) {
+    setSortBy((prev) => (prev && prev.column === column ? { column, dir: prev.dir === "asc" ? "desc" : "asc" } : { column, dir: "asc" }));
+  }
 
   const accounts = activeDoc?.accounts ?? [];
   const transactions = activeDoc?.transactions ?? [];
@@ -62,8 +67,29 @@ export default function App() {
 
   const scoped = useMemo(() => transactions.filter((t) => scopeIds.has(t.accountId)), [transactions, scopeIds]);
 
+  const STATUS_SORT_ORDER: Transaction["status"][] = ["reconciliado", "pendiente", "programado", "anulado"];
+  function signedAmount(t: Transaction): number {
+    return t.type === "income" || t.type === "transfer_in" ? Number(t.amount) : -Number(t.amount);
+  }
+  function sortValue(t: Transaction, column: SortColumn): number | string {
+    switch (column) {
+      case "date":
+        return t.date;
+      case "status":
+        return STATUS_SORT_ORDER.indexOf(t.status || "pendiente");
+      case "name":
+        return t.name.toLowerCase();
+      case "comment":
+        return (t.comment || "").toLowerCase();
+      case "amount":
+        return signedAmount(t);
+      case "balance":
+        return resultingBalance(t);
+    }
+  }
+
   const filteredTx = useMemo(() => {
-    return scoped
+    const base = scoped
       .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions))
       .filter((t) => filters.categories.length === 0 || (t.categoryId && filters.categories.includes(t.categoryId)))
       .filter((t) => filters.subcategories.length === 0 || (t.subcategoryId && filters.subcategories.includes(t.subcategoryId)))
@@ -71,9 +97,19 @@ export default function App() {
       .filter((t) => !filters.from || t.date >= filters.from)
       .filter((t) => !filters.to || t.date <= filters.to)
       .filter((t) => !filters.search || t.name.toLowerCase().includes(filters.search.toLowerCase()))
-      .slice()
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-  }, [scoped, filters, transactions]);
+      .slice();
+    if (!sortBy) {
+      return base.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    }
+    const dir = sortBy.dir === "asc" ? 1 : -1;
+    return base.sort((a, b) => {
+      const va = sortValue(a, sortBy.column);
+      const vb = sortValue(b, sortBy.column);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }, [scoped, filters, transactions, sortBy, runningMaps]);
 
   const curMonthKey = monthKey(todayISO());
   const thisMonthTx = scoped.filter((t) => monthKey(t.date) === curMonthKey);
@@ -704,6 +740,8 @@ export default function App() {
                     onRemove={removeTx}
                     onCycleStatus={cycleStatus}
                     onToggleLink={toggleTransferLink}
+                    sortBy={sortBy}
+                    onSort={handleSort}
                     onAdd={openNewTxForm}
                     onExport={handleExport}
                     onImport={handleImport}
