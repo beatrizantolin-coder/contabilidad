@@ -127,8 +127,10 @@ export default function App() {
     updateDoc(activeDocId, (d) => ({ ...d, savedFilters: fn(d.savedFilters) }));
   }
 
-  function addCategory(name: string, color: string, kind: CategoryKind) {
-    setCategories((prev) => prev.concat([{ id: genId(), name, color, kind, subcategories: [] }]));
+  function addCategory(name: string, color: string, kind: CategoryKind): ID {
+    const id = genId();
+    setCategories((prev) => prev.concat([{ id, name, color, kind, subcategories: [] }]));
+    return id;
   }
   function removeCategory(id: ID) {
     setCategories((prev) => prev.filter((c) => c.id !== id));
@@ -136,8 +138,10 @@ export default function App() {
   function setCategoryColor(id: ID, color: string) {
     setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, color } : c)));
   }
-  function addSubcategory(catId: ID, name: string, color: string) {
-    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([{ id: genId(), name, color, subcategories: [] }]) } : c)));
+  function addSubcategory(catId: ID, name: string, color: string): ID {
+    const id = genId();
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([{ id, name, color, subcategories: [] }]) } : c)));
+    return id;
   }
   function removeSubcategory(catId: ID, subId: ID) {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
@@ -145,14 +149,16 @@ export default function App() {
   function setSubcategoryColor(catId: ID, subId: ID, color: string) {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.map((s) => (s.id === subId ? { ...s, color } : s)) } : c)));
   }
-  function addSubSubcategory(catId: ID, subId: ID, name: string, color: string) {
+  function addSubSubcategory(catId: ID, subId: ID, name: string, color: string): ID {
+    const id = genId();
     setCategories((prev) =>
       prev.map((c) =>
         c.id !== catId
           ? c
-          : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.concat([{ id: genId(), name, color, subcategories: [] }]) })) },
+          : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.concat([{ id, name, color, subcategories: [] }]) })) },
       ),
     );
+    return id;
   }
   function removeSubSubcategory(catId: ID, subId: ID, subsubId: ID) {
     setCategories((prev) =>
@@ -266,7 +272,7 @@ export default function App() {
     if (!txDraft || !activeDoc || !activeDocId) return;
     if (!txDraft.name || !txDraft.amount || !txDraft.accountId) return;
     const amount = Number(txDraft.amount);
-    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: null } : null;
+    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.recurringEndDate || null } : null;
 
     if (txDraft.type === "transfer") {
       if (!txDraft.toAccountId) return;
@@ -371,6 +377,7 @@ export default function App() {
         toAccountId: isIncoming ? t.accountId : t.toAccountId,
         date: t.date, name: t.name, comment: t.comment || "", categoryId: null, subcategoryId: null, subsubcategoryId: null, amount: String(t.amount),
         type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
+        recurringEndDate: t.recurring?.endDate ?? "",
       });
     } else {
       setTxDraft({
@@ -378,6 +385,7 @@ export default function App() {
         date: t.date, name: t.name, comment: t.comment || "", categoryId: t.categoryId, subcategoryId: t.subcategoryId, subsubcategoryId: t.subsubcategoryId,
         amount: String(t.amount),
         type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
+        recurringEndDate: t.recurring?.endDate ?? "",
       });
     }
     setShowTxForm(true);
@@ -660,6 +668,9 @@ export default function App() {
                         documents={documents}
                         activeDocId={activeDoc.id}
                         onDescriptionChange={handleDescriptionAutocomplete}
+                        onCreateCategory={addCategory}
+                        onCreateSubcategory={addSubcategory}
+                        onCreateSubSubcategory={addSubSubcategory}
                         onSubmit={submitTx}
                         onCancel={resetDraft}
                       />

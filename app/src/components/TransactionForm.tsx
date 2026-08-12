@@ -1,7 +1,11 @@
-import type { LedgerDocument, RecurUnit, TransactionStatus } from "../types";
+import { useState } from "react";
+import type { CategoryKind, ID, LedgerDocument, RecurUnit, TransactionStatus } from "../types";
 import type { TxDraft } from "../lib/txDraft";
 import { Field } from "./Field";
-import { T, inputStyle, STATUSES, RECUR_UNITS } from "../theme";
+import { ColorSwatches } from "./ColorSwatches";
+import { T, inputStyle, STATUSES, RECUR_UNITS, PALETTE } from "../theme";
+
+const NEW_OPTION = "__new__";
 
 export function TransactionForm({
   txDraft,
@@ -11,6 +15,9 @@ export function TransactionForm({
   documents,
   activeDocId,
   onDescriptionChange,
+  onCreateCategory,
+  onCreateSubcategory,
+  onCreateSubSubcategory,
   onSubmit,
   onCancel,
 }: {
@@ -21,6 +28,9 @@ export function TransactionForm({
   documents: LedgerDocument[];
   activeDocId: string;
   onDescriptionChange: (name: string) => void;
+  onCreateCategory: (name: string, color: string, kind: CategoryKind) => ID;
+  onCreateSubcategory: (catId: ID, name: string, color: string) => ID;
+  onCreateSubSubcategory: (catId: ID, subId: ID, name: string, color: string) => ID;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
 }) {
@@ -28,6 +38,44 @@ export function TransactionForm({
   const selectedCategory = categories.find((c) => c.id === txDraft.categoryId);
   const selectedSubcategory = selectedCategory?.subcategories.find((s) => s.id === txDraft.subcategoryId);
   const formCategoryOptions = txDraft.type === "income" ? categories.filter((c) => c.kind === "income") : categories.filter((c) => c.kind !== "income");
+
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatColor, setNewCatColor] = useState(PALETTE[0]);
+
+  const [newSubOpen, setNewSubOpen] = useState(false);
+  const [newSubName, setNewSubName] = useState("");
+  const [newSubColor, setNewSubColor] = useState(PALETTE[0]);
+
+  const [newSubSubOpen, setNewSubSubOpen] = useState(false);
+  const [newSubSubName, setNewSubSubName] = useState("");
+  const [newSubSubColor, setNewSubSubColor] = useState(PALETTE[0]);
+
+  function submitNewCategory() {
+    if (!newCatName.trim()) return;
+    const kind: CategoryKind = txDraft.type === "income" ? "income" : "expense";
+    const id = onCreateCategory(newCatName.trim(), newCatColor, kind);
+    setTxDraft((d) => ({ ...d, categoryId: id, subcategoryId: null, subsubcategoryId: null }));
+    setNewCatName("");
+    setNewCatColor(PALETTE[0]);
+    setNewCatOpen(false);
+  }
+  function submitNewSubcategory() {
+    if (!newSubName.trim() || !selectedCategory) return;
+    const id = onCreateSubcategory(selectedCategory.id, newSubName.trim(), newSubColor);
+    setTxDraft((d) => ({ ...d, subcategoryId: id, subsubcategoryId: null }));
+    setNewSubName("");
+    setNewSubColor(PALETTE[0]);
+    setNewSubOpen(false);
+  }
+  function submitNewSubSubcategory() {
+    if (!newSubSubName.trim() || !selectedCategory || !selectedSubcategory) return;
+    const id = onCreateSubSubcategory(selectedCategory.id, selectedSubcategory.id, newSubSubName.trim(), newSubSubColor);
+    setTxDraft((d) => ({ ...d, subsubcategoryId: id }));
+    setNewSubSubName("");
+    setNewSubSubColor(PALETTE[0]);
+    setNewSubSubOpen(false);
+  }
 
   return (
     <form onSubmit={onSubmit} style={{ padding: 16, display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
@@ -143,6 +191,16 @@ export function TransactionForm({
           </div>
         )}
       </div>
+      {txDraft.recurringOn && (
+        <Field label="Fecha final (opcional)">
+          <input
+            type="date"
+            value={txDraft.recurringEndDate}
+            onChange={(e) => setTxDraft((d) => ({ ...d, recurringEndDate: e.target.value }))}
+            style={inputStyle}
+          />
+        </Field>
+      )}
 
       <Field label="Descripcion">
         <input
@@ -180,7 +238,14 @@ export function TransactionForm({
         <Field label="Categoria">
           <select
             value={txDraft.categoryId ?? ""}
-            onChange={(e) => setTxDraft((d) => ({ ...d, categoryId: e.target.value || null, subcategoryId: null, subsubcategoryId: null }))}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === NEW_OPTION) {
+                setNewCatOpen(true);
+                return;
+              }
+              setTxDraft((d) => ({ ...d, categoryId: val || null, subcategoryId: null, subsubcategoryId: null }));
+            }}
             style={inputStyle}
           >
             {formCategoryOptions.length === 0 && <option value="">Sin categorias</option>}
@@ -189,32 +254,137 @@ export function TransactionForm({
                 {c.name}
               </option>
             ))}
+            <option value={NEW_OPTION}>+ Nueva categoria</option>
           </select>
         </Field>
       )}
-      {txDraft.type !== "transfer" && selectedCategory && selectedCategory.subcategories.length > 0 && (
+      {txDraft.type !== "transfer" && newCatOpen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 8 }}>
+          <input
+            autoFocus
+            placeholder="Nombre de la categoria"
+            value={newCatName}
+            onChange={(e) => setNewCatName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitNewCategory();
+              }
+            }}
+            style={inputStyle}
+          />
+          <ColorSwatches value={newCatColor} onChange={setNewCatColor} size={14} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={submitNewCategory} style={{ background: T.accent, border: "none", borderRadius: 6, padding: "6px 12px", color: "#fff", fontWeight: 600, fontSize: 12 }}>
+              Crear
+            </button>
+            <button type="button" onClick={() => setNewCatOpen(false)} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "6px 10px", color: T.textMuted, fontSize: 12 }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {txDraft.type !== "transfer" && selectedCategory && (
         <Field label="Subcategoria">
-          <select value={txDraft.subcategoryId ?? ""} onChange={(e) => setTxDraft((d) => ({ ...d, subcategoryId: e.target.value || null, subsubcategoryId: null }))} style={inputStyle}>
+          <select
+            value={txDraft.subcategoryId ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === NEW_OPTION) {
+                setNewSubOpen(true);
+                return;
+              }
+              setTxDraft((d) => ({ ...d, subcategoryId: val || null, subsubcategoryId: null }));
+            }}
+            style={inputStyle}
+          >
             <option value="">Ninguna</option>
             {selectedCategory.subcategories.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
+            <option value={NEW_OPTION}>+ Nueva subcategoria</option>
           </select>
         </Field>
       )}
-      {txDraft.type !== "transfer" && selectedSubcategory && selectedSubcategory.subcategories.length > 0 && (
+      {txDraft.type !== "transfer" && selectedCategory && newSubOpen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 8 }}>
+          <input
+            autoFocus
+            placeholder="Nombre de la subcategoria"
+            value={newSubName}
+            onChange={(e) => setNewSubName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitNewSubcategory();
+              }
+            }}
+            style={inputStyle}
+          />
+          <ColorSwatches value={newSubColor} onChange={setNewSubColor} size={14} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={submitNewSubcategory} style={{ background: T.accent, border: "none", borderRadius: 6, padding: "6px 12px", color: "#fff", fontWeight: 600, fontSize: 12 }}>
+              Crear
+            </button>
+            <button type="button" onClick={() => setNewSubOpen(false)} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "6px 10px", color: T.textMuted, fontSize: 12 }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {txDraft.type !== "transfer" && selectedCategory && selectedSubcategory && (
         <Field label="Sub-subcategoria">
-          <select value={txDraft.subsubcategoryId ?? ""} onChange={(e) => setTxDraft((d) => ({ ...d, subsubcategoryId: e.target.value || null }))} style={inputStyle}>
+          <select
+            value={txDraft.subsubcategoryId ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === NEW_OPTION) {
+                setNewSubSubOpen(true);
+                return;
+              }
+              setTxDraft((d) => ({ ...d, subsubcategoryId: val || null }));
+            }}
+            style={inputStyle}
+          >
             <option value="">Ninguna</option>
             {selectedSubcategory.subcategories.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
+            <option value={NEW_OPTION}>+ Nueva sub-subcategoria</option>
           </select>
         </Field>
+      )}
+      {txDraft.type !== "transfer" && selectedCategory && selectedSubcategory && newSubSubOpen && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 8 }}>
+          <input
+            autoFocus
+            placeholder="Nombre de la sub-subcategoria"
+            value={newSubSubName}
+            onChange={(e) => setNewSubSubName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                submitNewSubSubcategory();
+              }
+            }}
+            style={inputStyle}
+          />
+          <ColorSwatches value={newSubSubColor} onChange={setNewSubSubColor} size={14} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={submitNewSubSubcategory} style={{ background: T.accent, border: "none", borderRadius: 6, padding: "6px 12px", color: "#fff", fontWeight: 600, fontSize: 12 }}>
+              Crear
+            </button>
+            <button type="button" onClick={() => setNewSubSubOpen(false)} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "6px 10px", color: T.textMuted, fontSize: 12 }}>
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
 
       <Field label="Comentario">

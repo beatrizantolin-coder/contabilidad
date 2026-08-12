@@ -19,6 +19,7 @@ export interface TxDraft {
   recurringOn: boolean;
   freqInterval: number;
   freqUnit: RecurUnit;
+  recurringEndDate: string;
 }
 
 export function emptyDraft(accounts: Account[], docId: ID, categories: Category[]): TxDraft {
@@ -39,5 +40,6 @@ export function emptyDraft(accounts: Account[], docId: ID, categories: Category[
     recurringOn: false,
     freqInterval: 1,
     freqUnit: "months",
+    recurringEndDate: "",
   };
 }
