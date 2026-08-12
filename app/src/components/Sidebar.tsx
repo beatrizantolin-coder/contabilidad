@@ -12,7 +12,7 @@ interface AccountSection {
   icon: typeof Wallet;
 }
 
-const ACCOUNT_SECTIONS: AccountSection[] = [
+export const ACCOUNT_SECTIONS: AccountSection[] = [
   { key: "checking", label: "Cuentas", icon: Wallet },
   { key: "savings", label: "Ahorro", icon: PiggyBank },
   { key: "credit", label: "Tarjetas", icon: CreditCard },
@@ -39,7 +39,7 @@ export function Sidebar({
   balances,
   totalBalance,
   activeAccounts,
-  toggleAccountSelect,
+  onAccountClick,
   clearAccountSelection,
   addAccount,
   updateAccount,
@@ -60,7 +60,7 @@ export function Sidebar({
   balances: Record<ID, number>;
   totalBalance: number;
   activeAccounts: Set<ID>;
-  toggleAccountSelect: (id: ID) => void;
+  onAccountClick: (id: ID, shiftKey: boolean) => void;
   clearAccountSelection: () => void;
   addAccount: (name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
   updateAccount: (id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
@@ -176,7 +176,7 @@ export function Sidebar({
               const highlighted = activeAccounts.has(a.id);
               return (
                 <div key={a.id} className="accrow navitem" style={{ borderRadius: 7, background: highlighted ? "#FFFFFF" : "transparent", boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none", marginBottom: 2, padding: "7px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => { toggleAccountSelect(a.id); goToAccounts(); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <button onClick={(e) => { onAccountClick(a.id, e.shiftKey); goToAccounts(); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                     <SectionIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
                     <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                   </button>

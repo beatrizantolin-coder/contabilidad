@@ -11,7 +11,7 @@ import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, readDocumentFromPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type SavedFilter, type Transaction } from "./types";
-import { Sidebar, type MainView } from "./components/Sidebar";
+import { ACCOUNT_SECTIONS, Sidebar, type MainView } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
 import { SidePanel } from "./components/SidePanel";
@@ -28,6 +28,7 @@ export default function App() {
   const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument } = useDocuments();
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
+  const [lastClickedAccountId, setLastClickedAccountId] = useState<ID | null>(null);
   const [view, setView] = useState<MainView>("transactions");
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -217,16 +218,39 @@ export default function App() {
       return next;
     });
   }
-  function toggleAccountSelect(id: ID) {
+  function handleAccountClick(id: ID, shiftKey: boolean) {
+    if (!shiftKey) {
+      setActiveAccounts(new Set([id]));
+      setLastClickedAccountId(id);
+      return;
+    }
+    if (lastClickedAccountId !== null) {
+      const orderedIds = ACCOUNT_SECTIONS.flatMap((section) => accounts.filter((a) => (a.type || "checking") === section.key)).map((a) => a.id);
+      const lastIdx = orderedIds.indexOf(lastClickedAccountId);
+      const curIdx = orderedIds.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const start = Math.min(lastIdx, curIdx);
+        const end = Math.max(lastIdx, curIdx);
+        const rangeIds = orderedIds.slice(start, end + 1);
+        setActiveAccounts((prev) => {
+          const next = new Set(prev);
+          rangeIds.forEach((rid) => next.add(rid));
+          return next;
+        });
+        setLastClickedAccountId(id);
+        return;
+      }
+    }
     setActiveAccounts((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      next.add(id);
       return next;
     });
+    setLastClickedAccountId(id);
   }
   function clearAccountSelection() {
     setActiveAccounts(new Set());
+    setLastClickedAccountId(null);
   }
 
   function findLastCategoryForName(name: string): Transaction | null {
@@ -583,7 +607,7 @@ export default function App() {
               balances={balances}
               totalBalance={totalBalance}
               activeAccounts={activeAccounts}
-              toggleAccountSelect={toggleAccountSelect}
+              onAccountClick={handleAccountClick}
               clearAccountSelection={clearAccountSelection}
               addAccount={addAccount}
               updateAccount={updateAccount}
