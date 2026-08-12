@@ -27,6 +27,7 @@ export function generateDueOccurrences(doc: LedgerDocument, today: string): Tran
     if (!tx.recurring) return;
     const nd = nextDate(tx.date, tx.recurring);
     if (nd > today) return;
+    if (tx.recurring.endDate && nd > tx.recurring.endDate) return;
     const exists = txs.some(
       (t) =>
         t.date === nd &&

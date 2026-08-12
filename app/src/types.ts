@@ -38,6 +38,8 @@ export type RecurUnit = "days" | "months" | "years";
 export interface Recurring {
   interval: number;
   unit: RecurUnit;
+  /** Si se rellena, la serie deja de generar nuevas ocurrencias a partir de esta fecha (ISO). */
+  endDate: string | null;
 }
 
 interface TransactionBase {
@@ -69,6 +71,8 @@ export interface TransferOutTransaction extends TransactionBase {
   toAccountId: ID;
   toDocId: ID;
   toLabel: string;
+  /** Mientras esté vinculada, editar una pata sincroniza la otra. Al desvincular, cada una se edita por separado. */
+  linked: boolean;
 }
 
 export interface TransferInTransaction extends TransactionBase {
@@ -80,6 +84,7 @@ export interface TransferInTransaction extends TransactionBase {
   fromAccountId: ID;
   fromDocId: ID;
   fromLabel: string;
+  linked: boolean;
 }
 
 export type Transaction = IncomeExpenseTransaction | TransferOutTransaction | TransferInTransaction;
@@ -120,4 +125,6 @@ export interface LedgerDocument {
 export interface Manifest {
   documentIds: ID[];
   activeDocumentId: ID | null;
+  /** Ruta en disco recordada por documento, para el botón "Guardar" (guarda directo sin volver a preguntar). */
+  savedPaths: Record<ID, string>;
 }

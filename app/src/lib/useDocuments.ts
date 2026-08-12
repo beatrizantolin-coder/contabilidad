@@ -15,6 +15,7 @@ export function useDocuments() {
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState<LedgerDocument[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [savedPaths, setSavedPaths] = useState<Record<string, string>>({});
   const prevDocsRef = useRef<LedgerDocument[]>([]);
   const hydratedRef = useRef(false);
 
@@ -33,6 +34,7 @@ export function useDocuments() {
       if (cancelled) return;
       setDocuments(loaded);
       prevDocsRef.current = loaded;
+      setSavedPaths(manifest.savedPaths);
       const active = manifest.activeDocumentId && loaded.some((d) => d.id === manifest.activeDocumentId)
         ? manifest.activeDocumentId
         : loaded[0]?.id ?? null;
@@ -64,11 +66,11 @@ export function useDocuments() {
   useEffect(() => {
     if (!hydratedRef.current) return;
     debounceSave("manifest", () => {
-      saveManifest({ documentIds: documents.map((d) => d.id), activeDocumentId: activeDocId }).catch((err) =>
+      saveManifest({ documentIds: documents.map((d) => d.id), activeDocumentId: activeDocId, savedPaths }).catch((err) =>
         console.error("Error guardando el manifiesto", err),
       );
     });
-  }, [documents, activeDocId]);
+  }, [documents, activeDocId, savedPaths]);
 
   // Autogeneracion de recurrentes + vencimiento automatico: por cada
   // documento, cualquier movimiento "programado" cuya fecha ya llego pasa a
@@ -113,15 +115,31 @@ export function useDocuments() {
 
   const removeDocument = useCallback(
     (id: string) => {
-      if (documents.length <= 1) return;
       setDocuments((prev) => prev.filter((d) => d.id !== id));
       if (activeDocId === id) {
         setActiveDocId(documents.find((d) => d.id !== id)?.id ?? null);
       }
+      setSavedPaths((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       deleteDocumentFile(id).catch((err) => console.error("Error eliminando documento", err));
     },
     [activeDocId, documents],
   );
+
+  const addDocument = useCallback((doc: LedgerDocument) => {
+    setDocuments((prev) => (prev.some((d) => d.id === doc.id) ? prev : prev.concat([doc])));
+    setActiveDocId(doc.id);
+  }, []);
+
+  const getSavedPath = useCallback((docId: string) => savedPaths[docId], [savedPaths]);
+
+  const setSavedPath = useCallback((docId: string, path: string) => {
+    setSavedPaths((prev) => ({ ...prev, [docId]: path }));
+  }, []);
 
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
 
@@ -134,6 +152,9 @@ export function useDocuments() {
     updateDoc,
     applyToDocs,
     createDocument,
+    addDocument,
     removeDocument,
+    getSavedPath,
+    setSavedPath,
   };
 }

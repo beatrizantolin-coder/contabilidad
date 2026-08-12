@@ -8,6 +8,8 @@ import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
 import { freqPerMonth, monthKey, todayISO } from "./lib/format";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
+import { pickOpenDocumentPath, readDocumentFromPath } from "./lib/docFile";
+import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type SavedFilter, type Transaction } from "./types";
 import { Sidebar, type MainView } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
@@ -18,11 +20,12 @@ import { RecurringView } from "./components/RecurringView";
 import { CategoriesView } from "./components/CategoriesView";
 import { FiltersView } from "./components/FiltersView";
 import { BalanceChart } from "./components/BalanceChart";
+import { WelcomeScreen } from "./components/WelcomeScreen";
 
 const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
 
 export default function App() {
-  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, removeDocument } = useDocuments();
+  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument } = useDocuments();
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [view, setView] = useState<MainView>("transactions");
@@ -263,7 +266,7 @@ export default function App() {
     if (!txDraft || !activeDoc || !activeDocId) return;
     if (!txDraft.name || !txDraft.amount || !txDraft.accountId) return;
     const amount = Number(txDraft.amount);
-    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit } : null;
+    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: null } : null;
 
     if (txDraft.type === "transfer") {
       if (!txDraft.toAccountId) return;
@@ -277,13 +280,13 @@ export default function App() {
       const legTransfer: Transaction = {
         id: genId(), seq: genSeq(), accountId: txDraft.accountId, date: txDraft.date, name: txDraft.name || "Transferencia", comment: txDraft.comment,
         categoryId: null, subcategoryId: null, subsubcategoryId: null, amount, type: "transfer", recurring, transferGroupId: groupId, status: txDraft.status,
-        toAccountId: txDraft.toAccountId, toDocId: txDraft.toDocId,
+        toAccountId: txDraft.toAccountId, toDocId: txDraft.toDocId, linked: true,
         toLabel: crossDoc ? (targetDoc ? targetDoc.name : "-") + " - " + targetAccName : targetAccName,
       };
       const legTransferIn: Transaction = {
         id: genId(), seq: genSeq(), accountId: txDraft.toAccountId, date: txDraft.date, name: txDraft.name || "Transferencia", comment: txDraft.comment,
         categoryId: null, subcategoryId: null, subsubcategoryId: null, amount, type: "transfer_in", recurring, transferGroupId: groupId, status: txDraft.status,
-        fromAccountId: txDraft.accountId, fromDocId: activeDocId,
+        fromAccountId: txDraft.accountId, fromDocId: activeDocId, linked: true,
         fromLabel: crossDoc ? activeDoc.name + " - " + sourceAccName : sourceAccName,
       };
 
@@ -498,6 +501,20 @@ export default function App() {
     setSelectedIds(new Set());
   }
 
+  async function handleOpenDocumentFile() {
+    try {
+      const path = await pickOpenDocumentPath();
+      if (!path) return;
+      const doc = await readDocumentFromPath(path);
+      addDocument(doc);
+    } catch (err) {
+      console.error("Error abriendo el documento", err);
+    }
+  }
+  function handleOpenTestDocument() {
+    addDocument(createTestDocument());
+  }
+
   function saveCurrentFilter(name: string) {
     setSavedFilters((prev) => prev.concat([{ id: genId(), name, filters: { ...filters } }]));
   }
@@ -653,35 +670,9 @@ export default function App() {
             </main>
           </>
         ) : (
-          <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div style={{ textAlign: "center", color: T.textMuted, fontSize: 13.5, maxWidth: 340 }}>
-              Todavia no tienes ningun archivo.
-              <br />
-              Crea el primero para empezar (p. ej. “Personal”).
-              <NewDocumentInline onCreate={createDocument} />
-            </div>
-          </div>
+          <WelcomeScreen onCreate={createDocument} onOpenFile={handleOpenDocumentFile} onOpenTest={handleOpenTestDocument} />
         )}
       </div>
     </div>
-  );
-}
-
-function NewDocumentInline({ onCreate }: { onCreate: (name: string) => void }) {
-  const [name, setName] = useState("");
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onCreate(name);
-        setName("");
-      }}
-      style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "center" }}
-    >
-      <input autoFocus placeholder="Nombre del archivo" value={name} onChange={(e) => setName(e.target.value)} style={{ border: "1px solid " + T.border, borderRadius: 6, padding: "8px 10px", fontSize: 13, fontFamily: "Inter, sans-serif" }} />
-      <button type="submit" style={{ background: T.accent, border: "none", borderRadius: 6, padding: "8px 14px", color: "#fff", fontWeight: 600, fontSize: 13 }}>
-        Crear
-      </button>
-    </form>
   );
 }

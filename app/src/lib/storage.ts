@@ -4,11 +4,12 @@ import { migrateDocument } from "./migrate";
 
 export async function loadManifest(): Promise<Manifest> {
   const raw = await invoke<unknown>("read_manifest");
-  if (!raw || typeof raw !== "object") return { documentIds: [], activeDocumentId: null };
+  if (!raw || typeof raw !== "object") return { documentIds: [], activeDocumentId: null, savedPaths: {} };
   const m = raw as Partial<Manifest>;
   return {
     documentIds: Array.isArray(m.documentIds) ? m.documentIds : [],
     activeDocumentId: typeof m.activeDocumentId === "string" ? m.activeDocumentId : null,
+    savedPaths: m.savedPaths && typeof m.savedPaths === "object" ? m.savedPaths : {},
   };
 }
 

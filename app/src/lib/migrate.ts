@@ -24,13 +24,14 @@ function migrateCategory(raw: any): Category {
 
 function migrateRecurring(raw: any): Recurring | null {
   if (!raw) return null;
+  const endDate = typeof raw.endDate === "string" ? raw.endDate : null;
   if (typeof raw.interval === "number" && typeof raw.unit === "string") {
-    return { interval: raw.interval, unit: raw.unit };
+    return { interval: raw.interval, unit: raw.unit, endDate };
   }
   // Formato antiguo: { frequency: "monthly" | "weekly" | "yearly" }
-  if (raw.frequency === "weekly") return { interval: 7, unit: "days" };
-  if (raw.frequency === "yearly") return { interval: 1, unit: "years" };
-  return { interval: 1, unit: "months" };
+  if (raw.frequency === "weekly") return { interval: 7, unit: "days", endDate };
+  if (raw.frequency === "yearly") return { interval: 1, unit: "years", endDate };
+  return { interval: 1, unit: "months", endDate };
 }
 
 function migrateAccount(raw: any): Account {
@@ -57,7 +58,7 @@ function migrateTransaction(raw: any): Transaction {
     recurring: migrateRecurring(raw.recurring),
   };
   if (raw.type === "transfer" || raw.type === "transfer_in") {
-    return { ...raw, ...base, categoryId: null, subcategoryId: null, subsubcategoryId: null } as Transaction;
+    return { ...raw, ...base, categoryId: null, subcategoryId: null, subsubcategoryId: null, linked: raw.linked !== false } as Transaction;
   }
   return {
     ...base,

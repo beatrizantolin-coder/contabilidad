@@ -128,11 +128,9 @@ export function Sidebar({
             >
               <FolderOpen size={11} /> {d.name}
             </button>
-            {documents.length > 1 && (
-              <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
-                <Trash2 size={10} />
-              </button>
-            )}
+            <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
+              <Trash2 size={10} />
+            </button>
           </div>
         ))}
         <button onClick={() => setShowDocForm((s) => !s)} style={{ background: "none", border: "1px dashed " + T.border, borderRadius: 6, padding: "3px 7px", color: T.textMuted }} aria-label="Nuevo archivo">
