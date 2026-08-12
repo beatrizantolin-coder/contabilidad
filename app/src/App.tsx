@@ -299,6 +299,17 @@ export default function App() {
     const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.recurringEndDate || null } : null;
 
     if (txDraft.type === "transfer") {
+      // Pata de transferencia ya desvinculada: se edita ella sola, sin tocar
+      // ni recrear la otra (dejaron de sincronizarse al desvincularlas).
+      const editingExisting = txDraft.id ? transactions.find((t) => t.id === txDraft.id) : null;
+      if (editingExisting && isTransferTx(editingExisting) && !editingExisting.linked) {
+        const id = txDraft.id as ID;
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === id ? ({ ...t, accountId: txDraft.accountId!, date: txDraft.date, name: txDraft.name, comment: txDraft.comment, amount, status: txDraft.status, recurring } as Transaction) : t)),
+        );
+        resetDraft();
+        return;
+      }
       if (!txDraft.toAccountId) return;
       if (txDraft.toDocId === activeDocId && txDraft.toAccountId === txDraft.accountId) return;
       const groupId = genId();
@@ -424,7 +435,7 @@ export default function App() {
 
   function removeTx(t: Transaction) {
     if (!activeDocId) return;
-    if (t.type === "transfer" || t.type === "transfer_in") {
+    if (isTransferTx(t) && t.linked) {
       const otherDocId = otherDocIdOf(t);
       const groupId = t.transferGroupId;
       const fn = (d: NonNullable<typeof activeDoc>) => ({ ...d, transactions: d.transactions.filter((x) => !isTransferTx(x) || x.transferGroupId !== groupId) });
@@ -437,12 +448,26 @@ export default function App() {
     }
   }
 
+  function toggleTransferLink(t: Transaction) {
+    if (!isTransferTx(t) || !activeDocId || !t.linked) return;
+    const otherDocId = otherDocIdOf(t);
+    const groupId = t.transferGroupId;
+    const fn = (d: NonNullable<typeof activeDoc>) => ({
+      ...d,
+      transactions: d.transactions.map((x) => (isTransferTx(x) && x.transferGroupId === groupId ? { ...x, linked: false } : x)),
+    });
+    applyToDocs([
+      { docId: activeDocId, fn },
+      { docId: otherDocId, fn },
+    ]);
+  }
+
   function cycleStatus(t: Transaction) {
     if (!activeDocId) return;
     const STATUS_ORDER: Transaction["status"][] = ["reconciliado", "pendiente", "programado", "anulado"];
     const idx = STATUS_ORDER.indexOf(t.status || "pendiente");
     const next = STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
-    if (t.type === "transfer" || t.type === "transfer_in") {
+    if (isTransferTx(t) && t.linked) {
       const otherDocId = otherDocIdOf(t);
       const groupId = t.transferGroupId;
       const fn = (d: NonNullable<typeof activeDoc>) => ({
@@ -678,6 +703,7 @@ export default function App() {
                     onEdit={editTx}
                     onRemove={removeTx}
                     onCycleStatus={cycleStatus}
+                    onToggleLink={toggleTransferLink}
                     onAdd={openNewTxForm}
                     onExport={handleExport}
                     onImport={handleImport}

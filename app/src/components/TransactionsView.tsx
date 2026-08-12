@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import { ArrowRightLeft, Download, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import { ArrowRightLeft, Download, Link2, Link2Off, Pencil, Plus, Repeat, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
 import type { Category, Filters, ID, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { FiltersBar } from "./FiltersBar";
 
-const GRID_COLUMNS = "74px 76px 1fr 140px 100px 100px 56px";
+const GRID_COLUMNS = "74px 76px 1fr 140px 100px 28px 100px 56px";
 
 export function TransactionsView({
   title,
@@ -25,6 +25,7 @@ export function TransactionsView({
   onEdit,
   onRemove,
   onCycleStatus,
+  onToggleLink,
   onAdd,
   onExport,
   onImport,
@@ -52,6 +53,7 @@ export function TransactionsView({
   onEdit: (t: Transaction) => void;
   onRemove: (t: Transaction) => void;
   onCycleStatus: (t: Transaction) => void;
+  onToggleLink: (t: Transaction) => void;
   onAdd: () => void;
   onExport: () => void;
   onImport: () => void;
@@ -125,6 +127,7 @@ export function TransactionsView({
           <span>Descripcion</span>
           <span>Comentario</span>
           <span style={{ textAlign: "right" }}>Importe</span>
+          <span />
           <span style={{ textAlign: "right" }}>Saldo</span>
           <span />
         </div>
@@ -135,7 +138,7 @@ export function TransactionsView({
           const isTransferOut = t.type === "transfer";
           const isTransferIn = t.type === "transfer_in";
           const isTransfer = isTransferOut || isTransferIn;
-          const color = t.type === "income" ? T.income : isTransfer ? T.transfer : T.expense;
+          const color = t.type === "income" || isTransferIn ? T.income : T.expense;
           const info = isTransfer ? { name: "Transferencia", color: T.transfer } : catInfo(categories, t.categoryId, t.subcategoryId, t.subsubcategoryId);
           const st = statusInfo(t.status);
           const StIcon = st.icon;
@@ -164,11 +167,11 @@ export function TransactionsView({
               </button>
               <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none" }}>
                 <span style={dot(info.color, 8)} />
-                {isTransfer && <ArrowRightLeft size={12} style={{ color: T.transfer }} />}
                 {t.name}
                 {isTransferOut ? " -> " + t.toLabel : ""}
                 {isTransferIn ? " <- " + t.fromLabel : ""}
                 {t.recurring && <Repeat size={11} style={{ color: T.textFaint }} />}
+                {isTransfer && <ArrowRightLeft size={12} style={{ color: T.transfer }} />}
               </span>
               <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.comment || ""}>
                 {t.comment || ""}
@@ -176,6 +179,17 @@ export function TransactionsView({
               <span className="amount" style={{ textAlign: "right", color, fontWeight: 500 }}>
                 {t.type === "income" || isTransferIn ? "+" : isTransferOut ? "" : "-"}
                 {fmt(Math.abs(t.amount))}
+              </span>
+              <span style={{ display: "flex", justifyContent: "center" }}>
+                {isTransfer && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); if (t.linked) onToggleLink(t); }}
+                    title={t.linked ? "Vinculada — clic para desvincular" : "Desvinculada: se edita de forma independiente"}
+                    style={{ background: "none", border: "none", color: t.linked ? T.textFaint : T.expense, padding: 2, cursor: t.linked ? "pointer" : "default", display: "flex" }}
+                  >
+                    {t.linked ? <Link2 size={13} /> : <Link2Off size={13} />}
+                  </button>
+                )}
               </span>
               <span className="amount" style={{ textAlign: "right", color: resultingBalance(t) < 0 ? T.expense : T.textMuted, fontSize: 12.5 }}>
                 {fmt(resultingBalance(t))}
