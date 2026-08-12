@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, Download, Link2, Link2Off, Pencil, Plus, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, Download, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate } from "../lib/format";
@@ -37,6 +37,10 @@ export function TransactionsView({
   onSort,
   onAdd,
   onSave,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
   onExport,
   onImport,
   onClearSelection,
@@ -74,6 +78,10 @@ export function TransactionsView({
   onSort: (column: SortColumn) => void;
   onAdd: () => void;
   onSave: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
   onExport: () => void;
   onImport: () => void;
   onClearSelection: () => void;
@@ -109,6 +117,12 @@ export function TransactionsView({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={onSave} title="Guardar documento" style={{ ...smallBtn(false), padding: "7px 9px" }}>
             <Save size={12} />
+          </button>
+          <button onClick={onUndo} disabled={!canUndo} title="Deshacer" style={{ ...smallBtn(false), padding: "7px 9px", opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "default" }}>
+            <Undo2 size={12} />
+          </button>
+          <button onClick={onRedo} disabled={!canRedo} title="Rehacer" style={{ ...smallBtn(false), padding: "7px 9px", opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "default" }}>
+            <Redo2 size={12} />
           </button>
           <button onClick={() => setShowFilters((s) => !s)} style={smallBtn(showFilters)}>
             <SlidersHorizontal size={12} style={{ verticalAlign: -1, marginRight: 4 }} />

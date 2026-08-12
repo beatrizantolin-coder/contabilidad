@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
@@ -10,7 +10,7 @@ import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolutio
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
-import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
+import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
 import { ACCOUNT_SECTIONS, Sidebar, type MainView } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
@@ -42,6 +42,53 @@ export default function App() {
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
   const [sortBy, setSortBy] = useState<SortState | null>(null);
+  const [historyTick, setHistoryTick] = useState(0);
+  const undoStackRef = useRef<LedgerDocument[]>([]);
+  const redoStackRef = useRef<LedgerDocument[]>([]);
+  const lastHistoryDocRef = useRef<ID | null>(null);
+  const lastHistoryPushRef = useRef(0);
+
+  useEffect(() => {
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    lastHistoryDocRef.current = null;
+    setHistoryTick((t) => t + 1);
+  }, [activeDocId]);
+
+  function pushHistory() {
+    if (!activeDoc || !activeDocId) return;
+    const now = Date.now();
+    if (lastHistoryDocRef.current === activeDocId && now - lastHistoryPushRef.current < 800) {
+      lastHistoryPushRef.current = now;
+      return;
+    }
+    lastHistoryDocRef.current = activeDocId;
+    lastHistoryPushRef.current = now;
+    undoStackRef.current = undoStackRef.current.concat([activeDoc]).slice(-50);
+    redoStackRef.current = [];
+    setHistoryTick((t) => t + 1);
+  }
+
+  function undo() {
+    if (!activeDocId || !activeDoc || undoStackRef.current.length === 0) return;
+    const prev = undoStackRef.current[undoStackRef.current.length - 1];
+    undoStackRef.current = undoStackRef.current.slice(0, -1);
+    redoStackRef.current = redoStackRef.current.concat([activeDoc]).slice(-50);
+    lastHistoryDocRef.current = null;
+    updateDoc(activeDocId, () => prev);
+    setHistoryTick((t) => t + 1);
+  }
+  function redo() {
+    if (!activeDocId || !activeDoc || redoStackRef.current.length === 0) return;
+    const next = redoStackRef.current[redoStackRef.current.length - 1];
+    redoStackRef.current = redoStackRef.current.slice(0, -1);
+    undoStackRef.current = undoStackRef.current.concat([activeDoc]).slice(-50);
+    lastHistoryDocRef.current = null;
+    updateDoc(activeDocId, () => next);
+    setHistoryTick((t) => t + 1);
+  }
+  const canUndo = historyTick >= 0 && undoStackRef.current.length > 0;
+  const canRedo = historyTick >= 0 && redoStackRef.current.length > 0;
 
   function handleSort(column: SortColumn) {
     setSortBy((prev) => (prev && prev.column === column ? { column, dir: prev.dir === "asc" ? "desc" : "asc" } : { column, dir: "asc" }));
@@ -158,18 +205,22 @@ export default function App() {
 
   function setAccounts(fn: (a: Account[]) => Account[]) {
     if (!activeDocId) return;
+    pushHistory();
     updateDoc(activeDocId, (d) => ({ ...d, accounts: fn(d.accounts) }));
   }
   function setTransactions(fn: (t: Transaction[]) => Transaction[]) {
     if (!activeDocId) return;
+    pushHistory();
     updateDoc(activeDocId, (d) => ({ ...d, transactions: fn(d.transactions) }));
   }
   function setCategories(fn: (c: Category[]) => Category[]) {
     if (!activeDocId) return;
+    pushHistory();
     updateDoc(activeDocId, (d) => ({ ...d, categories: fn(d.categories) }));
   }
   function setBudgets(fn: (b: Budgets) => Budgets) {
     if (!activeDocId) return;
+    pushHistory();
     updateDoc(activeDocId, (d) => ({ ...d, budgets: fn(d.budgets) }));
   }
   function setSavedFilters(fn: (sf: SavedFilter[]) => SavedFilter[]) {
@@ -359,6 +410,7 @@ export default function App() {
     e.preventDefault();
     if (!txDraft || !activeDoc || !activeDocId) return;
     if (!txDraft.name || !txDraft.amount || !txDraft.accountId) return;
+    pushHistory();
     const amount = Number(txDraft.amount);
     const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.recurringEndDate || null } : null;
 
@@ -499,6 +551,7 @@ export default function App() {
 
   function removeTx(t: Transaction) {
     if (!activeDocId) return;
+    pushHistory();
     if (isTransferTx(t) && t.linked) {
       const otherDocId = otherDocIdOf(t);
       const groupId = t.transferGroupId;
@@ -514,6 +567,7 @@ export default function App() {
 
   function toggleTransferLink(t: Transaction) {
     if (!isTransferTx(t) || !activeDocId || !t.linked) return;
+    pushHistory();
     const otherDocId = otherDocIdOf(t);
     const groupId = t.transferGroupId;
     const fn = (d: NonNullable<typeof activeDoc>) => ({
@@ -528,6 +582,7 @@ export default function App() {
 
   function cycleStatus(t: Transaction) {
     if (!activeDocId) return;
+    pushHistory();
     const STATUS_ORDER: Transaction["status"][] = ["reconciliado", "pendiente", "programado", "anulado"];
     const idx = STATUS_ORDER.indexOf(t.status || "pendiente");
     const next = STATUS_ORDER[(idx + 1) % STATUS_ORDER.length];
@@ -586,6 +641,8 @@ export default function App() {
   }
 
   function deleteSelected() {
+    if (selectedIds.size === 0) return;
+    pushHistory();
     const toDelete = transactions.filter((t) => selectedIds.has(t.id));
     const groupIds = new Set(toDelete.filter(isTransferTx).map((t) => t.transferGroupId));
     const plainIds = new Set(toDelete.filter((t) => !isTransferTx(t)).map((t) => t.id));
@@ -624,6 +681,7 @@ export default function App() {
   function applyBulkEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!activeDocId) return;
+    pushHistory();
     const selectedTx = transactions.filter((t) => selectedIds.has(t.id));
     const groupIds = new Set(selectedTx.filter(isTransferTx).map((t) => t.transferGroupId));
     updateDoc(activeDocId, (d) => {
@@ -778,6 +836,10 @@ export default function App() {
                     onResetMovementsRange={resetMovementsRange}
                     onAdd={openNewTxForm}
                     onSave={handleSave}
+                    onUndo={undo}
+                    onRedo={redo}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
                     onExport={handleExport}
                     onImport={handleImport}
                     onClearSelection={clearSelection}
