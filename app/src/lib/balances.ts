@@ -44,9 +44,16 @@ export function computeRunningMaps(accounts: Account[], chronological: Transacti
   return { idToTotal };
 }
 
-export function hasLocalSibling(t: Transaction, transactions: Transaction[]): boolean {
+/**
+ * Solo se considera "con hermano local visible" cuando la pata de salida
+ * tambien esta dentro del alcance seleccionado: si se ve el documento
+ * completo (o ambas cuentas), basta una fila para representar la
+ * transferencia; pero si el alcance es solo la cuenta de destino, la pata
+ * de entrada debe mostrarse porque es la unica visible en ese alcance.
+ */
+export function hasLocalSibling(t: Transaction, transactions: Transaction[], scopeIds: Set<ID>): boolean {
   if (t.type !== "transfer_in" || !t.transferGroupId) return false;
-  return transactions.some((x) => x.type === "transfer" && x.transferGroupId === t.transferGroupId);
+  return transactions.some((x) => x.type === "transfer" && x.transferGroupId === t.transferGroupId && scopeIds.has(x.accountId));
 }
 
 /**

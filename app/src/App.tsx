@@ -149,7 +149,7 @@ export default function App() {
 
   const filteredTx = useMemo(() => {
     const base = scoped
-      .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions))
+      .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds))
       .filter((t) => t.date >= effectiveViewRange.from && t.date <= effectiveViewRange.to)
       .filter((t) => filters.categories.length === 0 || (t.categoryId && filters.categories.includes(t.categoryId)))
       .filter((t) => filters.subcategories.length === 0 || (t.subcategoryId && filters.subcategories.includes(t.subcategoryId)))

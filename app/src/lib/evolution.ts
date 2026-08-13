@@ -21,7 +21,7 @@ export function computeEvoPoints(
   evoRange: EvoRange,
 ): EvoPoint[] {
   const openingSum = accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + a.opening, 0);
-  const fullSrc = chronological.filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t, transactions)));
+  const fullSrc = chronological.filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds)));
   if (fullSrc.length === 0) return [];
 
   const rangeFrom = evoRange.from || null;
