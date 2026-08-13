@@ -377,6 +377,13 @@ export default function App() {
       setAccounts(() => result.accounts);
       setCategories(() => result.categories);
       setTransactions((prev) => prev.concat(result.transactions));
+      // La vista de movimientos por defecto muestra solo la semana en
+      // curso: sin esto, un CSV con fechas fuera de esa semana parecería
+      // no haberse importado, aunque los datos ya esten ahi.
+      if (result.transactions.length > 0) {
+        const dates = result.transactions.map((t) => t.date);
+        setViewRange({ from: dates.reduce((a, b) => (b < a ? b : a)), to: dates.reduce((a, b) => (b > a ? b : a)) });
+      }
     } catch (err) {
       console.error("Error importando CSV", err);
     }
