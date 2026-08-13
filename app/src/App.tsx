@@ -893,21 +893,24 @@ export default function App() {
     newFilter: handleNewFilterMenu,
   };
   const menuHandlersRef = useRef<AppMenuHandlers>(menuHandlers);
+  const menuBuildSeqRef = useRef(0);
   useEffect(() => {
     menuHandlersRef.current = menuHandlers;
   });
 
+  // Se identifica cada reconstruccion con un numero de secuencia creciente y
+  // solo se aplica la ultima: reconstruir el menu implica rasterizar iconos
+  // (asincrono) y con clics rapidos puede terminar antes una reconstruccion
+  // mas vieja que una mas nueva, aplicando por error un estado de
+  // habilitado/deshabilitado desactualizado en Deshacer/Rehacer.
   useEffect(() => {
-    let cancelled = false;
+    const seq = ++menuBuildSeqRef.current;
     buildAppMenu(menuHandlersRef, { canUndo, canRedo, recentPaths })
       .then((menu) => {
-        if (cancelled) return;
+        if (menuBuildSeqRef.current !== seq) return;
         menu.setAsAppMenu().catch((err) => console.error("Error activando el menu nativo", err));
       })
       .catch((err) => console.error("Error construyendo el menu nativo", err));
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canUndo, canRedo, recentPaths]);
 
