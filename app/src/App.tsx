@@ -779,7 +779,7 @@ export default function App() {
 
   return (
     <div style={{ height: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif", overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", height: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "270px 1fr", height: "100%" }}>
         {activeDoc ? (
           <>
             <Sidebar

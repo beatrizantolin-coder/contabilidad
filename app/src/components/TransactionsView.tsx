@@ -8,6 +8,10 @@ import { FiltersBar } from "./FiltersBar";
 import { MovementsRangeBar } from "./MovementsRangeBar";
 
 const GRID_COLUMNS = "18px 74px 76px 1fr 140px 100px 28px 100px 56px";
+// Ancho minimo de la tabla: por debajo de este punto se prefiere scroll
+// horizontal (el contenedor padre ya tiene overflow:auto) a comprimir las
+// columnas hasta que el texto de las cabeceras se solape o se corte.
+const GRID_MIN_WIDTH = 760;
 
 export function TransactionsView({
   title,
@@ -210,7 +214,7 @@ export function TransactionsView({
       )}
 
       <div style={{ flex: 1, overflow: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
           <span />
           <SortableHeader label="Fecha" column="date" sortBy={sortBy} onSort={onSort} />
           <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />
@@ -245,7 +249,7 @@ export function TransactionsView({
               onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
               onClick={(e) => (e.shiftKey ? onShiftSelect(t.id) : onEdit(t))}
               style={{
-                display: "grid", gridTemplateColumns: GRID_COLUMNS, alignItems: "center", padding: "8px 20px", fontSize: 13,
+                display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: "8px 20px", fontSize: 13,
                 borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
                 borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
               }}
