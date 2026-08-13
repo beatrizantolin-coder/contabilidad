@@ -1,10 +1,11 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { desktopDir, join } from "@tauri-apps/api/path";
 import type { LedgerDocument } from "../types";
 import { migrateDocument } from "./migrate";
 import { readTextFile, writeTextFile } from "./storage";
 
 export async function pickOpenDocumentPath(): Promise<string | null> {
-  const path = await open({ multiple: false, filters: [{ name: "Documento", extensions: ["json"] }] });
+  const path = await open({ multiple: false, filters: [{ name: "Documento", extensions: ["nice"] }] });
   if (!path || Array.isArray(path)) return null;
   return path;
 }
@@ -15,9 +16,15 @@ export async function readDocumentFromPath(path: string): Promise<LedgerDocument
 }
 
 export async function pickSaveDocumentPath(suggestedName: string): Promise<string | null> {
+  let defaultPath = suggestedName + ".nice";
+  try {
+    defaultPath = await join(await desktopDir(), defaultPath);
+  } catch (err) {
+    console.error("No se pudo resolver el Escritorio, se usa la ruta por defecto del sistema", err);
+  }
   const path = await save({
-    defaultPath: suggestedName + ".json",
-    filters: [{ name: "Documento", extensions: ["json"] }],
+    defaultPath,
+    filters: [{ name: "Documento", extensions: ["nice"] }],
   });
   return path ?? null;
 }

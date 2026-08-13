@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { T } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
@@ -825,6 +827,44 @@ export default function App() {
       console.error("Error abriendo el documento reciente", err);
     }
   }
+
+  // Doble clic en un .nice desde el Finder: al arrancar, el backend puede
+  // tener una ruta pendiente (evento Opened de macOS o argumento de linea de
+  // comandos llegado antes de que este efecto se registre); y si la app ya
+  // esta abierta, llega en vivo por el evento "open-document-path".
+  const openPathHandlerRef = useRef(openDocumentFromPathReplacing);
+  useEffect(() => {
+    openPathHandlerRef.current = openDocumentFromPathReplacing;
+  });
+  useEffect(() => {
+    if (loading) return;
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      try {
+        const pending = await invoke<string | null>("take_pending_open_path");
+        if (pending) {
+          await openPathHandlerRef.current(pending);
+          setShowWelcome(false);
+        }
+      } catch (err) {
+        console.error("Error comprobando si habia un documento pendiente de abrir", err);
+      }
+      try {
+        unlisten = await listen<string>("open-document-path", async (event) => {
+          try {
+            await openPathHandlerRef.current(event.payload);
+            setShowWelcome(false);
+          } catch (err) {
+            console.error("Error abriendo el documento recibido del sistema", err);
+          }
+        });
+      } catch (err) {
+        console.error("Error escuchando la apertura de documentos del sistema", err);
+      }
+    })();
+    return () => unlisten?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   function duplicateActiveDocument() {
     if (!activeDoc) return;

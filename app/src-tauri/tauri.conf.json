@@ -35,6 +35,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["nice"],
+        "name": "Documento de Contabilidad",
+        "description": "Documento de Contabilidad",
+        "role": "Editor",
+        "exportedType": {
+          "identifier": "com.beatrizantolin.contabilidad.nice",
+          "conformsTo": ["public.data"]
+        }
+      }
+    ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }
