@@ -6,16 +6,21 @@ export function WelcomeScreen({
   onCreate,
   onOpenFile,
   onOpenTest,
+  skipWelcomeOnStart,
+  onToggleSkipWelcome,
 }: {
   onCreate: (name: string) => void;
   onOpenFile: () => void;
   onOpenTest: () => void;
+  skipWelcomeOnStart: boolean;
+  onToggleSkipWelcome: (value: boolean) => void;
 }) {
   const [name, setName] = useState("");
 
   return (
     <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, height: "100%" }}>
       <div style={{ textAlign: "center", maxWidth: 440, width: "100%" }}>
+        <img src="/app-icon.png" alt="" width={64} height={64} style={{ marginBottom: 12 }} />
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Bienvenido a Contabilidad</div>
         <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 26px" }}>Elige cómo quieres empezar.</p>
 
@@ -69,6 +74,11 @@ export function WelcomeScreen({
             <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>Con cuentas, categorías y movimientos de ejemplo, solo para explorar la app.</p>
           </button>
         </div>
+
+        <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 18, fontSize: 12, color: T.textMuted, cursor: "pointer", justifyContent: "center" }}>
+          <input type="checkbox" checked={skipWelcomeOnStart} onChange={(e) => onToggleSkipWelcome(e.target.checked)} style={{ margin: 0 }} />
+          No volver a mostrar esta pantalla al iniciar
+        </label>
       </div>
     </div>
   );

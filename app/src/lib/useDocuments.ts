@@ -17,6 +17,7 @@ export function useDocuments() {
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [savedPaths, setSavedPaths] = useState<Record<string, string>>({});
   const [recentPaths, setRecentPaths] = useState<string[]>([]);
+  const [skipWelcomeOnStart, setSkipWelcomeOnStartState] = useState(false);
   const prevDocsRef = useRef<LedgerDocument[]>([]);
   const hydratedRef = useRef(false);
 
@@ -37,6 +38,7 @@ export function useDocuments() {
       prevDocsRef.current = loaded;
       setSavedPaths(manifest.savedPaths);
       setRecentPaths(manifest.recentPaths);
+      setSkipWelcomeOnStartState(manifest.skipWelcomeOnStart);
       const active = manifest.activeDocumentId && loaded.some((d) => d.id === manifest.activeDocumentId)
         ? manifest.activeDocumentId
         : loaded[0]?.id ?? null;
@@ -68,11 +70,15 @@ export function useDocuments() {
   useEffect(() => {
     if (!hydratedRef.current) return;
     debounceSave("manifest", () => {
-      saveManifest({ documentIds: documents.map((d) => d.id), activeDocumentId: activeDocId, savedPaths, recentPaths }).catch((err) =>
-        console.error("Error guardando el manifiesto", err),
-      );
+      saveManifest({
+        documentIds: documents.map((d) => d.id),
+        activeDocumentId: activeDocId,
+        savedPaths,
+        recentPaths,
+        skipWelcomeOnStart,
+      }).catch((err) => console.error("Error guardando el manifiesto", err));
     });
-  }, [documents, activeDocId, savedPaths, recentPaths]);
+  }, [documents, activeDocId, savedPaths, recentPaths, skipWelcomeOnStart]);
 
   // Autogeneracion de recurrentes + vencimiento automatico: por cada
   // documento, cualquier movimiento "programado" cuya fecha ya llego pasa a
@@ -147,6 +153,10 @@ export function useDocuments() {
     setRecentPaths((prev) => [path, ...prev.filter((p) => p !== path)].slice(0, 8));
   }, []);
 
+  const setSkipWelcomeOnStart = useCallback((value: boolean) => {
+    setSkipWelcomeOnStartState(value);
+  }, []);
+
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
 
   return {
@@ -164,5 +174,7 @@ export function useDocuments() {
     setSavedPath,
     recentPaths,
     addRecentPath,
+    skipWelcomeOnStart,
+    setSkipWelcomeOnStart,
   };
 }

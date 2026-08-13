@@ -27,7 +27,24 @@ import { buildAppMenu, type AppMenuHandlers } from "./lib/appMenu";
 const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
 
 export default function App() {
-  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument, getSavedPath, setSavedPath, recentPaths, addRecentPath } = useDocuments();
+  const {
+    loading,
+    documents,
+    activeDocId,
+    setActiveDocId,
+    activeDoc,
+    updateDoc,
+    applyToDocs,
+    createDocument,
+    addDocument,
+    removeDocument,
+    getSavedPath,
+    setSavedPath,
+    recentPaths,
+    addRecentPath,
+    skipWelcomeOnStart,
+    setSkipWelcomeOnStart,
+  } = useDocuments();
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [lastClickedAccountId, setLastClickedAccountId] = useState<ID | null>(null);
@@ -48,6 +65,11 @@ export default function App() {
   const [renameValue, setRenameValue] = useState("");
   const [newAccountTrigger, setNewAccountTrigger] = useState(0);
   const [newCategoryTrigger, setNewCategoryTrigger] = useState(0);
+  // Estado de sesion (no persistido) que decide si se muestra la bienvenida
+  // ahora mismo: null mientras se carga, y una vez cargado se fija segun
+  // la preferencia guardada. Se pone a false en cuanto el usuario elige
+  // una accion en la bienvenida, para no volver a mostrarla en esta sesion.
+  const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
   const undoStackRef = useRef<LedgerDocument[]>([]);
   const redoStackRef = useRef<LedgerDocument[]>([]);
@@ -60,6 +82,17 @@ export default function App() {
     lastHistoryDocRef.current = null;
     setHistoryTick((t) => t + 1);
   }, [activeDocId]);
+
+  // Una vez cargados los datos, se decide una unica vez si esta sesion
+  // empieza mostrando la bienvenida: siempre se muestra salvo que el
+  // usuario haya marcado la casilla "No volver a mostrar" en una sesion
+  // anterior (skipWelcomeOnStart), en cuyo caso se abre directo el ultimo
+  // documento usado (si existe).
+  useEffect(() => {
+    if (loading || showWelcome !== null) return;
+    setShowWelcome(!activeDoc || !skipWelcomeOnStart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
 
   function pushHistory() {
     if (!activeDoc || !activeDocId) return;
@@ -914,7 +947,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canUndo, canRedo, recentPaths]);
 
-  if (loading) {
+  if (loading || showWelcome === null) {
     return (
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.textMuted, fontFamily: "Inter, sans-serif", fontSize: 13 }}>
         Cargando tus datos...
@@ -928,7 +961,7 @@ export default function App() {
   return (
     <div style={{ height: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif", overflow: "hidden" }}>
       <div style={{ display: "grid", gridTemplateColumns: "270px 1fr", height: "100%" }}>
-        {activeDoc ? (
+        {activeDoc && !showWelcome ? (
           <>
             <Sidebar
               documents={documents}
@@ -1080,7 +1113,22 @@ export default function App() {
             </main>
           </>
         ) : (
-          <WelcomeScreen onCreate={createDocument} onOpenFile={handleOpenDocumentFile} onOpenTest={handleOpenTestDocument} />
+          <WelcomeScreen
+            onCreate={(name) => {
+              createDocument(name);
+              setShowWelcome(false);
+            }}
+            onOpenFile={() => {
+              handleOpenDocumentFile();
+              setShowWelcome(false);
+            }}
+            onOpenTest={() => {
+              handleOpenTestDocument();
+              setShowWelcome(false);
+            }}
+            skipWelcomeOnStart={skipWelcomeOnStart}
+            onToggleSkipWelcome={setSkipWelcomeOnStart}
+          />
         )}
       </div>
       {showRenameDoc && <RenameDocumentModal value={renameValue} onChange={setRenameValue} onSubmit={submitRenameDocument} onCancel={() => setShowRenameDoc(false)} />}
