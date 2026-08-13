@@ -46,6 +46,8 @@ export default function App() {
   const [sortBy, setSortBy] = useState<SortState | null>(null);
   const [showRenameDoc, setShowRenameDoc] = useState(false);
   const [renameValue, setRenameValue] = useState("");
+  const [newAccountTrigger, setNewAccountTrigger] = useState(0);
+  const [newCategoryTrigger, setNewCategoryTrigger] = useState(0);
   const [historyTick, setHistoryTick] = useState(0);
   const undoStackRef = useRef<LedgerDocument[]>([]);
   const redoStackRef = useRef<LedgerDocument[]>([]);
@@ -858,6 +860,14 @@ export default function App() {
     setShowFilters(true);
     setView("transactions");
   }
+  function handleNewAccountMenu() {
+    setView("transactions");
+    setNewAccountTrigger((n) => n + 1);
+  }
+  function handleNewCategoryMenu() {
+    setView("categories");
+    setNewCategoryTrigger((n) => n + 1);
+  }
 
   const menuHandlers: AppMenuHandlers = {
     newDocument: handleNewDocumentMenu,
@@ -876,10 +886,10 @@ export default function App() {
     selectAll: handleSelectAllMenu,
     search: handleSearchMenu,
     addDocument: handleOpenDocumentFile,
-    newAccount: () => console.log("Menu: Nueva cuenta (pendiente de bloque M4)"),
+    newAccount: handleNewAccountMenu,
     newTransaction: openNewTxForm,
     newScheduled: openScheduledForm,
-    newCategory: () => console.log("Menu: Nueva categoria (pendiente de bloque M4)"),
+    newCategory: handleNewCategoryMenu,
     newFilter: handleNewFilterMenu,
   };
   const menuHandlersRef = useRef<AppMenuHandlers>(menuHandlers);
@@ -938,6 +948,7 @@ export default function App() {
               updateAccount={updateAccount}
               removeAccount={removeAccount}
               onReorderAccounts={reorderAccounts}
+              newAccountTrigger={newAccountTrigger}
               view={view}
               setView={setView}
               recurringCount={recurringList.length}
@@ -974,6 +985,7 @@ export default function App() {
                     removeSubSubcategory={removeSubSubcategory}
                     setSubSubcategoryColor={setSubSubcategoryColor}
                     setBudget={setBudget}
+                    newCategoryTrigger={newCategoryTrigger}
                   />
                 )}
 

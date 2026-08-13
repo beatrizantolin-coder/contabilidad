@@ -45,6 +45,7 @@ export function Sidebar({
   updateAccount,
   removeAccount,
   onReorderAccounts,
+  newAccountTrigger,
   view,
   setView,
   recurringCount,
@@ -67,6 +68,8 @@ export function Sidebar({
   updateAccount: (id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
   removeAccount: (id: ID) => void;
   onReorderAccounts: (draggedId: ID, targetId: ID) => void;
+  /** Se incrementa desde Documento > Nueva cuenta (menú nativo) para abrir el formulario sin pasar por el "+" de una sección concreta. */
+  newAccountTrigger: number;
   view: MainView;
   setView: (v: MainView) => void;
   recurringCount: number;
@@ -129,6 +132,11 @@ export function Sidebar({
     }
     setShowAccForm(true);
   }
+
+  useEffect(() => {
+    if (newAccountTrigger > 0) openAccountForm("checking", null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newAccountTrigger]);
 
   function submitAccount(e: React.FormEvent) {
     e.preventDefault();

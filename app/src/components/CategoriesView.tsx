@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Trash2, X } from "lucide-react";
 import type { Category, CategoryKind, ID } from "../types";
 import { PALETTE, T, dot, inputStyle } from "../theme";
@@ -26,6 +26,7 @@ export function CategoriesView({
   removeSubSubcategory,
   setSubSubcategoryColor,
   setBudget,
+  newCategoryTrigger,
 }: {
   docName: string;
   categories: Category[];
@@ -42,12 +43,18 @@ export function CategoriesView({
   removeSubSubcategory: (catId: ID, subId: ID, subsubId: ID) => void;
   setSubSubcategoryColor: (catId: ID, subId: ID, subsubId: ID, color: string) => void;
   setBudget: (catId: ID, value: number | undefined) => void;
+  /** Se incrementa desde Documento > Nueva Categoria (menú nativo) para abrir el formulario. */
+  newCategoryTrigger: number;
 }) {
   const [showCatForm, setShowCatForm] = useState(false);
   const [catDraft, setCatDraft] = useState<{ name: string; color: string; kind: CategoryKind }>({ name: "", color: PALETTE[0], kind: "expense" });
   const [subFormFor, setSubFormFor] = useState<string | null>(null);
   const [subDraft, setSubDraft] = useState({ name: "", color: PALETTE[0] });
   const [colorPickerOpen, setColorPickerOpen] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (newCategoryTrigger > 0) setShowCatForm(true);
+  }, [newCategoryTrigger]);
 
   function submitCategory(e: React.FormEvent) {
     e.preventDefault();
