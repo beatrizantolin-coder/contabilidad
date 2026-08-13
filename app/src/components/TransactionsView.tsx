@@ -158,7 +158,7 @@ export function TransactionsView({
             </span>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={onSave} title="Guardar documento" style={{ ...smallBtn(false), padding: "7px 9px" }}>
             <Save size={12} />
           </button>
@@ -190,11 +190,19 @@ export function TransactionsView({
         </div>
       </div>
 
-      {showFilters && <FiltersBar filters={filters} setFilters={setFilters} categories={categories} onSaveFilter={onSaveFilter} />}
-      {showMovementsRange && <MovementsRangeBar onApply={onApplyMovementsRange} />}
+      {showFilters && (
+        <div className="no-print">
+          <FiltersBar filters={filters} setFilters={setFilters} categories={categories} onSaveFilter={onSaveFilter} />
+        </div>
+      )}
+      {showMovementsRange && (
+        <div className="no-print">
+          <MovementsRangeBar onApply={onApplyMovementsRange} />
+        </div>
+      )}
 
       {selectedIds.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", background: "#EAF1FC", borderBottom: "1px solid " + T.border }}>
+        <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", background: "#EAF1FC", borderBottom: "1px solid " + T.border }}>
           <span style={{ fontSize: 12.5, color: T.accent, fontWeight: 600 }}>
             {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"}
           </span>
@@ -319,7 +327,7 @@ export function TransactionsView({
         })}
       </div>
 
-      {chart}
+      <div className="no-print">{chart}</div>
 
       <div style={{ borderTop: "1px solid " + T.border, padding: "8px 20px", background: T.bgElevated, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11.5, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{footerLabel}</span>

@@ -21,12 +21,13 @@ import { CategoriesView } from "./components/CategoriesView";
 import { FiltersView } from "./components/FiltersView";
 import { BalanceChart } from "./components/BalanceChart";
 import { WelcomeScreen } from "./components/WelcomeScreen";
+import { RenameDocumentModal } from "./components/RenameDocumentModal";
 import { buildAppMenu, type AppMenuHandlers } from "./lib/appMenu";
 
 const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
 
 export default function App() {
-  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument, getSavedPath, setSavedPath, recentPaths } = useDocuments();
+  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument, getSavedPath, setSavedPath, recentPaths, addRecentPath } = useDocuments();
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [lastClickedAccountId, setLastClickedAccountId] = useState<ID | null>(null);
@@ -43,6 +44,8 @@ export default function App() {
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
   const [sortBy, setSortBy] = useState<SortState | null>(null);
+  const [showRenameDoc, setShowRenameDoc] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
   const [historyTick, setHistoryTick] = useState(0);
   const undoStackRef = useRef<LedgerDocument[]>([]);
   const redoStackRef = useRef<LedgerDocument[]>([]);
@@ -314,6 +317,7 @@ export default function App() {
         if (!picked) return;
         path = picked;
         setSavedPath(activeDoc.id, path);
+        addRecentPath(path);
       }
       await writeDocumentToPath(activeDoc, path);
     } catch (err) {
@@ -747,12 +751,64 @@ export default function App() {
       if (!path) return;
       const doc = await readDocumentFromPath(path);
       addDocument(doc);
+      addRecentPath(path);
     } catch (err) {
       console.error("Error abriendo el documento", err);
     }
   }
   function handleOpenTestDocument() {
     addDocument(createTestDocument());
+  }
+
+  // Archivo > Abrir... / Abrir Reciente: a diferencia de "Anadir documento"
+  // (que deja el documento activo tal cual y anade el nuevo al lado), estas
+  // dos acciones sustituyen el documento activo por el que se abre. Primero
+  // se cierra el anterior y luego se anade el nuevo: si se hiciera al reves,
+  // removeDocument leeria un `activeDocId` todavia no actualizado (closure
+  // obsoleta dentro del mismo lote de renders) y podria dejar activo un
+  // documento equivocado.
+  async function openDocumentFromPathReplacing(path: string) {
+    const doc = await readDocumentFromPath(path);
+    const prevActiveId = activeDocId;
+    if (prevActiveId) removeDocument(prevActiveId);
+    addDocument(doc);
+    addRecentPath(path);
+  }
+  async function handleOpenReplacing() {
+    try {
+      const path = await pickOpenDocumentPath();
+      if (!path) return;
+      await openDocumentFromPathReplacing(path);
+    } catch (err) {
+      console.error("Error abriendo el documento", err);
+    }
+  }
+  async function handleOpenRecent(path: string) {
+    try {
+      await openDocumentFromPathReplacing(path);
+    } catch (err) {
+      console.error("Error abriendo el documento reciente", err);
+    }
+  }
+
+  function duplicateActiveDocument() {
+    if (!activeDoc) return;
+    addDocument({ ...activeDoc, id: genId(), name: activeDoc.name + " copia" });
+  }
+
+  function openRenameDocument() {
+    if (!activeDoc) return;
+    setRenameValue(activeDoc.name);
+    setShowRenameDoc(true);
+  }
+  function submitRenameDocument() {
+    if (!activeDocId || !renameValue.trim()) return;
+    updateDoc(activeDocId, (d) => ({ ...d, name: renameValue.trim() }));
+    setShowRenameDoc(false);
+  }
+
+  function handlePrint() {
+    window.print();
   }
 
   function saveCurrentFilter(name: string) {
@@ -805,14 +861,14 @@ export default function App() {
 
   const menuHandlers: AppMenuHandlers = {
     newDocument: handleNewDocumentMenu,
-    openReplacing: () => console.log("Menu: Abrir... (pendiente de bloque M2)"),
-    openRecent: (path) => console.log("Menu: Abrir reciente (pendiente de bloque M2)", path),
+    openReplacing: handleOpenReplacing,
+    openRecent: handleOpenRecent,
     closeDocument: handleCloseDocumentMenu,
     save: handleSave,
-    duplicateDocument: () => console.log("Menu: Duplicar documento (pendiente de bloque M2)"),
-    renameDocument: () => console.log("Menu: Renombrar documento (pendiente de bloque M2)"),
+    duplicateDocument: duplicateActiveDocument,
+    renameDocument: openRenameDocument,
     exportCsv: handleExport,
-    print: () => console.log("Menu: Imprimir (pendiente de bloque M2)"),
+    print: handlePrint,
     undo,
     redo,
     duplicateSelected,
@@ -1012,6 +1068,7 @@ export default function App() {
           <WelcomeScreen onCreate={createDocument} onOpenFile={handleOpenDocumentFile} onOpenTest={handleOpenTestDocument} />
         )}
       </div>
+      {showRenameDoc && <RenameDocumentModal value={renameValue} onChange={setRenameValue} onSubmit={submitRenameDocument} onCancel={() => setShowRenameDoc(false)} />}
     </div>
   );
 }

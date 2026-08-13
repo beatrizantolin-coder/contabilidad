@@ -54,3 +54,15 @@ select {
 input[type="checkbox"] {
   accent-color: #3373dc;
 }
+
+/* Archivo > Imprimir...: solo se imprime la tabla de movimientos, sin
+   sidebar, barra de herramientas ni grafica de evolucion. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body,
+  #root {
+    height: auto;
+  }
+}

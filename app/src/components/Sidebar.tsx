@@ -144,7 +144,7 @@ export function Sidebar({
   const goToAccounts = () => setView("transactions");
 
   return (
-    <aside style={{ background: T.sidebar, borderRight: "1px solid " + T.border, padding: "12px 10px", overflowY: "auto", height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <aside className="no-print" style={{ background: T.sidebar, borderRight: "1px solid " + T.border, padding: "12px 10px", overflowY: "auto", height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, margin: "2px 10px 6px" }}>
         Documentos
       </div>
