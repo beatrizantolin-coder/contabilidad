@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, Download, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
-import { fmt, shortDate } from "../lib/format";
+import { fmt, monthKey, monthYearLabel, shortDate, todayISO } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { FiltersBar } from "./FiltersBar";
 import { MovementsRangeBar } from "./MovementsRangeBar";
@@ -102,6 +102,16 @@ export function TransactionsView({
 }) {
   const [draggedTxId, setDraggedTxId] = useState<ID | null>(null);
   const [dragOverTxId, setDragOverTxId] = useState<ID | null>(null);
+  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
+
+  function toggleMonthCollapse(key: string) {
+    setCollapsedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   // Reordenar movimientos del mismo dia por arrastre: seguimiento manual del
   // raton (igual que las cuentas del sidebar), en vez de HTML5 drag-and-drop
@@ -236,95 +246,126 @@ export function TransactionsView({
 
         {filteredTx.length === 0 && <div style={{ padding: "28px 20px", color: T.textMuted, fontSize: 13 }}>Sin movimientos que coincidan. Prueba a limpiar los filtros.</div>}
 
-        {filteredTx.map((t) => {
-          const isTransferOut = t.type === "transfer";
-          const isTransferIn = t.type === "transfer_in";
-          const isTransfer = isTransferOut || isTransferIn;
-          const color = t.type === "income" || isTransferIn ? T.income : T.expense;
-          const info = isTransfer ? { name: "Transferencia", color: T.transfer } : catInfo(categories, t.categoryId, t.subcategoryId, t.subsubcategoryId);
-          const st = statusInfo(t.status);
-          const StIcon = st.icon;
-          const voided = t.status === "anulado";
-          const selected = selectedIds.has(t.id);
-          const isDragging = draggedTxId === t.id;
-          const isDragOver = dragOverTxId === t.id && draggedTxId !== t.id;
-          return (
-            <div
-              key={t.id}
-              className="accrow"
-              data-tx-id={t.id}
-              data-tx-date={t.date}
-              onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
-              onClick={(e) => (e.shiftKey ? onShiftSelect(t.id) : onEdit(t))}
-              style={{
-                display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: "8px 20px", fontSize: 13,
-                borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
-                borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
-              }}
-            >
-              {dateSortEnabled ? (
-                <GripVertical
-                  size={11}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDraggedTxId(t.id);
-                  }}
-                  style={{ color: T.textFaint, cursor: "grab" }}
-                />
-              ) : (
-                <span />
-              )}
-              <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>
-                {shortDate(t.date)}
-              </span>
-              <button
-                onClick={(e) => { e.stopPropagation(); onCycleStatus(t); }}
-                title={st.label}
-                style={{ display: "flex", alignItems: "center", justifyContent: "center", color: st.color, background: "none", border: "none", padding: 2, width: "100%" }}
-              >
-                <StIcon size={15} />
-              </button>
-              <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none" }}>
-                <span style={dot(info.color, 8)} />
-                {t.name}
-                {isTransferOut ? " -> " + t.toLabel : ""}
-                {isTransferIn ? " <- " + t.fromLabel : ""}
-                {t.recurring && <Repeat size={11} style={{ color: T.textFaint }} />}
-                {isTransfer && <ArrowRightLeft size={12} style={{ color: T.transfer }} />}
-              </span>
-              <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.comment || ""}>
-                {t.comment || ""}
-              </span>
-              <span className="amount" style={{ textAlign: "right", color, fontWeight: 500 }}>
-                {t.type === "income" || isTransferIn ? "+" : isTransferOut ? "" : "-"}
-                {fmt(Math.abs(t.amount))}
-              </span>
-              <span style={{ display: "flex", justifyContent: "center" }}>
-                {isTransfer && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); if (t.linked) onToggleLink(t); }}
-                    title={t.linked ? "Vinculada — clic para desvincular" : "Desvinculada: se edita de forma independiente"}
-                    style={{ background: "none", border: "none", color: t.linked ? T.textFaint : T.expense, padding: 2, cursor: t.linked ? "pointer" : "default", display: "flex" }}
-                  >
-                    {t.linked ? <Link2 size={13} /> : <Link2Off size={13} />}
-                  </button>
-                )}
-              </span>
-              <span className="amount" style={{ textAlign: "right", color: resultingBalance(t) < 0 ? T.expense : T.textMuted, fontSize: 12.5 }}>
-                {fmt(resultingBalance(t))}
-              </span>
-              <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
-                <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar">
-                  <Pencil size={12} />
+        {(() => {
+          const today = todayISO();
+          const groups: { key: string; label: string; rows: Transaction[] }[] = [];
+          filteredTx.forEach((t) => {
+            const key = monthKey(t.date);
+            const g = groups.length > 0 ? groups[groups.length - 1] : null;
+            if (!g || g.key !== key) groups.push({ key, label: monthYearLabel(t.date), rows: [t] });
+            else g.rows.push(t);
+          });
+          return groups.map((g) => {
+            const isCollapsed = collapsedMonths.has(g.key);
+            return (
+              <div key={g.key}>
+                <button
+                  onClick={() => toggleMonthCollapse(g.key)}
+                  style={{ width: "100%", minWidth: GRID_MIN_WIDTH, display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: T.bgElevated, border: "none", borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", textAlign: "left" }}
+                >
+                  {isCollapsed ? <ChevronRight size={13} style={{ color: T.textMuted }} /> : <ChevronDown size={13} style={{ color: T.textMuted }} />}
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{g.label}</span>
+                  <span style={{ fontSize: 11, color: T.textFaint }}>({g.rows.length})</span>
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); onRemove(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Eliminar">
-                  <Trash2 size={12} />
-                </button>
-              </span>
-            </div>
-          );
-        })}
+                {!isCollapsed &&
+                  g.rows.map((t) => {
+                    const isTransferOut = t.type === "transfer";
+                    const isTransferIn = t.type === "transfer_in";
+                    const isTransfer = isTransferOut || isTransferIn;
+                    const color = t.type === "income" || isTransferIn ? T.income : T.expense;
+                    const info = isTransfer ? { name: "Transferencia", color: T.transfer } : catInfo(categories, t.categoryId, t.subcategoryId, t.subsubcategoryId);
+                    const st = statusInfo(t.status);
+                    const StIcon = st.icon;
+                    const voided = t.status === "anulado";
+                    const selected = selectedIds.has(t.id);
+                    const isDragging = draggedTxId === t.id;
+                    const isDragOver = dragOverTxId === t.id && draggedTxId !== t.id;
+                    // Un movimiento "Programado" cuya fecha aun no llego es un plan
+                    // futuro, no un hecho: se atenua para distinguirlo de un
+                    // movimiento ya vencido (que ya habria pasado a Pendiente).
+                    const isFutureScheduled = t.status === "programado" && t.date > today;
+                    const balance = resultingBalance(t);
+                    return (
+                      <div
+                        key={t.id}
+                        className="accrow"
+                        data-tx-id={t.id}
+                        data-tx-date={t.date}
+                        onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
+                        onClick={(e) => (e.shiftKey ? onShiftSelect(t.id) : onEdit(t))}
+                        style={{
+                          display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: "8px 20px", fontSize: 13,
+                          borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
+                          borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
+                        }}
+                      >
+                        {dateSortEnabled ? (
+                          <GripVertical
+                            size={11}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDraggedTxId(t.id);
+                            }}
+                            style={{ color: T.textFaint, cursor: "grab" }}
+                          />
+                        ) : (
+                          <span />
+                        )}
+                        <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>
+                          {shortDate(t.date)}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onCycleStatus(t); }}
+                          title={st.label}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", color: isFutureScheduled ? T.textFaint : st.color, background: "none", border: "none", padding: 2, width: "100%" }}
+                        >
+                          <StIcon size={15} />
+                        </button>
+                        <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none" }}>
+                          <span style={dot(isFutureScheduled ? T.textFaint : info.color, 8)} />
+                          {t.name}
+                          {isTransferOut ? " -> " + t.toLabel : ""}
+                          {isTransferIn ? " <- " + t.fromLabel : ""}
+                          {t.recurring && <Repeat size={11} style={{ color: T.textFaint }} />}
+                          {isTransfer && <ArrowRightLeft size={12} style={{ color: T.transfer }} />}
+                        </span>
+                        <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.comment || ""}>
+                          {t.comment || ""}
+                        </span>
+                        <span className="amount" style={{ textAlign: "right", color: isFutureScheduled ? T.textFaint : color, fontWeight: 500 }}>
+                          {t.type === "income" || isTransferIn ? "+" : isTransferOut ? "" : "-"}
+                          {fmt(Math.abs(t.amount))}
+                        </span>
+                        <span style={{ display: "flex", justifyContent: "center" }}>
+                          {isTransfer && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); if (t.linked) onToggleLink(t); }}
+                              title={t.linked ? "Vinculada — clic para desvincular" : "Desvinculada: se edita de forma independiente"}
+                              style={{ background: "none", border: "none", color: t.linked ? T.textFaint : T.expense, padding: 2, cursor: t.linked ? "pointer" : "default", display: "flex" }}
+                            >
+                              {t.linked ? <Link2 size={13} /> : <Link2Off size={13} />}
+                            </button>
+                          )}
+                        </span>
+                        <span className="amount" style={{ textAlign: "right", color: isFutureScheduled ? T.textFaint : balance < 0 ? T.expense : T.textMuted, fontSize: 12.5 }}>
+                          {fmt(balance)}
+                        </span>
+                        <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
+                          <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar">
+                            <Pencil size={12} />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); onRemove(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Eliminar">
+                            <Trash2 size={12} />
+                          </button>
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            );
+          });
+        })()}
       </div>
 
       <div className="no-print">{chart}</div>

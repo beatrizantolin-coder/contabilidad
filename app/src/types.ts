@@ -1,6 +1,6 @@
 export type ID = string;
 
-export type AccountType = "checking" | "savings" | "credit";
+export type AccountType = "checking" | "savings" | "credit" | "cash";
 
 export interface Account {
   id: ID;

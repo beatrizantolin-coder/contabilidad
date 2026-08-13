@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import {
   CheckCircle2, CircleDashed, Clock, XCircle,
-  Wallet, PiggyBank, CreditCard,
+  Wallet, PiggyBank, CreditCard, Banknote,
   type LucideIcon,
 } from "lucide-react";
 import type { AccountType, RecurUnit, TransactionStatus } from "./types";
@@ -54,6 +54,7 @@ export const ACCOUNT_TYPES: AccountTypeInfo[] = [
   { value: "checking", label: "Cuenta corriente", icon: Wallet },
   { value: "savings", label: "Cuenta de ahorro", icon: PiggyBank },
   { value: "credit", label: "Tarjeta de credito", icon: CreditCard },
+  { value: "cash", label: "Efectivo", icon: Banknote },
 ];
 
 export const accountTypeInfo = (value: AccountType | undefined): AccountTypeInfo =>

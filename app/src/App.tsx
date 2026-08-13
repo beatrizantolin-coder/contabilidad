@@ -8,6 +8,7 @@ import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibl
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
 import { currentWeekRange, freqPerMonth, monthKey, shortDate, todayISO } from "./lib/format";
+import { computeProgramadorRows } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
@@ -252,6 +253,7 @@ export default function App() {
   const maxCat = Math.max(1, ...byCategory.map((c) => c.val));
 
   const recurringList = useMemo(() => transactions.filter((t) => t.recurring && t.type !== "transfer_in"), [transactions]);
+  const programadorRows = useMemo(() => computeProgramadorRows(transactions), [transactions]);
   const forecastNetPerMonth = useMemo(() => {
     let net = 0;
     recurringList.forEach((t) => {
@@ -1043,11 +1045,13 @@ export default function App() {
                 {view === "recurring" && (
                   <RecurringView
                     docName={activeDoc.name}
-                    recurringList={recurringList}
+                    programadorRows={programadorRows}
                     netPerMonth={forecastNetPerMonth}
                     categories={categories}
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                     onNewScheduled={openScheduledForm}
+                    onEdit={editTx}
+                    onRemove={removeTx}
                   />
                 )}
 

@@ -1,6 +1,6 @@
 import type { Account, ID, Transaction } from "../types";
 import { hasLocalSibling } from "./balances";
-import { todayISO } from "./format";
+import { endOfYearISO, nextDate, todayISO } from "./format";
 
 export interface EvoPoint {
   time: number;
@@ -12,6 +12,18 @@ export interface EvoRange {
   to: string;
 }
 
+function seriesKey(t: Transaction): string {
+  return [t.accountId, t.name, t.categoryId, t.subcategoryId, t.type, t.amount, t.recurring?.interval, t.recurring?.unit].join("|");
+}
+
+type EvoEvent = { date: string; time: number } & ({ real: true; balance: number } | { real: false; delta: number });
+
+/**
+ * Combina el historico real (hasta el punto de partida del rango) con una
+ * proyeccion: cada serie recurrente se extiende, mas alla de su ultima
+ * ocurrencia real, hasta el final del rango elegido, sin crear esas
+ * ocurrencias como movimientos reales (solo para dibujar la previsión).
+ */
 export function computeEvoPoints(
   accounts: Account[],
   chronological: Transaction[],
@@ -22,26 +34,50 @@ export function computeEvoPoints(
 ): EvoPoint[] {
   const openingSum = accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + a.opening, 0);
   const fullSrc = chronological.filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds)));
-  if (fullSrc.length === 0) return [];
 
-  const rangeFrom = evoRange.from || null;
-  const rangeTo = evoRange.to || null;
+  const rangeFrom = evoRange.from || todayISO();
+  const rangeTo = evoRange.to || endOfYearISO();
 
   let startBalance = openingSum;
   fullSrc.forEach((t) => {
-    if (!rangeFrom || t.date < rangeFrom) startBalance = resultingBalance(t);
+    if (t.date < rangeFrom) startBalance = resultingBalance(t);
   });
 
-  const effectiveFrom = rangeFrom || fullSrc[0].date;
-  const startTime = new Date(effectiveFrom + "T00:00:00").getTime() - 86400000;
-  const inRange = fullSrc.filter((t) => (!rangeFrom || t.date >= rangeFrom) && (!rangeTo || t.date <= rangeTo));
+  const startTime = new Date(rangeFrom + "T00:00:00").getTime() - 86400000;
+  const realInRange = fullSrc.filter((t) => t.date >= rangeFrom && t.date <= rangeTo);
+
+  const seriesLatest = new Map<string, Transaction>();
+  transactions.forEach((t) => {
+    if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
+    if (!scopeIds.has(t.accountId)) return;
+    const key = seriesKey(t);
+    const current = seriesLatest.get(key);
+    if (!current || t.date > current.date) seriesLatest.set(key, t);
+  });
+  const projected: { date: string; delta: number }[] = [];
+  seriesLatest.forEach((tx) => {
+    if (!tx.recurring) return;
+    let d = nextDate(tx.date, tx.recurring);
+    let guard = 0;
+    while (d <= rangeTo && guard < 500) {
+      if (d >= rangeFrom) projected.push({ date: d, delta: (tx.type === "income" ? 1 : -1) * Number(tx.amount) });
+      d = nextDate(d, tx.recurring);
+      guard++;
+    }
+  });
+
+  const realEvents: EvoEvent[] = realInRange.map((t) => ({ date: t.date, time: new Date(t.date + "T00:00:00").getTime(), real: true, balance: resultingBalance(t) }));
+  const projectedEvents: EvoEvent[] = projected.map((p) => ({ date: p.date, time: new Date(p.date + "T00:00:00").getTime(), real: false, delta: p.delta }));
+  const events: EvoEvent[] = realEvents.concat(projectedEvents).sort((a, b) => (a.date === b.date ? (a.real === b.real ? 0 : a.real ? -1 : 1) : a.date < b.date ? -1 : 1));
 
   const pts: EvoPoint[] = [{ time: startTime, balance: startBalance }];
-  inRange.forEach((t) => {
-    pts.push({ time: new Date(t.date + "T00:00:00").getTime(), balance: resultingBalance(t) });
+  let running = startBalance;
+  events.forEach((e) => {
+    running = e.real ? e.balance : running + e.delta;
+    pts.push({ time: e.time, balance: running });
   });
 
-  const endTime = rangeTo ? new Date(rangeTo + "T00:00:00").getTime() : new Date(todayISO() + "T00:00:00").getTime();
+  const endTime = new Date(rangeTo + "T00:00:00").getTime();
   if (endTime > pts[pts.length - 1].time) pts.push({ time: endTime, balance: pts[pts.length - 1].balance });
   return pts;
 }

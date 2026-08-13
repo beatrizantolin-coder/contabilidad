@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CreditCard, FolderOpen, GripVertical, PiggyBank, Pencil, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
+import { Banknote, CircleDollarSign, CreditCard, FolderOpen, GripVertical, PiggyBank, Pencil, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, ID, LedgerDocument } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -16,6 +16,7 @@ export const ACCOUNT_SECTIONS: AccountSection[] = [
   { key: "checking", label: "Cuentas", icon: Wallet },
   { key: "savings", label: "Ahorro", icon: PiggyBank },
   { key: "credit", label: "Tarjetas", icon: CreditCard },
+  { key: "cash", label: "Efectivo", icon: Banknote },
 ];
 
 interface AccDraft {
@@ -24,9 +25,11 @@ interface AccDraft {
   opening: string;
   type: AccountType;
   linkedAccountId: ID | null;
+  /** Si es true, el formulario oculta el selector de tipo (ya viene implicito por la seccion desde la que se abrio). */
+  lockType: boolean;
 }
 
-const emptyAccDraft = (type: AccountType): AccDraft => ({ id: null, name: "", opening: "", type, linkedAccountId: null });
+const emptyAccDraft = (type: AccountType, lockType: boolean): AccDraft => ({ id: null, name: "", opening: "", type, linkedAccountId: null, lockType });
 
 export function Sidebar({
   documents,
@@ -79,7 +82,7 @@ export function Sidebar({
   const [showDocForm, setShowDocForm] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
   const [showAccForm, setShowAccForm] = useState(false);
-  const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking"));
+  const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
   const [draggedAccountId, setDraggedAccountId] = useState<ID | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<ID | null>(null);
 
@@ -124,17 +127,17 @@ export function Sidebar({
     setShowDocForm(false);
   }
 
-  function openAccountForm(type: AccountType, existing: Account | null) {
+  function openAccountForm(type: AccountType, existing: Account | null, lockType: boolean) {
     if (existing) {
-      setAccDraft({ id: existing.id, name: existing.name, opening: String(existing.opening), type: existing.type, linkedAccountId: existing.linkedAccountId });
+      setAccDraft({ id: existing.id, name: existing.name, opening: String(existing.opening), type: existing.type, linkedAccountId: existing.linkedAccountId, lockType: false });
     } else {
-      setAccDraft(emptyAccDraft(type));
+      setAccDraft(emptyAccDraft(type, lockType));
     }
     setShowAccForm(true);
   }
 
   useEffect(() => {
-    if (newAccountTrigger > 0) openAccountForm("checking", null);
+    if (newAccountTrigger > 0) openAccountForm("checking", null, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newAccountTrigger]);
 
@@ -145,7 +148,7 @@ export function Sidebar({
     const linkedAccountId = accDraft.type === "credit" ? accDraft.linkedAccountId : null;
     if (accDraft.id) updateAccount(accDraft.id, accDraft.name, accDraft.type, opening, linkedAccountId);
     else addAccount(accDraft.name, accDraft.type, opening, linkedAccountId);
-    setAccDraft(emptyAccDraft("checking"));
+    setAccDraft(emptyAccDraft("checking", false));
     setShowAccForm(false);
   }
 
@@ -188,18 +191,33 @@ export function Sidebar({
           <button type="submit" style={{ background: T.accent, border: "none", borderRadius: 6, padding: "0 10px", color: "#fff", fontSize: 12, fontWeight: 600 }}>
             Crear
           </button>
+          <button
+            type="button"
+            onClick={() => { setShowDocForm(false); setDocNameDraft(""); }}
+            style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "0 8px", color: T.textMuted }}
+            aria-label="Cancelar"
+          >
+            <X size={12} />
+          </button>
         </form>
       )}
 
       <div style={{ padding: "2px 8px 14px", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>{activeDoc.name}</div>
 
-      <button
-        onClick={() => { clearAccountSelection(); goToAccounts(); }}
+      <div
         className="navitem"
-        style={{ width: "100%", textAlign: "left", background: activeAccounts.size === 0 && view === "transactions" ? "#FFFFFF" : "transparent", boxShadow: activeAccounts.size === 0 && view === "transactions" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 10px", marginBottom: 6, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, background: activeAccounts.size === 0 && view === "transactions" ? "#FFFFFF" : "transparent", boxShadow: activeAccounts.size === 0 && view === "transactions" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", borderRadius: 7, padding: "7px 8px 7px 10px" }}
       >
-        <Wallet size={14} style={{ color: T.accent }} /> Todas las cuentas
-      </button>
+        <button
+          onClick={() => { clearAccountSelection(); goToAccounts(); }}
+          style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}
+        >
+          <CircleDollarSign size={14} style={{ color: T.accent }} /> Grupos de cuentas
+        </button>
+        <button onClick={() => openAccountForm("checking", null, false)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1, marginLeft: 6 }} aria-label="Anadir cuenta">
+          <Plus size={13} />
+        </button>
+      </div>
 
       {ACCOUNT_SECTIONS.map((section) => {
         const SectionIcon = section.icon;
@@ -210,7 +228,7 @@ export function Sidebar({
               <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600 }}>
                 <SectionIcon size={10} /> {section.label}
               </span>
-              <button onClick={() => openAccountForm(section.key, null)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
+              <button onClick={() => openAccountForm(section.key, null, true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
                 <Plus size={11} />
               </button>
             </div>
@@ -256,7 +274,7 @@ export function Sidebar({
                   <span className="amount" style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA", flexShrink: 0 }}>
                     {fmt(bal)}
                   </span>
-                  <button onClick={() => openAccountForm(a.type, a)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Editar " + a.name}>
+                  <button onClick={() => openAccountForm(a.type, a, false)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Editar " + a.name}>
                     <Pencil size={11} />
                   </button>
                   <button onClick={() => removeAccount(a.id)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Eliminar " + a.name}>
@@ -272,17 +290,19 @@ export function Sidebar({
       {showAccForm && (
         <form onSubmit={submitAccount} style={{ marginTop: 8, padding: 10, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
           <input autoFocus placeholder="Nombre de la cuenta" value={accDraft.name} onChange={(e) => setAccDraft((d) => ({ ...d, name: e.target.value }))} style={inputStyle} />
-          <select
-            value={accDraft.type}
-            onChange={(e) => setAccDraft((d) => ({ ...d, type: e.target.value as AccountType, linkedAccountId: e.target.value === "credit" ? d.linkedAccountId : null }))}
-            style={inputStyle}
-          >
-            {ACCOUNT_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
+          {!accDraft.lockType && (
+            <select
+              value={accDraft.type}
+              onChange={(e) => setAccDraft((d) => ({ ...d, type: e.target.value as AccountType, linkedAccountId: e.target.value === "credit" ? d.linkedAccountId : null }))}
+              style={inputStyle}
+            >
+              {ACCOUNT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          )}
           {accDraft.type === "credit" && (
             <select value={accDraft.linkedAccountId ?? ""} onChange={(e) => setAccDraft((d) => ({ ...d, linkedAccountId: e.target.value || null }))} style={inputStyle}>
               <option value="">Sin cuenta asociada</option>

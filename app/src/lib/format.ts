@@ -15,6 +15,12 @@ export const shortDate = (iso: string): string => {
 
 export const monthKey = (iso: string): string => iso.slice(0, 7);
 
+export const monthYearLabel = (iso: string): string => {
+  const d = new Date(iso + "T00:00:00");
+  const label = d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
 /** Rango lunes-domingo de la semana en curso (vista por defecto de la tabla de movimientos). */
 export const currentWeekRange = (): { from: string; to: string } => {
   const now = new Date();
