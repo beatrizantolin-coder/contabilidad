@@ -64,7 +64,7 @@ export function FiltersBar({
         <Field label="Descripcion">
           <div style={{ position: "relative" }}>
             <Search size={13} style={{ position: "absolute", left: 9, top: 10, color: T.textFaint }} />
-            <input placeholder="Buscar" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} style={{ ...inputStyle, paddingLeft: 28, width: 150 }} />
+            <input id="filtros-search-input" placeholder="Buscar" value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} style={{ ...inputStyle, paddingLeft: 28, width: 150 }} />
           </div>
         </Field>
 

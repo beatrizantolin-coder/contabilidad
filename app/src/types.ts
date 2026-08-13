@@ -133,4 +133,6 @@ export interface Manifest {
   activeDocumentId: ID | null;
   /** Ruta en disco recordada por documento, para el botón "Guardar" (guarda directo sin volver a preguntar). */
   savedPaths: Record<ID, string>;
+  /** Rutas de documentos abiertos recientemente, mas reciente primero, para Archivo > Abrir Reciente. */
+  recentPaths: string[];
 }

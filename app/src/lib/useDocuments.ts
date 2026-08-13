@@ -16,6 +16,7 @@ export function useDocuments() {
   const [documents, setDocuments] = useState<LedgerDocument[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [savedPaths, setSavedPaths] = useState<Record<string, string>>({});
+  const [recentPaths, setRecentPaths] = useState<string[]>([]);
   const prevDocsRef = useRef<LedgerDocument[]>([]);
   const hydratedRef = useRef(false);
 
@@ -35,6 +36,7 @@ export function useDocuments() {
       setDocuments(loaded);
       prevDocsRef.current = loaded;
       setSavedPaths(manifest.savedPaths);
+      setRecentPaths(manifest.recentPaths);
       const active = manifest.activeDocumentId && loaded.some((d) => d.id === manifest.activeDocumentId)
         ? manifest.activeDocumentId
         : loaded[0]?.id ?? null;
@@ -66,11 +68,11 @@ export function useDocuments() {
   useEffect(() => {
     if (!hydratedRef.current) return;
     debounceSave("manifest", () => {
-      saveManifest({ documentIds: documents.map((d) => d.id), activeDocumentId: activeDocId, savedPaths }).catch((err) =>
+      saveManifest({ documentIds: documents.map((d) => d.id), activeDocumentId: activeDocId, savedPaths, recentPaths }).catch((err) =>
         console.error("Error guardando el manifiesto", err),
       );
     });
-  }, [documents, activeDocId, savedPaths]);
+  }, [documents, activeDocId, savedPaths, recentPaths]);
 
   // Autogeneracion de recurrentes + vencimiento automatico: por cada
   // documento, cualquier movimiento "programado" cuya fecha ya llego pasa a
@@ -141,6 +143,10 @@ export function useDocuments() {
     setSavedPaths((prev) => ({ ...prev, [docId]: path }));
   }, []);
 
+  const addRecentPath = useCallback((path: string) => {
+    setRecentPaths((prev) => [path, ...prev.filter((p) => p !== path)].slice(0, 8));
+  }, []);
+
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
 
   return {
@@ -156,5 +162,7 @@ export function useDocuments() {
     removeDocument,
     getSavedPath,
     setSavedPath,
+    recentPaths,
+    addRecentPath,
   };
 }

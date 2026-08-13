@@ -21,11 +21,12 @@ import { CategoriesView } from "./components/CategoriesView";
 import { FiltersView } from "./components/FiltersView";
 import { BalanceChart } from "./components/BalanceChart";
 import { WelcomeScreen } from "./components/WelcomeScreen";
+import { buildAppMenu, type AppMenuHandlers } from "./lib/appMenu";
 
 const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
 
 export default function App() {
-  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument, getSavedPath, setSavedPath } = useDocuments();
+  const { loading, documents, activeDocId, setActiveDocId, activeDoc, updateDoc, applyToDocs, createDocument, addDocument, removeDocument, getSavedPath, setSavedPath, recentPaths } = useDocuments();
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [lastClickedAccountId, setLastClickedAccountId] = useState<ID | null>(null);
@@ -765,6 +766,84 @@ export default function App() {
   function removeSavedFilter(id: ID) {
     setSavedFilters((prev) => prev.filter((sf) => sf.id !== id));
   }
+
+  function selectAllVisible() {
+    setSelectedIds(new Set(filteredTx.map((t) => t.id)));
+  }
+  function handleSelectAllMenu() {
+    const el = document.activeElement as HTMLElement | null;
+    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) {
+      (el as HTMLInputElement | HTMLTextAreaElement).select();
+      return;
+    }
+    selectAllVisible();
+  }
+  function handleSearchMenu() {
+    setShowFilters(() => true);
+    setTimeout(() => {
+      document.getElementById("filtros-search-input")?.focus();
+    }, 50);
+  }
+  function handleNewDocumentMenu() {
+    const base = "Sin título";
+    let name = base;
+    let n = 2;
+    while (documents.some((d) => d.name === name)) {
+      name = base + " " + n;
+      n++;
+    }
+    createDocument(name);
+  }
+  function handleCloseDocumentMenu() {
+    if (activeDocId) removeDocument(activeDocId);
+  }
+  function handleNewFilterMenu() {
+    setFilters(emptyFilters());
+    setShowFilters(true);
+    setView("transactions");
+  }
+
+  const menuHandlers: AppMenuHandlers = {
+    newDocument: handleNewDocumentMenu,
+    openReplacing: () => console.log("Menu: Abrir... (pendiente de bloque M2)"),
+    openRecent: (path) => console.log("Menu: Abrir reciente (pendiente de bloque M2)", path),
+    closeDocument: handleCloseDocumentMenu,
+    save: handleSave,
+    duplicateDocument: () => console.log("Menu: Duplicar documento (pendiente de bloque M2)"),
+    renameDocument: () => console.log("Menu: Renombrar documento (pendiente de bloque M2)"),
+    exportCsv: handleExport,
+    print: () => console.log("Menu: Imprimir (pendiente de bloque M2)"),
+    undo,
+    redo,
+    duplicateSelected,
+    deleteSelected,
+    selectAll: handleSelectAllMenu,
+    search: handleSearchMenu,
+    addDocument: handleOpenDocumentFile,
+    newAccount: () => console.log("Menu: Nueva cuenta (pendiente de bloque M4)"),
+    newTransaction: openNewTxForm,
+    newScheduled: openScheduledForm,
+    newCategory: () => console.log("Menu: Nueva categoria (pendiente de bloque M4)"),
+    newFilter: handleNewFilterMenu,
+  };
+  const menuHandlersRef = useRef<AppMenuHandlers>(menuHandlers);
+  useEffect(() => {
+    menuHandlersRef.current = menuHandlers;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    buildAppMenu(menuHandlersRef, { canUndo, canRedo, recentPaths })
+      .then((menu) => {
+        if (cancelled) return;
+        menu.setAsAppMenu().catch((err) => console.error("Error activando el menu nativo", err));
+      })
+      .catch((err) => console.error("Error construyendo el menu nativo", err));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUndo, canRedo, recentPaths]);
 
   if (loading) {
     return (
