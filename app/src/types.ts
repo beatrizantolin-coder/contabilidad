@@ -12,13 +12,12 @@ export interface Account {
   linkedAccountId: ID | null;
 }
 
-export type CategoryKind = "expense" | "income";
+export type CategoryKind = "expense" | "income" | "transfer";
 
 export interface Subcategory {
   id: ID;
   name: string;
-  color: string;
-  /** Sub-subcategorías (solo se usa un nivel más en la UI). */
+  /** Sin color propio: siempre se deriva del color de la categoría principal (ver lib/color.ts). */
   subcategories: Subcategory[];
 }
 
@@ -53,6 +52,8 @@ interface TransactionBase {
   amount: number;
   status: TransactionStatus;
   recurring: Recurring | null;
+  /** Orden manual dentro de un grupo de empate (mismo valor en la columna de orden activa). Si no está fijado, se usa `seq`. */
+  manualRank?: number;
 }
 
 export interface IncomeExpenseTransaction extends TransactionBase {
@@ -106,7 +107,8 @@ export interface Filters {
   to: string;
 }
 
-export type SortColumn = "date" | "status" | "name" | "comment" | "amount" | "balance";
+/** Saldo no se incluye: no es ordenable (depende del orden cronologico real). */
+export type SortColumn = "date" | "status" | "name" | "comment" | "amount";
 export interface SortState {
   column: SortColumn;
   dir: "asc" | "desc";

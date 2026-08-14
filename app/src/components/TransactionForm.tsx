@@ -3,7 +3,7 @@ import type { CategoryKind, ID, LedgerDocument, RecurUnit, TransactionStatus } f
 import type { TxDraft } from "../lib/txDraft";
 import { Field } from "./Field";
 import { ColorSwatches } from "./ColorSwatches";
-import { T, inputStyle, STATUSES, RECUR_UNITS, PALETTE } from "../theme";
+import { T, dot, inputStyle, STATUSES, RECUR_UNITS, PALETTE } from "../theme";
 
 const NEW_OPTION = "__new__";
 
@@ -18,6 +18,7 @@ export function TransactionForm({
   onCreateCategory,
   onCreateSubcategory,
   onCreateSubSubcategory,
+  setCategoryColor,
   onSubmit,
   onCancel,
 }: {
@@ -29,8 +30,9 @@ export function TransactionForm({
   activeDocId: string;
   onDescriptionChange: (name: string) => void;
   onCreateCategory: (name: string, color: string, kind: CategoryKind) => ID;
-  onCreateSubcategory: (catId: ID, name: string, color: string) => ID;
-  onCreateSubSubcategory: (catId: ID, subId: ID, name: string, color: string) => ID;
+  onCreateSubcategory: (catId: ID, name: string) => ID;
+  onCreateSubSubcategory: (catId: ID, subId: ID, name: string) => ID;
+  setCategoryColor: (id: ID, color: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
 }) {
@@ -45,11 +47,11 @@ export function TransactionForm({
 
   const [newSubOpen, setNewSubOpen] = useState(false);
   const [newSubName, setNewSubName] = useState("");
-  const [newSubColor, setNewSubColor] = useState(PALETTE[0]);
 
   const [newSubSubOpen, setNewSubSubOpen] = useState(false);
   const [newSubSubName, setNewSubSubName] = useState("");
-  const [newSubSubColor, setNewSubSubColor] = useState(PALETTE[0]);
+
+  const [descColorPickerOpen, setDescColorPickerOpen] = useState(false);
 
   function submitNewCategory() {
     if (!newCatName.trim()) return;
@@ -62,18 +64,16 @@ export function TransactionForm({
   }
   function submitNewSubcategory() {
     if (!newSubName.trim() || !selectedCategory) return;
-    const id = onCreateSubcategory(selectedCategory.id, newSubName.trim(), newSubColor);
+    const id = onCreateSubcategory(selectedCategory.id, newSubName.trim());
     setTxDraft((d) => ({ ...d, subcategoryId: id, subsubcategoryId: null }));
     setNewSubName("");
-    setNewSubColor(PALETTE[0]);
     setNewSubOpen(false);
   }
   function submitNewSubSubcategory() {
     if (!newSubSubName.trim() || !selectedCategory || !selectedSubcategory) return;
-    const id = onCreateSubSubcategory(selectedCategory.id, selectedSubcategory.id, newSubSubName.trim(), newSubSubColor);
+    const id = onCreateSubSubcategory(selectedCategory.id, selectedSubcategory.id, newSubSubName.trim());
     setTxDraft((d) => ({ ...d, subsubcategoryId: id }));
     setNewSubSubName("");
-    setNewSubSubColor(PALETTE[0]);
     setNewSubSubOpen(false);
   }
 
@@ -210,19 +210,38 @@ export function TransactionForm({
         </Field>
       )}
 
-      <Field label="Descripcion">
-        <input
-          autoFocus
-          value={txDraft.name}
-          onChange={(e) => {
-            const val = e.target.value;
-            setTxDraft((d) => ({ ...d, name: val }));
-            onDescriptionChange(val);
-          }}
-          style={inputStyle}
-          placeholder="p. ej. Supermercado"
-        />
-      </Field>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+        {selectedCategory && (
+          <button
+            type="button"
+            onClick={() => setDescColorPickerOpen((o) => !o)}
+            style={{ background: "none", border: "none", padding: "0 0 8px 0", lineHeight: 0, flexShrink: 0 }}
+            aria-label="Cambiar color de la categoria"
+          >
+            <span style={dot(selectedCategory.color, 14)} />
+          </button>
+        )}
+        <div style={{ flex: 1 }}>
+          <Field label="Descripcion">
+            <input
+              autoFocus
+              value={txDraft.name}
+              onChange={(e) => {
+                const val = e.target.value;
+                setTxDraft((d) => ({ ...d, name: val }));
+                onDescriptionChange(val);
+              }}
+              style={inputStyle}
+              placeholder="p. ej. Supermercado"
+            />
+          </Field>
+        </div>
+      </div>
+      {descColorPickerOpen && selectedCategory && (
+        <div style={{ marginTop: -6 }}>
+          <ColorSwatches value={selectedCategory.color} onChange={(c) => { setCategoryColor(selectedCategory.id, c); setDescColorPickerOpen(false); }} size={14} />
+        </div>
+      )}
 
       <Field label="Estado">
         <select value={txDraft.status} onChange={(e) => setTxDraft((d) => ({ ...d, status: e.target.value as TransactionStatus }))} style={inputStyle}>
@@ -332,7 +351,6 @@ export function TransactionForm({
             }}
             style={inputStyle}
           />
-          <ColorSwatches value={newSubColor} onChange={setNewSubColor} size={14} />
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={submitNewSubcategory} style={{ background: T.accent, border: "none", borderRadius: 6, padding: "6px 12px", color: "#fff", fontWeight: 600, fontSize: 12 }}>
               Crear
@@ -383,7 +401,6 @@ export function TransactionForm({
             }}
             style={inputStyle}
           />
-          <ColorSwatches value={newSubSubColor} onChange={setNewSubSubColor} size={14} />
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={submitNewSubSubcategory} style={{ background: T.accent, border: "none", borderRadius: 6, padding: "6px 12px", color: "#fff", fontWeight: 600, fontSize: 12 }}>
               Crear

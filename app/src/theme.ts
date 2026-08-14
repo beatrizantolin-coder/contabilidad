@@ -23,8 +23,8 @@ export const T = {
 };
 
 export const PALETTE = [
-  "#3373DC", "#2FA84F", "#D64545", "#D6A93B", "#8E5FD6",
-  "#3BA6A6", "#D6708F", "#6B7A8F", "#C77B3A", "#57C77A",
+  "#E2725B", "#E8A33D", "#7FB35C", "#5B8DBF", "#9080C4",
+  "#9A9D93", "#D97FA6", "#4FAFA8", "#D9B23D", "#A97C50",
 ];
 
 export interface StatusInfo {

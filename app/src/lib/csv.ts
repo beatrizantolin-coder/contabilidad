@@ -162,7 +162,7 @@ export function parseIcomptaCsv(csvText: string, accounts: Account[], categories
     if (subName) {
       let subIndex = cat.subcategories.findIndex((s) => normalizeKey(s.name) === normalizeKey(subName));
       if (subIndex === -1) {
-        const newSub: Subcategory = { id: genId(), name: subName, color: cat.color, subcategories: [] };
+        const newSub: Subcategory = { id: genId(), name: subName, subcategories: [] };
         cat = { ...cat, subcategories: cat.subcategories.concat([newSub]) };
         nextCategories[catIndex] = cat;
         subIndex = cat.subcategories.length - 1;

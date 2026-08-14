@@ -7,7 +7,6 @@ function migrateSubcategory(raw: any): Subcategory {
   return {
     id: raw.id,
     name: raw.name,
-    color: raw.color,
     subcategories: Array.isArray(raw.subcategories) ? raw.subcategories.map(migrateSubcategory) : [],
   };
 }
@@ -56,6 +55,7 @@ function migrateTransaction(raw: any): Transaction {
     amount: raw.amount,
     status: (raw.status as TransactionStatus) || "pendiente",
     recurring: migrateRecurring(raw.recurring),
+    manualRank: typeof raw.manualRank === "number" ? raw.manualRank : undefined,
   };
   if (raw.type === "transfer" || raw.type === "transfer_in") {
     return { ...raw, ...base, categoryId: null, subcategoryId: null, subsubcategoryId: null, linked: raw.linked !== false } as Transaction;

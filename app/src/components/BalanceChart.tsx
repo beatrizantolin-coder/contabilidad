@@ -112,17 +112,33 @@ export function BalanceChart({ points, ticks, evoRange, setEvoRange }: { points:
             height="150"
             preserveAspectRatio="none"
             style={{ cursor: "crosshair" }}
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const relX = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-              const clickTime = evoMinT + relX * evoRangeT;
-              let bal = points[0].balance;
-              for (let i = 0; i < points.length; i++) {
-                if (points[i].time <= clickTime) bal = points[i].balance;
-                else break;
-              }
-              const dateLabel = new Date(clickTime).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "2-digit" });
-              setMarker({ xPct: relX * 100, date: dateLabel, balance: bal });
+            onMouseDown={(e) => {
+              e.preventDefault();
+              // Se captura el nodo SVG en una variable normal (no en el evento
+              // de React, que deja de ser valido en cuanto termina este
+              // manejador) para poder seguir leyendo su posicion durante el
+              // arrastre, en los listeners de mousemove/mouseup de window.
+              const svgNode = e.currentTarget;
+              const updateMarker = (clientX: number) => {
+                const rect = svgNode.getBoundingClientRect();
+                const relX = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+                const clickTime = evoMinT + relX * evoRangeT;
+                let bal = points[0].balance;
+                for (let i = 0; i < points.length; i++) {
+                  if (points[i].time <= clickTime) bal = points[i].balance;
+                  else break;
+                }
+                const dateLabel = new Date(clickTime).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "2-digit" });
+                setMarker({ xPct: relX * 100, date: dateLabel, balance: bal });
+              };
+              updateMarker(e.clientX);
+              const onMove = (moveEvent: MouseEvent) => updateMarker(moveEvent.clientX);
+              const onUp = () => {
+                window.removeEventListener("mousemove", onMove);
+                window.removeEventListener("mouseup", onUp);
+              };
+              window.addEventListener("mousemove", onMove);
+              window.addEventListener("mouseup", onUp);
             }}
           >
             <line x1="0" y1={evoY(evoMaxB)} x2="1000" y2={evoY(evoMaxB)} stroke={T.borderSoft} strokeDasharray="4 3" />

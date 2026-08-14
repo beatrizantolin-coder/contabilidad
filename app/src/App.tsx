@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { T } from "./theme";
+import { T, statusInfo } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
-import { currentWeekRange, freqPerMonth, monthKey, shortDate, todayISO } from "./lib/format";
-import { computeProgramadorRows } from "./lib/recurring";
+import { currentWeekRange, freqPerMonth, monthKey, monthYearLabel, shortDate, todayISO } from "./lib/format";
+import { computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
@@ -21,6 +21,7 @@ import { SidePanel } from "./components/SidePanel";
 import { TransactionsView } from "./components/TransactionsView";
 import { RecurringView } from "./components/RecurringView";
 import { CategoriesView } from "./components/CategoriesView";
+import { CategoryEditForm } from "./components/CategoryEditForm";
 import { FiltersView } from "./components/FiltersView";
 import { BalanceChart } from "./components/BalanceChart";
 import { WelcomeScreen } from "./components/WelcomeScreen";
@@ -63,6 +64,8 @@ export default function App() {
   const [lastClickedId, setLastClickedId] = useState<ID | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
+  const [showCatEdit, setShowCatEdit] = useState(false);
+  const [catEditId, setCatEditId] = useState<ID | null>(null);
   const [sortBy, setSortBy] = useState<SortState | null>(null);
   const [showRenameDoc, setShowRenameDoc] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -85,6 +88,15 @@ export default function App() {
     lastHistoryDocRef.current = null;
     setHistoryTick((t) => t + 1);
   }, [activeDocId]);
+
+  // Cualquier panel lateral de edicion abierto (movimiento, edicion en masa
+  // o categoria) se cierra solo al cambiar de pantalla o de documento activo.
+  useEffect(() => {
+    setShowTxForm(false);
+    setShowBulkEdit(false);
+    setShowCatEdit(false);
+    setCatEditId(null);
+  }, [view, activeDocId]);
 
   // Una vez cargados los datos, se decide una unica vez si esta sesion
   // empieza mostrando la bienvenida: siempre se muestra salvo que el
@@ -182,12 +194,15 @@ export default function App() {
         return (t.comment || "").toLowerCase();
       case "amount":
         return signedAmount(t);
-      case "balance":
-        return resultingBalance(t);
     }
+  }
+  /** Desempate: orden manual si se ha fijado arrastrando, si no el orden de creacion. */
+  function rankOf(t: Transaction): number {
+    return t.manualRank !== undefined ? t.manualRank : t.seq;
   }
 
   const effectiveViewRange = viewRange ?? currentWeekRange();
+  const effectiveSortColumn: SortColumn = sortBy?.column ?? "date";
 
   const filteredTx = useMemo(() => {
     const base = scoped
@@ -200,40 +215,65 @@ export default function App() {
       .filter((t) => !filters.to || t.date <= filters.to)
       .filter((t) => !filters.search || t.name.toLowerCase().includes(filters.search.toLowerCase()))
       .slice();
-    if (!sortBy) {
-      return base.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : b.seq - a.seq));
-    }
-    const dir = sortBy.dir === "asc" ? 1 : -1;
+    const dir = sortBy && sortBy.dir === "asc" ? 1 : -1;
     return base.sort((a, b) => {
-      const va = sortValue(a, sortBy.column);
-      const vb = sortValue(b, sortBy.column);
+      const va = sortValue(a, effectiveSortColumn);
+      const vb = sortValue(b, effectiveSortColumn);
       if (va < vb) return -1 * dir;
       if (va > vb) return 1 * dir;
-      if (sortBy.column === "date") return (a.seq - b.seq) * dir;
-      return 0;
+      return (rankOf(a) - rankOf(b)) * dir;
     });
-  }, [scoped, filters, transactions, sortBy, runningMaps, effectiveViewRange.from, effectiveViewRange.to]);
+  }, [scoped, filters, transactions, sortBy, effectiveSortColumn, effectiveViewRange.from, effectiveViewRange.to]);
 
-  // Cuando la tabla esta ordenada por fecha (o sin orden explicito, que
-  // ordena por fecha desc por defecto), el empate entre movimientos del
-  // mismo dia se resuelve por `seq`; arrastrar una fila reasigna el `seq`
-  // de todo el grupo de ese dia para reflejar el nuevo orden visual.
-  const dateSortEnabled = !sortBy || sortBy.column === "date";
-  function reorderSameDay(draggedId: ID, targetId: ID) {
+  // Clave de agrupacion visual: coincide con la columna de orden activa (por
+  // fecha se agrupa por mes/año, por estado por su nombre, por descripcion o
+  // comentario por su texto exacto). Por importe no se agrupa (valor continuo).
+  function txGroupKey(t: Transaction): string | null {
+    switch (effectiveSortColumn) {
+      case "date":
+        return monthKey(t.date);
+      case "status":
+        return t.status || "pendiente";
+      case "name":
+        return t.name;
+      case "comment":
+        return t.comment || "";
+      case "amount":
+        return null;
+    }
+  }
+  function txGroupLabel(t: Transaction): string {
+    switch (effectiveSortColumn) {
+      case "date":
+        return monthYearLabel(t.date);
+      case "status":
+        return statusInfo(t.status).label;
+      case "name":
+        return t.name;
+      case "comment":
+        return t.comment || "Sin comentario";
+      case "amount":
+        return "";
+    }
+  }
+
+  // Dentro de un mismo grupo de empate (mismo valor en la columna de orden
+  // activa), arrastrar una fila fija su orden relativo via `manualRank`, al
+  // margen de si el orden general esta en ascendente o descendente.
+  function reorderWithinGroup(draggedId: ID, targetId: ID) {
     if (draggedId === targetId) return;
-    const dragged = filteredTx.find((t) => t.id === draggedId);
-    const target = filteredTx.find((t) => t.id === targetId);
-    if (!dragged || !target || dragged.date !== target.date) return;
-    const dayItems = filteredTx.filter((t) => t.date === dragged.date);
-    const withoutDragged = dayItems.filter((t) => t.id !== draggedId);
-    const targetIdx = withoutDragged.findIndex((t) => t.id === targetId);
-    const newVisualOrder = withoutDragged.slice();
-    newVisualOrder.splice(targetIdx, 0, dragged);
-    const dir = sortBy && sortBy.column === "date" && sortBy.dir === "asc" ? 1 : -1;
-    const ascendingOrder = dir === 1 ? newVisualOrder : newVisualOrder.slice().reverse();
-    const newSeqById = new Map<ID, number>();
-    ascendingOrder.forEach((t) => newSeqById.set(t.id, genSeq()));
-    setTransactions((prev) => prev.map((t) => (newSeqById.has(t.id) ? { ...t, seq: newSeqById.get(t.id) as number } : t)));
+    const dragged = transactions.find((t) => t.id === draggedId);
+    const target = transactions.find((t) => t.id === targetId);
+    if (!dragged || !target || txGroupKey(dragged) === null || txGroupKey(dragged) !== txGroupKey(target)) return;
+    const draggedRank = rankOf(dragged);
+    const targetRank = rankOf(target);
+    setTransactions((prev) =>
+      prev.map((t) => {
+        if (t.id === dragged.id) return { ...t, manualRank: targetRank };
+        if (t.id === target.id) return { ...t, manualRank: draggedRank };
+        return t;
+      }),
+    );
   }
 
   const curMonthKey = monthKey(todayISO());
@@ -302,46 +342,36 @@ export default function App() {
   function removeCategory(id: ID) {
     setCategories((prev) => prev.filter((c) => c.id !== id));
   }
+  function setCategoryName(id: ID, name: string) {
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
+  }
+  function setCategoryKind(id: ID, kind: CategoryKind) {
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, kind } : c)));
+  }
+  // El color de subcategorias/sub-subcategorias se deriva siempre del de la
+  // categoria (ver lib/color.ts), asi que cambiar el color aqui ya "cascada"
+  // automaticamente a todos sus descendientes sin tocar sus datos.
   function setCategoryColor(id: ID, color: string) {
     setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, color } : c)));
   }
-  function addSubcategory(catId: ID, name: string, color: string): ID {
+  function addSubcategory(catId: ID, name: string): ID {
     const id = genId();
-    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([{ id, name, color, subcategories: [] }]) } : c)));
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([{ id, name, subcategories: [] }]) } : c)));
     return id;
   }
   function removeSubcategory(catId: ID, subId: ID) {
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
   }
-  function setSubcategoryColor(catId: ID, subId: ID, color: string) {
-    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.map((s) => (s.id === subId ? { ...s, color } : s)) } : c)));
-  }
-  function addSubSubcategory(catId: ID, subId: ID, name: string, color: string): ID {
+  function addSubSubcategory(catId: ID, subId: ID, name: string): ID {
     const id = genId();
     setCategories((prev) =>
       prev.map((c) =>
         c.id !== catId
           ? c
-          : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.concat([{ id, name, color, subcategories: [] }]) })) },
+          : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.concat([{ id, name, subcategories: [] }]) })) },
       ),
     );
     return id;
-  }
-  function removeSubSubcategory(catId: ID, subId: ID, subsubId: ID) {
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id !== catId ? c : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.filter((ss) => ss.id !== subsubId) })) },
-      ),
-    );
-  }
-  function setSubSubcategoryColor(catId: ID, subId: ID, subsubId: ID, color: string) {
-    setCategories((prev) =>
-      prev.map((c) =>
-        c.id !== catId
-          ? c
-          : { ...c, subcategories: c.subcategories.map((s) => (s.id !== subId ? s : { ...s, subcategories: s.subcategories.map((ss) => (ss.id === subsubId ? { ...ss, color } : ss)) })) },
-      ),
-    );
   }
   function setBudget(catId: ID, value: number | undefined) {
     setBudgets((prev) => ({ ...prev, [catId]: value as number }));
@@ -485,6 +515,27 @@ export default function App() {
   function resetDraft() {
     setShowTxForm(false);
     setTxDraft(null);
+  }
+
+  // Clic en una fila del Programador: si ya es una ocurrencia real, se edita
+  // tal cual. Si es solo una prevision (fecha futura aun no generada), se
+  // materializa en ese momento como movimiento real "Programado" con esa
+  // fecha, y se abre directamente su edicion.
+  function openProgramadorRow(row: ProgramadorRow) {
+    if (row.real) {
+      editTx(row.tx);
+      return;
+    }
+    const newTx = { ...row.tx, id: genId(), seq: genSeq(), date: row.date, status: "programado" as const };
+    setTransactions((prev) => prev.concat([newTx]));
+    editTx(newTx);
+  }
+
+  function openCategoryEdit(id: ID) {
+    setShowTxForm(false);
+    setShowBulkEdit(false);
+    setCatEditId(id);
+    setShowCatEdit(true);
   }
 
   function otherDocIdOf(t: Transaction): ID {
@@ -1050,7 +1101,7 @@ export default function App() {
                     categories={categories}
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                     onNewScheduled={openScheduledForm}
-                    onEdit={editTx}
+                    onOpenRow={openProgramadorRow}
                     onRemove={removeTx}
                   />
                 )}
@@ -1064,14 +1115,7 @@ export default function App() {
                     maxSpend={maxCat}
                     addCategory={addCategory}
                     removeCategory={removeCategory}
-                    setCategoryColor={setCategoryColor}
-                    addSubcategory={addSubcategory}
-                    removeSubcategory={removeSubcategory}
-                    setSubcategoryColor={setSubcategoryColor}
-                    addSubSubcategory={addSubSubcategory}
-                    removeSubSubcategory={removeSubSubcategory}
-                    setSubSubcategoryColor={setSubSubcategoryColor}
-                    setBudget={setBudget}
+                    onOpenCategory={openCategoryEdit}
                     newCategoryTrigger={newCategoryTrigger}
                   />
                 )}
@@ -1099,8 +1143,10 @@ export default function App() {
                     onToggleLink={toggleTransferLink}
                     sortBy={sortBy}
                     onSort={handleSort}
-                    dateSortEnabled={dateSortEnabled}
-                    onReorderSameDay={reorderSameDay}
+                    groupKey={txGroupKey}
+                    groupLabel={txGroupLabel}
+                    canReorder={effectiveSortColumn !== "amount"}
+                    onReorderWithinGroup={reorderWithinGroup}
                     showMovementsRange={showMovementsRange}
                     setShowMovementsRange={setShowMovementsRange}
                     onApplyMovementsRange={applyMovementsRange}
@@ -1126,12 +1172,43 @@ export default function App() {
                 )}
               </div>
 
-              {(showTxForm || showBulkEdit) && (
+              {(showTxForm || showBulkEdit || showCatEdit) && (
                 <SidePanel
-                  title={showBulkEdit ? "Editar " + selectedIds.size + " movimientos" : txDraft?.id ? "Editar movimiento" : "Nuevo movimiento"}
-                  onClose={() => (showBulkEdit ? setShowBulkEdit(false) : resetDraft())}
+                  title={showCatEdit ? "Editar categoria" : showBulkEdit ? "Editar " + selectedIds.size + " movimientos" : txDraft?.id ? "Editar movimiento" : "Nuevo movimiento"}
+                  onClose={() => {
+                    if (showCatEdit) {
+                      setShowCatEdit(false);
+                      setCatEditId(null);
+                    } else if (showBulkEdit) {
+                      setShowBulkEdit(false);
+                    } else {
+                      resetDraft();
+                    }
+                  }}
                 >
-                  {showBulkEdit ? (
+                  {showCatEdit ? (
+                    (() => {
+                      const catEditCategory = categories.find((c) => c.id === catEditId);
+                      return (
+                        catEditCategory && (
+                          <CategoryEditForm
+                            category={catEditCategory}
+                            budgets={budgets}
+                            setCategoryName={setCategoryName}
+                            setCategoryKind={setCategoryKind}
+                            setCategoryColor={setCategoryColor}
+                            setBudget={setBudget}
+                            addSubcategory={addSubcategory}
+                            removeSubcategory={removeSubcategory}
+                            onDone={() => {
+                              setShowCatEdit(false);
+                              setCatEditId(null);
+                            }}
+                          />
+                        )
+                      );
+                    })()
+                  ) : showBulkEdit ? (
                     <BulkEditForm
                       bulkEdit={bulkEdit}
                       setBulkEdit={(fn) => setBulkEdit(fn)}
@@ -1154,6 +1231,7 @@ export default function App() {
                         onCreateCategory={addCategory}
                         onCreateSubcategory={addSubcategory}
                         onCreateSubSubcategory={addSubSubcategory}
+                        setCategoryColor={setCategoryColor}
                         onSubmit={submitTx}
                         onCancel={resetDraft}
                       />

@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowUp, ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
+import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
-import { fmt, monthKey, monthYearLabel, shortDate, todayISO } from "../lib/format";
+import { fmt, shortDate, todayISO } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { FiltersBar } from "./FiltersBar";
 import { MovementsRangeBar } from "./MovementsRangeBar";
@@ -39,8 +39,10 @@ export function TransactionsView({
   onToggleLink,
   sortBy,
   onSort,
-  dateSortEnabled,
-  onReorderSameDay,
+  groupKey,
+  groupLabel,
+  canReorder,
+  onReorderWithinGroup,
   onAdd,
   onSave,
   onUndo,
@@ -82,8 +84,11 @@ export function TransactionsView({
   onToggleLink: (t: Transaction) => void;
   sortBy: SortState | null;
   onSort: (column: SortColumn) => void;
-  dateSortEnabled: boolean;
-  onReorderSameDay: (draggedId: ID, targetId: ID) => void;
+  /** Clave de agrupacion visual segun la columna de orden activa; null = sin agrupar (p.ej. Importe). */
+  groupKey: (t: Transaction) => string | null;
+  groupLabel: (t: Transaction) => string;
+  canReorder: boolean;
+  onReorderWithinGroup: (draggedId: ID, targetId: ID) => void;
   onAdd: () => void;
   onSave: () => void;
   onUndo: () => void;
@@ -102,10 +107,10 @@ export function TransactionsView({
 }) {
   const [draggedTxId, setDraggedTxId] = useState<ID | null>(null);
   const [dragOverTxId, setDragOverTxId] = useState<ID | null>(null);
-  const [collapsedMonths, setCollapsedMonths] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
-  function toggleMonthCollapse(key: string) {
-    setCollapsedMonths((prev) => {
+  function toggleGroupCollapse(key: string) {
+    setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -113,18 +118,18 @@ export function TransactionsView({
     });
   }
 
-  // Reordenar movimientos del mismo dia por arrastre: seguimiento manual del
-  // raton (igual que las cuentas del sidebar), en vez de HTML5 drag-and-drop
-  // nativo, por la misma fiabilidad bajo WebKitGTK.
+  // Reordenar movimientos dentro del mismo grupo de empate por arrastre:
+  // seguimiento manual del raton (igual que las cuentas del sidebar), en vez
+  // de HTML5 drag-and-drop nativo, por fiabilidad bajo WebKitGTK.
   useEffect(() => {
     if (!draggedTxId) return;
-    const draggedDate = filteredTx.find((t) => t.id === draggedTxId)?.date;
+    const draggedGroup = filteredTx.find((t) => t.id === draggedTxId) ? groupKey(filteredTx.find((t) => t.id === draggedTxId) as Transaction) : null;
     function onMove(e: MouseEvent) {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const row = el?.closest("[data-tx-id]") as HTMLElement | null;
       const rowId = row?.dataset.txId;
-      const rowDate = row?.dataset.txDate;
-      if (rowId && rowId !== draggedTxId && rowDate === draggedDate) {
+      const rowGroup = row?.dataset.txGroup ?? "";
+      if (rowId && rowId !== draggedTxId && rowGroup === (draggedGroup ?? "")) {
         setDragOverTxId(rowId);
       } else {
         setDragOverTxId(null);
@@ -132,7 +137,7 @@ export function TransactionsView({
     }
     function onUp() {
       if (dragOverTxId && draggedTxId && dragOverTxId !== draggedTxId) {
-        onReorderSameDay(draggedTxId, dragOverTxId);
+        onReorderWithinGroup(draggedTxId, dragOverTxId);
       }
       setDraggedTxId(null);
       setDragOverTxId(null);
@@ -240,33 +245,39 @@ export function TransactionsView({
           <SortableHeader label="Comentario" column="comment" sortBy={sortBy} onSort={onSort} />
           <SortableHeader label="Importe" column="amount" sortBy={sortBy} onSort={onSort} align="right" />
           <span />
-          <SortableHeader label="Saldo" column="balance" sortBy={sortBy} onSort={onSort} align="right" />
+          <span style={{ textAlign: "right" }}>Saldo</span>
           <span />
         </div>
 
         {filteredTx.length === 0 && <div style={{ padding: "28px 20px", color: T.textMuted, fontSize: 13 }}>Sin movimientos que coincidan. Prueba a limpiar los filtros.</div>}
 
         {(() => {
-          const today = todayISO();
           const groups: { key: string; label: string; rows: Transaction[] }[] = [];
           filteredTx.forEach((t) => {
-            const key = monthKey(t.date);
+            const key = groupKey(t);
+            if (key === null) {
+              groups.push({ key: "row-" + t.id, label: "", rows: [t] });
+              return;
+            }
             const g = groups.length > 0 ? groups[groups.length - 1] : null;
-            if (!g || g.key !== key) groups.push({ key, label: monthYearLabel(t.date), rows: [t] });
+            if (!g || g.key !== key) groups.push({ key, label: groupLabel(t), rows: [t] });
             else g.rows.push(t);
           });
+          const today = todayISO();
           return groups.map((g) => {
-            const isCollapsed = collapsedMonths.has(g.key);
+            const isCollapsed = g.label !== "" && collapsedGroups.has(g.key);
             return (
               <div key={g.key}>
-                <button
-                  onClick={() => toggleMonthCollapse(g.key)}
-                  style={{ width: "100%", minWidth: GRID_MIN_WIDTH, display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: T.bgElevated, border: "none", borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", textAlign: "left" }}
-                >
-                  {isCollapsed ? <ChevronRight size={13} style={{ color: T.textMuted }} /> : <ChevronDown size={13} style={{ color: T.textMuted }} />}
-                  <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{g.label}</span>
-                  <span style={{ fontSize: 11, color: T.textFaint }}>({g.rows.length})</span>
-                </button>
+                {g.label !== "" && (
+                  <button
+                    onClick={() => toggleGroupCollapse(g.key)}
+                    style={{ width: "100%", minWidth: GRID_MIN_WIDTH, display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: T.bgElevated, border: "none", borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", textAlign: "left" }}
+                  >
+                    {isCollapsed ? <ChevronRight size={13} style={{ color: T.textMuted }} /> : <ChevronDown size={13} style={{ color: T.textMuted }} />}
+                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{g.label}</span>
+                    <span style={{ fontSize: 11, color: T.textFaint }}>({g.rows.length})</span>
+                  </button>
+                )}
                 {!isCollapsed &&
                   g.rows.map((t) => {
                     const isTransferOut = t.type === "transfer";
@@ -290,7 +301,7 @@ export function TransactionsView({
                         key={t.id}
                         className="accrow"
                         data-tx-id={t.id}
-                        data-tx-date={t.date}
+                        data-tx-group={groupKey(t) ?? ""}
                         onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
                         onClick={(e) => (e.shiftKey ? onShiftSelect(t.id) : onEdit(t))}
                         style={{
@@ -299,7 +310,7 @@ export function TransactionsView({
                           borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
                         }}
                       >
-                        {dateSortEnabled ? (
+                        {canReorder ? (
                           <GripVertical
                             size={11}
                             onMouseDown={(e) => {
@@ -399,11 +410,12 @@ function SortableHeader({
       onClick={() => onSort(column)}
       style={{
         display: "flex", alignItems: "center", gap: 3, justifyContent: align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start",
-        background: "none", border: "none", padding: 0, margin: 0, font: "inherit", color: active ? T.text : "inherit", textTransform: "inherit", letterSpacing: "inherit", cursor: "pointer",
+        background: "none", border: "none", padding: 0, margin: 0, cursor: "pointer",
+        textTransform: "uppercase", letterSpacing: "0.04em", fontSize: 10.5,
+        color: active ? T.text : T.textMuted, fontWeight: active ? 700 : 600,
       }}
     >
       {label}
-      {active && (sortBy!.dir === "asc" ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
     </button>
   );
 }

@@ -1,5 +1,6 @@
 import type { Category, ID } from "../types";
 import { T } from "../theme";
+import { subcategoryColor } from "./color";
 
 export interface CatInfo {
   name: string;
@@ -17,9 +18,9 @@ export function catInfo(categories: Category[], categoryId: ID | null, subcatego
     if (sub) {
       if (subsubcategoryId) {
         const subsub = sub.subcategories.find((s) => s.id === subsubcategoryId);
-        if (subsub) return { name: cat.name + " / " + sub.name + " / " + subsub.name, color: subsub.color, catName: cat.name, subName: sub.name, subsubName: subsub.name };
+        if (subsub) return { name: cat.name + " / " + sub.name + " / " + subsub.name, color: subcategoryColor(cat.color), catName: cat.name, subName: sub.name, subsubName: subsub.name };
       }
-      return { name: cat.name + " / " + sub.name, color: sub.color, catName: cat.name, subName: sub.name };
+      return { name: cat.name + " / " + sub.name, color: subcategoryColor(cat.color), catName: cat.name, subName: sub.name };
     }
   }
   return { name: cat.name, color: cat.color, catName: cat.name };
