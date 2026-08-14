@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CircleDollarSign, CreditCard, FolderOpen, GripVertical, PiggyBank, Pencil, Plus, Repeat, Save, Trash2, Wallet, X } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FolderOpen, GripVertical, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, ID, LedgerDocument } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -55,6 +55,8 @@ export function Sidebar({
   recurringCount,
   categoriesCount,
   savedFiltersCount,
+  collapsed,
+  onToggleCollapsed,
 }: {
   documents: LedgerDocument[];
   activeDocId: string;
@@ -62,7 +64,7 @@ export function Sidebar({
   activeDoc: LedgerDocument;
   createDocument: (name: string) => void;
   removeDocument: (id: string) => void;
-  onSaveDocument: (doc: LedgerDocument) => void;
+  onSaveDocument: (doc: LedgerDocument) => Promise<void>;
   accounts: Account[];
   balances: Record<ID, number>;
   totalBalance: number;
@@ -80,6 +82,8 @@ export function Sidebar({
   recurringCount: number;
   categoriesCount: number;
   savedFiltersCount: number;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
   const [showDocForm, setShowDocForm] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
@@ -87,6 +91,13 @@ export function Sidebar({
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
   const [draggedAccountId, setDraggedAccountId] = useState<ID | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<ID | null>(null);
+  const [savedDocFeedback, setSavedDocFeedback] = useState<string | null>(null);
+
+  async function handleSaveDocumentClick(d: LedgerDocument) {
+    await onSaveDocument(d);
+    setSavedDocFeedback(d.id);
+    setTimeout(() => setSavedDocFeedback((cur) => (cur === d.id ? null : cur)), 1200);
+  }
 
   // Reordenar cuentas por arrastre: se sigue el raton manualmente (en vez de
   // usar el HTML5 drag-and-drop nativo) porque bajo WebKitGTK el gesto de
@@ -165,7 +176,27 @@ export function Sidebar({
   const goToAccounts = () => setView("transactions");
 
   return (
-    <aside className="no-print" style={{ background: T.sidebar, borderRight: "1px solid " + T.border, padding: "12px 10px", overflowY: "auto", height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <aside
+      className="no-print"
+      style={{
+        background: T.sidebar, borderRight: "1px solid " + T.border, padding: collapsed ? "12px 6px" : "12px 10px",
+        overflowY: collapsed ? "hidden" : "auto", height: "100%", minHeight: 0, display: "flex", flexDirection: "column",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", marginBottom: 14, flexShrink: 0 }}>
+        {!collapsed && (
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <CircleDollarSign size={20} style={{ color: T.accent, flexShrink: 0 }} />
+            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>Contabilidad</span>
+          </div>
+        )}
+        <button onClick={onToggleCollapsed} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label={collapsed ? "Expandir menu" : "Contraer menu"}>
+          {collapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+      </div>
+
+      {collapsed ? null : (
+      <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 10px 6px" }}>
         <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Documentos</span>
         <button onClick={() => setShowDocForm((s) => !s)} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Nuevo archivo">
@@ -192,8 +223,13 @@ export function Sidebar({
             <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
               <Trash2 size={10} />
             </button>
-            <button onClick={() => onSaveDocument(d)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px 0 0" }} aria-label={"Guardar " + d.name} title="Guardar">
-              <Save size={10} />
+            <button
+              onClick={() => handleSaveDocumentClick(d)}
+              style={{ background: "none", border: "none", color: savedDocFeedback === d.id ? T.income : T.textFaint, padding: "0 3px 0 0" }}
+              aria-label={"Guardar " + d.name}
+              title="Guardar"
+            >
+              {savedDocFeedback === d.id ? <CheckCircle2 size={10} /> : <Save size={10} />}
             </button>
           </div>
         ))}
@@ -381,6 +417,8 @@ export function Sidebar({
           </span>
         </div>
       </div>
+      </>
+      )}
     </aside>
   );
 }

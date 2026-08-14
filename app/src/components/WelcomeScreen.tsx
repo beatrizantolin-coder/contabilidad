@@ -22,6 +22,7 @@ export function WelcomeScreen({
       <div style={{ textAlign: "center", maxWidth: 440, width: "100%" }}>
         <img src="/app-icon.png" alt="" width={64} height={64} style={{ marginBottom: 12 }} />
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Bienvenido a Contabilidad</div>
+        <p style={{ fontSize: 11.5, color: T.textFaint, margin: "0 0 10px" }}>© Contabilidad design. Version 0.1.0</p>
         <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 26px" }}>Elige cómo quieres empezar.</p>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left" }}>

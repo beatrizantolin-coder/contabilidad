@@ -2,13 +2,13 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Category, ID, Transaction } from "../types";
 import type { ProgramadorRow } from "../lib/recurring";
-import { T, dot } from "../theme";
+import { T, dot, smallBtn } from "../theme";
 import { fmt, freqLabel, freqPerMonth, monthYearLabel, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
 
-const GRID_COLUMNS = "80px 130px 110px 1fr 110px 56px";
+const GRID_COLUMNS = "80px 130px 70px 100px 1fr 100px 56px";
 
-type ProgramadorSort = "fecha" | "cuenta" | "periodicidad" | "descripcion" | "importe";
+type ProgramadorSort = "fecha" | "cuenta" | "tipo" | "periodicidad" | "descripcion" | "importe";
 
 export function RecurringView({
   docName,
@@ -35,6 +35,7 @@ export function RecurringView({
   const sorters: Record<ProgramadorSort, (a: ProgramadorRow, b: ProgramadorRow) => number> = {
     fecha: (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0),
     cuenta: (a, b) => accountName(a.tx.accountId).localeCompare(accountName(b.tx.accountId)) || (a.date < b.date ? -1 : 1),
+    tipo: (a, b) => a.tx.type.localeCompare(b.tx.type) || (a.date < b.date ? -1 : 1),
     periodicidad: (a, b) => (a.tx.recurring ? freqPerMonth(a.tx.recurring) : 0) - (b.tx.recurring ? freqPerMonth(b.tx.recurring) : 0),
     descripcion: (a, b) => a.tx.name.localeCompare(b.tx.name),
     importe: (a, b) => Number(a.tx.amount) - Number(b.tx.amount),
@@ -45,6 +46,16 @@ export function RecurringView({
   if (sortBy === "cuenta") {
     sorted.forEach((row) => {
       const label = accountName(row.tx.accountId);
+      let g = groups.find((x) => x.label === label);
+      if (!g) {
+        g = { label, rows: [] };
+        groups.push(g);
+      }
+      g.rows.push(row);
+    });
+  } else if (sortBy === "tipo") {
+    sorted.forEach((row) => {
+      const label = row.tx.type === "income" ? "Ingresos" : "Gastos";
       let g = groups.find((x) => x.label === label);
       if (!g) {
         g = { label, rows: [] };
@@ -79,12 +90,28 @@ export function RecurringView({
       </div>
 
       {programadorRows.length > 0 && (
-        <div style={{ padding: "10px 24px 0", fontSize: 13, color: T.textMuted }}>
-          Neto recurrente:{" "}
-          <span className="amount" style={{ color: netPerMonth < 0 ? T.expense : T.income, fontWeight: 700 }}>
-            {fmt(netPerMonth)}
-          </span>{" "}
-          / mes
+        <div style={{ padding: "10px 24px 0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <span style={{ fontSize: 13, color: T.textMuted }}>
+            Neto recurrente:{" "}
+            <span className="amount" style={{ color: netPerMonth < 0 ? T.expense : T.income, fontWeight: 700 }}>
+              {fmt(netPerMonth)}
+            </span>{" "}
+            / mes
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 11, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.04em" }}>Agrupar por</span>
+            {(
+              [
+                ["fecha", "Fecha"],
+                ["cuenta", "Cuenta"],
+                ["tipo", "Tipo"],
+              ] as const
+            ).map(([value, label]) => (
+              <button key={value} onClick={() => setSortBy(value)} style={smallBtn(sortBy === value)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -95,6 +122,7 @@ export function RecurringView({
           <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, padding: "7px 24px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0, zIndex: 1 }}>
             <SortHeader value="fecha" label="Fecha" sortBy={sortBy} setSortBy={setSortBy} />
             <SortHeader value="cuenta" label="Cuenta" sortBy={sortBy} setSortBy={setSortBy} />
+            <SortHeader value="tipo" label="Tipo" sortBy={sortBy} setSortBy={setSortBy} />
             <SortHeader value="periodicidad" label="Periodicidad" sortBy={sortBy} setSortBy={setSortBy} />
             <SortHeader value="descripcion" label="Descripcion" sortBy={sortBy} setSortBy={setSortBy} />
             <span style={{ textAlign: "right" }}>
@@ -141,6 +169,7 @@ export function RecurringView({
                       {shortDate(row.date)}
                     </span>
                     <span style={{ color: T.textMuted, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountName(t.accountId)}</span>
+                    <span style={{ color: t.type === "income" ? T.income : T.expense, fontSize: 12 }}>{t.type === "income" ? "Ingreso" : "Gasto"}</span>
                     <span style={{ color: T.textMuted, fontSize: 12 }}>{freqLabel(t.recurring)}</span>
                     <span style={{ display: "flex", alignItems: "center", gap: 7, color: T.text }}>
                       <span style={dot(info.color, 8)} />

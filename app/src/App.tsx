@@ -53,6 +53,8 @@ export default function App() {
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [lastClickedAccountId, setLastClickedAccountId] = useState<ID | null>(null);
   const [view, setView] = useState<MainView>("transactions");
+  const [sidebarWidth, setSidebarWidth] = useState(270);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters());
@@ -206,10 +208,16 @@ export default function App() {
   const effectiveViewRange = viewRange ?? currentWeekRange();
   const effectiveSortColumn: SortColumn = sortBy?.column ?? "date";
 
+  // Si el panel de Filtros trae su propio rango de fechas, ese rango explicito
+  // sustituye al rango de la vista Movimientos (semana en curso / 1m / 3m...)
+  // en vez de combinarse con AND: si no, un rango de Filtros que no se solape
+  // con la vista activa dejaria el resultado vacio sin que sea evidente por que.
+  const filtersHaveDateRange = !!filters.from || !!filters.to;
+
   const filteredTx = useMemo(() => {
     const base = scoped
       .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds))
-      .filter((t) => t.date >= effectiveViewRange.from && t.date <= effectiveViewRange.to)
+      .filter((t) => filtersHaveDateRange || (t.date >= effectiveViewRange.from && t.date <= effectiveViewRange.to))
       .filter((t) => filters.categories.length === 0 || (t.categoryId && filters.categories.includes(t.categoryId)))
       .filter((t) => filters.subcategories.length === 0 || (t.subcategoryId && filters.subcategories.includes(t.subcategoryId)))
       .filter((t) => filters.type === "all" || (filters.type === "transfer" ? t.type === "transfer" || t.type === "transfer_in" : t.type === filters.type))
@@ -437,6 +445,11 @@ export default function App() {
   function addAccount(name: string, type: AccountType, opening: number, linkedAccountId: ID | null) {
     setAccounts((prev) => prev.concat([{ id: genId(), name, opening, warning: 0, type, linkedAccountId: type === "credit" ? linkedAccountId : null }]));
   }
+  function createDestinoAccount(docId: ID, name: string, type: AccountType, opening: number): ID {
+    const id = genId();
+    updateDoc(docId, (d) => ({ ...d, accounts: d.accounts.concat([{ id, name, opening, warning: 0, type, linkedAccountId: null }]) }));
+    return id;
+  }
   function updateAccount(id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) {
     setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, name, type, opening, linkedAccountId: type === "credit" ? linkedAccountId : null } : a)));
   }
@@ -573,6 +586,7 @@ export default function App() {
     if (!txDraft.name || !txDraft.amount || !txDraft.accountId) return;
     pushHistory();
     const amount = Number(txDraft.amount);
+    const effectiveDate = txDraft.date || todayISO();
     const recurring = txDraft.recurringOn
       ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null }
       : null;
@@ -584,7 +598,7 @@ export default function App() {
       if (editingExisting && isTransferTx(editingExisting) && !editingExisting.linked) {
         const id = txDraft.id as ID;
         setTransactions((prev) =>
-          prev.map((t) => (t.id === id ? ({ ...t, accountId: txDraft.accountId!, date: txDraft.date, name: txDraft.name, comment: txDraft.comment, amount, status: txDraft.status, recurring } as Transaction) : t)),
+          prev.map((t) => (t.id === id ? ({ ...t, accountId: txDraft.accountId!, date: effectiveDate, name: txDraft.name, comment: txDraft.comment, amount, status: txDraft.status, recurring } as Transaction) : t)),
         );
         resetDraft();
         return;
@@ -598,13 +612,13 @@ export default function App() {
       const crossDoc = txDraft.toDocId !== activeDocId;
 
       const legTransfer: Transaction = {
-        id: genId(), seq: genSeq(), accountId: txDraft.accountId, date: txDraft.date, name: txDraft.name || "Transferencia", comment: txDraft.comment,
+        id: genId(), seq: genSeq(), accountId: txDraft.accountId, date: effectiveDate, name: txDraft.name || "Transferencia", comment: txDraft.comment,
         categoryId: null, subcategoryId: null, subsubcategoryId: null, amount, type: "transfer", recurring, transferGroupId: groupId, status: txDraft.status,
         toAccountId: txDraft.toAccountId, toDocId: txDraft.toDocId, linked: true,
         toLabel: crossDoc ? (targetDoc ? targetDoc.name : "-") + " - " + targetAccName : targetAccName,
       };
       const legTransferIn: Transaction = {
-        id: genId(), seq: genSeq(), accountId: txDraft.toAccountId, date: txDraft.date, name: txDraft.name || "Transferencia", comment: txDraft.comment,
+        id: genId(), seq: genSeq(), accountId: txDraft.toAccountId, date: effectiveDate, name: txDraft.name || "Transferencia", comment: txDraft.comment,
         categoryId: null, subcategoryId: null, subsubcategoryId: null, amount, type: "transfer_in", recurring, transferGroupId: groupId, status: txDraft.status,
         fromAccountId: txDraft.accountId, fromDocId: activeDocId, linked: true,
         fromLabel: crossDoc ? activeDoc.name + " - " + sourceAccName : sourceAccName,
@@ -657,7 +671,7 @@ export default function App() {
             ? ({
                 ...t,
                 accountId: txDraft.accountId!,
-                date: txDraft.date,
+                date: effectiveDate,
                 name: txDraft.name,
                 comment: txDraft.comment,
                 categoryId: txDraft.categoryId,
@@ -675,7 +689,7 @@ export default function App() {
       setTransactions((prev) =>
         prev.concat([
           {
-            id: genId(), seq: genSeq(), accountId: txDraft.accountId!, date: txDraft.date, name: txDraft.name, comment: txDraft.comment,
+            id: genId(), seq: genSeq(), accountId: txDraft.accountId!, date: effectiveDate, name: txDraft.name, comment: txDraft.comment,
             categoryId: txDraft.categoryId, subcategoryId: txDraft.subcategoryId, subsubcategoryId: txDraft.subsubcategoryId,
             amount, type: txDraft.type, recurring, status: txDraft.status,
           } as Transaction,
@@ -1085,10 +1099,12 @@ export default function App() {
 
   return (
     <div style={{ height: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif", overflow: "hidden" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "270px 1fr", height: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: (sidebarCollapsed ? 44 : sidebarWidth) + "px 1fr", height: "100%", position: "relative" }}>
         {activeDoc && !showWelcome ? (
           <>
             <Sidebar
+              collapsed={sidebarCollapsed}
+              onToggleCollapsed={() => setSidebarCollapsed((c) => !c)}
               documents={documents}
               activeDocId={activeDoc.id}
               setActiveDocId={(id) => {
@@ -1117,6 +1133,26 @@ export default function App() {
               categoriesCount={categories.length}
               savedFiltersCount={savedFilters.length}
             />
+            {!sidebarCollapsed && (
+              <div
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const startX = e.clientX;
+                  const startWidth = sidebarWidth;
+                  const onMove = (moveEvent: MouseEvent) => {
+                    const next = Math.min(420, Math.max(170, startWidth + (moveEvent.clientX - startX)));
+                    setSidebarWidth(next);
+                  };
+                  const onUp = () => {
+                    window.removeEventListener("mousemove", onMove);
+                    window.removeEventListener("mouseup", onUp);
+                  };
+                  window.addEventListener("mousemove", onMove);
+                  window.addEventListener("mouseup", onUp);
+                }}
+                style={{ position: "absolute", left: sidebarWidth - 3, top: 0, bottom: 0, width: 6, cursor: "col-resize", zIndex: 5 }}
+              />
+            )}
             <main style={{ background: T.bg, display: "flex", flexDirection: "row", minWidth: 0, minHeight: 0 }}>
               <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
                 {view === "recurring" && (
@@ -1143,6 +1179,7 @@ export default function App() {
                     onNewCategory={openNewCategory}
                     removeCategory={removeCategory}
                     onOpenCategory={openCategoryEdit}
+                    removeSubcategory={removeSubcategory}
                     newCategoryTrigger={newCategoryTrigger}
                   />
                 )}
@@ -1261,6 +1298,7 @@ export default function App() {
                         onCreateCategory={addCategory}
                         onCreateSubcategory={addSubcategory}
                         onCreateSubSubcategory={addSubSubcategory}
+                        onCreateDestinoAccount={createDestinoAccount}
                         setCategoryColor={setCategoryColor}
                         onSubmit={submitTx}
                         onCancel={resetDraft}

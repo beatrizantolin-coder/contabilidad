@@ -1,9 +1,10 @@
 import { useState } from "react";
-import type { CategoryKind, ID, LedgerDocument, RecurUnit, TransactionStatus } from "../types";
+import { X } from "lucide-react";
+import type { AccountType, CategoryKind, ID, LedgerDocument, RecurUnit, TransactionStatus } from "../types";
 import type { TxDraft } from "../lib/txDraft";
 import { Field } from "./Field";
 import { ColorSwatches } from "./ColorSwatches";
-import { T, dot, inputStyle, STATUSES, RECUR_UNITS, PALETTE } from "../theme";
+import { T, dot, inputStyle, STATUSES, RECUR_UNITS, PALETTE, ACCOUNT_TYPES } from "../theme";
 
 const NEW_OPTION = "__new__";
 
@@ -18,6 +19,7 @@ export function TransactionForm({
   onCreateCategory,
   onCreateSubcategory,
   onCreateSubSubcategory,
+  onCreateDestinoAccount,
   setCategoryColor,
   onSubmit,
   onCancel,
@@ -32,6 +34,7 @@ export function TransactionForm({
   onCreateCategory: (name: string, color: string, kind: CategoryKind) => ID;
   onCreateSubcategory: (catId: ID, name: string) => ID;
   onCreateSubSubcategory: (catId: ID, subId: ID, name: string) => ID;
+  onCreateDestinoAccount: (docId: ID, name: string, type: AccountType, opening: number) => ID;
   setCategoryColor: (id: ID, color: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
@@ -52,6 +55,21 @@ export function TransactionForm({
   const [newSubSubName, setNewSubSubName] = useState("");
 
   const [descColorPickerOpen, setDescColorPickerOpen] = useState(false);
+
+  const [newDestinoOpen, setNewDestinoOpen] = useState(false);
+  const [newDestinoName, setNewDestinoName] = useState("");
+  const [newDestinoType, setNewDestinoType] = useState<AccountType>("checking");
+  const [newDestinoOpening, setNewDestinoOpening] = useState("");
+
+  function submitNewDestino() {
+    if (!newDestinoName.trim()) return;
+    const id = onCreateDestinoAccount(txDraft.toDocId, newDestinoName.trim(), newDestinoType, Number(newDestinoOpening) || 0);
+    setTxDraft((d) => ({ ...d, toAccountId: id }));
+    setNewDestinoName("");
+    setNewDestinoType("checking");
+    setNewDestinoOpening("");
+    setNewDestinoOpen(false);
+  }
 
   function submitNewCategory() {
     if (!newCatName.trim()) return;
@@ -110,15 +128,54 @@ export function TransactionForm({
             </select>
           </Field>
           <Field label="Destino (cuenta)">
-            <select value={txDraft.toAccountId ?? ""} onChange={(e) => setTxDraft((d) => ({ ...d, toAccountId: e.target.value }))} style={inputStyle}>
+            <select
+              value={newDestinoOpen ? NEW_OPTION : (txDraft.toAccountId ?? "")}
+              onChange={(e) => {
+                if (e.target.value === NEW_OPTION) {
+                  setNewDestinoOpen(true);
+                  return;
+                }
+                setNewDestinoOpen(false);
+                setTxDraft((d) => ({ ...d, toAccountId: e.target.value }));
+              }}
+              style={inputStyle}
+            >
               {targetDocAccounts.length === 0 && <option value="">Sin cuentas en este archivo</option>}
               {targetDocAccounts.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
               ))}
+              <option value={NEW_OPTION}>+ Anadir nuevo destino...</option>
             </select>
           </Field>
+          {newDestinoOpen && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 10, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 8 }}>
+              <input
+                autoFocus
+                placeholder="Nombre de la cuenta destino"
+                value={newDestinoName}
+                onChange={(e) => setNewDestinoName(e.target.value)}
+                style={inputStyle}
+              />
+              <select value={newDestinoType} onChange={(e) => setNewDestinoType(e.target.value as AccountType)} style={inputStyle}>
+                {ACCOUNT_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+              <input placeholder="Saldo inicial" type="number" step="0.01" value={newDestinoOpening} onChange={(e) => setNewDestinoOpening(e.target.value)} style={inputStyle} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" onClick={submitNewDestino} style={{ flex: 1, background: T.accent, border: "none", borderRadius: 6, padding: "7px 0", color: "#fff", fontWeight: 600, fontSize: 12.5 }}>
+                  Crear y usar
+                </button>
+                <button type="button" onClick={() => setNewDestinoOpen(false)} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "7px 9px", color: T.textMuted }}>
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -226,32 +283,36 @@ export function TransactionForm({
         )}
       </div>
 
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-        {selectedCategory && (
-          <button
-            type="button"
-            onClick={() => setDescColorPickerOpen((o) => !o)}
-            style={{ background: "none", border: "none", padding: "0 0 8px 0", lineHeight: 0, flexShrink: 0 }}
-            aria-label="Cambiar color de la categoria"
-          >
-            <span style={dot(selectedCategory.color, 14)} />
-          </button>
-        )}
-        <div style={{ flex: 1 }}>
-          <Field label="Descripcion">
-            <input
-              autoFocus
-              value={txDraft.name}
-              onChange={(e) => {
-                const val = e.target.value;
-                setTxDraft((d) => ({ ...d, name: val }));
-                onDescriptionChange(val);
-              }}
-              style={inputStyle}
-              placeholder="p. ej. Supermercado"
-            />
-          </Field>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", rowGap: 6, columnGap: 8 }}>
+        <span aria-hidden style={{ visibility: "hidden", fontSize: 11 }}>
+          &middot;
+        </span>
+        <span style={{ fontFamily: "Inter, sans-serif", fontSize: 11, letterSpacing: "0.03em", textTransform: "uppercase", color: T.textMuted, fontWeight: 600 }}>
+          Descripcion
+        </span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {selectedCategory && (
+            <button
+              type="button"
+              onClick={() => setDescColorPickerOpen((o) => !o)}
+              style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }}
+              aria-label="Cambiar color de la categoria"
+            >
+              <span style={dot(selectedCategory.color, 14)} />
+            </button>
+          )}
         </div>
+        <input
+          autoFocus
+          value={txDraft.name}
+          onChange={(e) => {
+            const val = e.target.value;
+            setTxDraft((d) => ({ ...d, name: val }));
+            onDescriptionChange(val);
+          }}
+          style={inputStyle}
+          placeholder="p. ej. Supermercado"
+        />
       </div>
       {descColorPickerOpen && selectedCategory && (
         <div style={{ marginTop: -6 }}>
@@ -269,9 +330,11 @@ export function TransactionForm({
         </select>
       </Field>
 
-      <Field label="Fecha">
-        <input type="date" value={txDraft.date} onChange={(e) => setTxDraft((d) => ({ ...d, date: e.target.value }))} style={inputStyle} />
-      </Field>
+      {!txDraft.recurringOn && (
+        <Field label="Fecha">
+          <input type="date" value={txDraft.date} onChange={(e) => setTxDraft((d) => ({ ...d, date: e.target.value }))} style={inputStyle} />
+        </Field>
+      )}
 
       <Field label="Importe">
         <input type="number" step="0.01" value={txDraft.amount} onChange={(e) => setTxDraft((d) => ({ ...d, amount: e.target.value }))} style={inputStyle} placeholder="0.00" />
