@@ -174,41 +174,57 @@ export function TransactionForm({
         </div>
       </Field>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.textMuted }}>
           <input type="checkbox" checked={txDraft.recurringOn} onChange={(e) => setTxDraft((d) => ({ ...d, recurringOn: e.target.checked }))} />
           Movimiento recurrente
         </label>
         {txDraft.recurringOn && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 12.5, color: T.textMuted }}>Cada</span>
-            <input
-              type="number"
-              min="1"
-              value={txDraft.freqInterval}
-              onChange={(e) => setTxDraft((d) => ({ ...d, freqInterval: Number(e.target.value) }))}
-              style={{ ...inputStyle, width: 60 }}
-            />
-            <select value={txDraft.freqUnit} onChange={(e) => setTxDraft((d) => ({ ...d, freqUnit: e.target.value as RecurUnit }))} style={{ ...inputStyle, width: 110 }}>
-              {RECUR_UNITS.map((u) => (
-                <option key={u.value} value={u.value}>
-                  {u.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <>
+            <Field label="Periodicidad">
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12.5, color: T.textMuted }}>Cada</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={txDraft.freqInterval}
+                  onChange={(e) => setTxDraft((d) => ({ ...d, freqInterval: Number(e.target.value) }))}
+                  style={{ ...inputStyle, width: 60 }}
+                />
+                <select value={txDraft.freqUnit} onChange={(e) => setTxDraft((d) => ({ ...d, freqUnit: e.target.value as RecurUnit }))} style={{ ...inputStyle, width: 110 }}>
+                  {RECUR_UNITS.map((u) => (
+                    <option key={u.value} value={u.value}>
+                      {u.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </Field>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Fecha inicio">
+                  <input type="date" value={txDraft.date} onChange={(e) => setTxDraft((d) => ({ ...d, date: e.target.value }))} style={inputStyle} />
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Fecha final">
+                  <input
+                    type="date"
+                    value={txDraft.recurringEndDate}
+                    disabled={txDraft.freqNoEnd}
+                    onChange={(e) => setTxDraft((d) => ({ ...d, recurringEndDate: e.target.value }))}
+                    style={txDraft.freqNoEnd ? { ...inputStyle, background: T.borderSoft, color: T.textFaint } : inputStyle}
+                  />
+                </Field>
+              </div>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.textMuted }}>
+              <input type="checkbox" checked={txDraft.freqNoEnd} onChange={(e) => setTxDraft((d) => ({ ...d, freqNoEnd: e.target.checked }))} />
+              Sin fecha final (se repite indefinidamente)
+            </label>
+          </>
         )}
       </div>
-      {txDraft.recurringOn && (
-        <Field label="Fecha final (opcional)">
-          <input
-            type="date"
-            value={txDraft.recurringEndDate}
-            onChange={(e) => setTxDraft((d) => ({ ...d, recurringEndDate: e.target.value }))}
-            style={inputStyle}
-          />
-        </Field>
-      )}
 
       <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
         {selectedCategory && (

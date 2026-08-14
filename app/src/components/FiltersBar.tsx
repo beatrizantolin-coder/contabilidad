@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import type { Category, Filters, ID } from "../types";
-import { T, inputStyle, smallBtn } from "../theme";
+import { T, dot, inputStyle, smallBtn } from "../theme";
 import { Field } from "./Field";
 
 export function FiltersBar({
@@ -91,8 +91,9 @@ export function FiltersBar({
                 {filterCategoryChoices.length === 0 && <div style={{ fontSize: 12, color: T.textFaint, padding: 6 }}>Sin categorias.</div>}
                 {filterCategoryChoices.map((c) => (
                   <button key={c.id} type="button" onClick={() => toggleFilterCategory(c.id)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 4px", background: "none", border: "none", textAlign: "left", cursor: "pointer" }}>
-                    <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid " + (filters.categories.includes(c.id) ? T.accent : T.border), background: filters.categories.includes(c.id) ? T.accent : "#FFFFFF" }} />
-                    <span style={{ fontSize: 12.5 }}>{c.name}</span>
+                    <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid " + (filters.categories.includes(c.id) ? T.accent : T.border), background: filters.categories.includes(c.id) ? T.accent : "#FFFFFF" }} />
+                    <span style={dot(c.color, 8)} />
+                    <span style={{ fontSize: 12.5, lineHeight: 1 }}>{c.name}</span>
                   </button>
                 ))}
                 <button type="button" onClick={() => setPopoverOpen(null)} style={{ marginTop: 6, width: "100%", background: T.accent, border: "none", borderRadius: 6, padding: "6px 0", color: "#fff", fontSize: 12, fontWeight: 600 }}>

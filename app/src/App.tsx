@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { T, statusInfo } from "./theme";
+import { PALETTE, T, statusInfo } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
@@ -66,6 +66,7 @@ export default function App() {
   const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
   const [showCatEdit, setShowCatEdit] = useState(false);
   const [catEditId, setCatEditId] = useState<ID | null>(null);
+  const [catIsNew, setCatIsNew] = useState(false);
   const [sortBy, setSortBy] = useState<SortState | null>(null);
   const [showRenameDoc, setShowRenameDoc] = useState(false);
   const [renameValue, setRenameValue] = useState("");
@@ -96,6 +97,7 @@ export default function App() {
     setShowBulkEdit(false);
     setShowCatEdit(false);
     setCatEditId(null);
+    setCatIsNew(false);
   }, [view, activeDocId]);
 
   // Una vez cargados los datos, se decide una unica vez si esta sesion
@@ -292,6 +294,14 @@ export default function App() {
   }, [thisMonthTx]);
   const maxCat = Math.max(1, ...byCategory.map((c) => c.val));
 
+  const bySubcategory = useMemo(() => {
+    const map = new Map<ID, number>();
+    thisMonthTx
+      .filter((t) => t.type === "expense" && t.subcategoryId)
+      .forEach((t) => map.set(t.subcategoryId as ID, (map.get(t.subcategoryId as ID) || 0) + Number(t.amount)));
+    return Array.from(map.entries()).map(([id, val]) => ({ id, val }));
+  }, [thisMonthTx]);
+
   const recurringList = useMemo(() => transactions.filter((t) => t.recurring && t.type !== "transfer_in"), [transactions]);
   const programadorRows = useMemo(() => computeProgramadorRows(transactions), [transactions]);
   const forecastNetPerMonth = useMemo(() => {
@@ -377,21 +387,24 @@ export default function App() {
     setBudgets((prev) => ({ ...prev, [catId]: value as number }));
   }
 
-  async function handleSave() {
-    if (!activeDoc) return;
+  async function handleSaveDoc(doc: LedgerDocument) {
     try {
-      let path = getSavedPath(activeDoc.id);
+      let path = getSavedPath(doc.id);
       if (!path) {
-        const picked = await pickSaveDocumentPath(activeDoc.name);
+        const picked = await pickSaveDocumentPath(doc.name);
         if (!picked) return;
         path = picked;
-        setSavedPath(activeDoc.id, path);
+        setSavedPath(doc.id, path);
         addRecentPath(path);
       }
-      await writeDocumentToPath(activeDoc, path);
+      await writeDocumentToPath(doc, path);
     } catch (err) {
       console.error("Error guardando el documento", err);
     }
+  }
+  async function handleSave() {
+    if (!activeDoc) return;
+    await handleSaveDoc(activeDoc);
   }
   async function handleExport() {
     if (!activeDoc) return;
@@ -535,6 +548,16 @@ export default function App() {
     setShowTxForm(false);
     setShowBulkEdit(false);
     setCatEditId(id);
+    setCatIsNew(false);
+    setShowCatEdit(true);
+  }
+
+  function openNewCategory(kind: CategoryKind) {
+    const id = addCategory("Nueva categoria", PALETTE[0], kind);
+    setShowTxForm(false);
+    setShowBulkEdit(false);
+    setCatEditId(id);
+    setCatIsNew(true);
     setShowCatEdit(true);
   }
 
@@ -550,7 +573,9 @@ export default function App() {
     if (!txDraft.name || !txDraft.amount || !txDraft.accountId) return;
     pushHistory();
     const amount = Number(txDraft.amount);
-    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.recurringEndDate || null } : null;
+    const recurring = txDraft.recurringOn
+      ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null }
+      : null;
 
     if (txDraft.type === "transfer") {
       // Pata de transferencia ya desvinculada: se edita ella sola, sin tocar
@@ -673,7 +698,7 @@ export default function App() {
         toAccountId: isIncoming ? t.accountId : t.toAccountId,
         date: t.date, name: t.name, comment: t.comment || "", categoryId: null, subcategoryId: null, subsubcategoryId: null, amount: String(t.amount),
         type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
-        recurringEndDate: t.recurring?.endDate ?? "",
+        recurringEndDate: t.recurring?.endDate ?? "", freqNoEnd: !t.recurring?.endDate,
       });
     } else {
       setTxDraft({
@@ -681,7 +706,7 @@ export default function App() {
         date: t.date, name: t.name, comment: t.comment || "", categoryId: t.categoryId, subcategoryId: t.subcategoryId, subsubcategoryId: t.subsubcategoryId,
         amount: String(t.amount),
         type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
-        recurringEndDate: t.recurring?.endDate ?? "",
+        recurringEndDate: t.recurring?.endDate ?? "", freqNoEnd: !t.recurring?.endDate,
       });
     }
     setShowTxForm(true);
@@ -1074,6 +1099,7 @@ export default function App() {
               activeDoc={activeDoc}
               createDocument={createDocument}
               removeDocument={removeDocument}
+              onSaveDocument={handleSaveDoc}
               accounts={accounts}
               balances={balances}
               totalBalance={totalBalance}
@@ -1112,15 +1138,16 @@ export default function App() {
                     categories={categories}
                     budgets={budgets}
                     spendByCategory={byCategory}
+                    spendBySubcategory={bySubcategory}
                     maxSpend={maxCat}
-                    addCategory={addCategory}
+                    onNewCategory={openNewCategory}
                     removeCategory={removeCategory}
                     onOpenCategory={openCategoryEdit}
                     newCategoryTrigger={newCategoryTrigger}
                   />
                 )}
 
-                {view === "filters" && <FiltersView docName={activeDoc.name} savedFilters={savedFilters} onApply={applySavedFilter} onRemove={removeSavedFilter} />}
+                {view === "filters" && <FiltersView docName={activeDoc.name} savedFilters={savedFilters} onApply={applySavedFilter} onRemove={removeSavedFilter} onNewFilter={handleNewFilterMenu} />}
 
                 {view === "transactions" && (
                   <TransactionsView
@@ -1174,11 +1201,12 @@ export default function App() {
 
               {(showTxForm || showBulkEdit || showCatEdit) && (
                 <SidePanel
-                  title={showCatEdit ? "Editar categoria" : showBulkEdit ? "Editar " + selectedIds.size + " movimientos" : txDraft?.id ? "Editar movimiento" : "Nuevo movimiento"}
+                  title={showCatEdit ? (catIsNew ? "Nueva categoria" : "Editar categoria") : showBulkEdit ? "Editar " + selectedIds.size + " movimientos" : txDraft?.id ? "Editar movimiento" : "Nuevo movimiento"}
                   onClose={() => {
                     if (showCatEdit) {
                       setShowCatEdit(false);
                       setCatEditId(null);
+                      setCatIsNew(false);
                     } else if (showBulkEdit) {
                       setShowBulkEdit(false);
                     } else {
@@ -1194,6 +1222,7 @@ export default function App() {
                           <CategoryEditForm
                             category={catEditCategory}
                             budgets={budgets}
+                            hideKind={catIsNew}
                             setCategoryName={setCategoryName}
                             setCategoryKind={setCategoryKind}
                             setCategoryColor={setCategoryColor}
@@ -1203,6 +1232,7 @@ export default function App() {
                             onDone={() => {
                               setShowCatEdit(false);
                               setCatEditId(null);
+                              setCatIsNew(false);
                             }}
                           />
                         )

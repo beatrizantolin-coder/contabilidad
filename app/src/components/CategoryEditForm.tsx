@@ -15,6 +15,7 @@ const KIND_OPTIONS: readonly [CategoryKind, string][] = [
 export function CategoryEditForm({
   category,
   budgets,
+  hideKind,
   setCategoryName,
   setCategoryKind,
   setCategoryColor,
@@ -25,6 +26,8 @@ export function CategoryEditForm({
 }: {
   category: Category;
   budgets: Budgets;
+  /** Oculta el selector de tipo al crear una categoria nueva: el tipo ya viene asignado por la pestana activa. */
+  hideKind?: boolean;
   setCategoryName: (id: ID, name: string) => void;
   setCategoryKind: (id: ID, kind: CategoryKind) => void;
   setCategoryColor: (id: ID, color: string) => void;
@@ -52,26 +55,28 @@ export function CategoryEditForm({
         <input value={category.name} onChange={(e) => setCategoryName(category.id, e.target.value)} style={inputStyle} />
       </Field>
 
-      <Field label="Tipo">
-        <div style={{ display: "flex", gap: 6 }}>
-          {KIND_OPTIONS.map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setCategoryKind(category.id, value)}
-              style={{
-                flex: 1, padding: "7px 0", borderRadius: 6,
-                border: "1px solid " + (category.kind === value ? T.accent : T.border),
-                background: category.kind === value ? "#EAF1FC" : "#FFFFFF",
-                color: category.kind === value ? T.accent : T.textMuted,
-                fontSize: 12, fontWeight: 600,
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </Field>
+      {!hideKind && (
+        <Field label="Tipo">
+          <div style={{ display: "flex", gap: 6 }}>
+            {KIND_OPTIONS.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setCategoryKind(category.id, value)}
+                style={{
+                  flex: 1, padding: "7px 0", borderRadius: 6,
+                  border: "1px solid " + (category.kind === value ? T.accent : T.border),
+                  background: category.kind === value ? "#EAF1FC" : "#FFFFFF",
+                  color: category.kind === value ? T.accent : T.textMuted,
+                  fontSize: 12, fontWeight: 600,
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </Field>
+      )}
 
       <Field label="Color">
         <ColorSwatches value={category.color} onChange={(c) => setCategoryColor(category.id, c)} size={18} />
@@ -90,16 +95,27 @@ export function CategoryEditForm({
       <div>
         <span style={{ fontFamily: "Inter, sans-serif", fontSize: 11, letterSpacing: "0.03em", textTransform: "uppercase", color: T.textMuted, fontWeight: 600 }}>Subcategorias</span>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-          {category.subcategories.map((sub) => (
-            <div key={sub.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", background: "#FFFFFF", border: "1px solid " + T.borderSoft, borderRadius: 6 }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5 }}>
-                <span style={dot(subcategoryColor(category.color), 8)} /> {sub.name}
-              </span>
-              <button onClick={() => removeSubcategory(category.id, sub.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Eliminar " + sub.name}>
-                <X size={12} />
-              </button>
-            </div>
-          ))}
+          {category.subcategories.map((sub) => {
+            const subLimit = budgets[sub.id];
+            return (
+              <div key={sub.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 8px", background: "#FFFFFF", border: "1px solid " + T.borderSoft, borderRadius: 6 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, minWidth: 0, flex: 1 }}>
+                  <span style={{ flexShrink: 0, ...dot(subcategoryColor(category.color), 8) }} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
+                </span>
+                <input
+                  type="number"
+                  placeholder="Sin limite"
+                  value={subLimit === undefined ? "" : subLimit}
+                  onChange={(e) => setBudget(sub.id, e.target.value === "" ? undefined : Number(e.target.value))}
+                  style={{ ...inputStyle, width: 84, padding: "5px 8px", fontSize: 12 }}
+                />
+                <button onClick={() => removeSubcategory(category.id, sub.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Eliminar " + sub.name}>
+                  <X size={12} />
+                </button>
+              </div>
+            );
+          })}
           {category.subcategories.length === 0 && <div style={{ fontSize: 12, color: T.textFaint }}>Sin subcategorias todavia.</div>}
         </div>
 

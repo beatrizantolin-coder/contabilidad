@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { SavedFilter } from "../types";
 import { T } from "../theme";
 import { shortDate } from "../lib/format";
@@ -8,16 +8,25 @@ export function FiltersView({
   savedFilters,
   onApply,
   onRemove,
+  onNewFilter,
 }: {
   docName: string;
   savedFilters: SavedFilter[];
   onApply: (sf: SavedFilter) => void;
   onRemove: (id: string) => void;
+  onNewFilter: () => void;
 }) {
   return (
     <div style={{ padding: "20px 24px", overflow: "auto", flex: 1, minHeight: 0 }}>
-      <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Filtros</h2>
-      <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 18px" }}>Filtros guardados en {docName}. Haz clic en uno para aplicarlo.</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Filtros</h2>
+          <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 18px" }}>Filtros guardados en {docName}. Haz clic en uno para aplicarlo.</p>
+        </div>
+        <button onClick={onNewFilter} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+          <Plus size={14} /> Nuevo filtro
+        </button>
+      </div>
 
       {savedFilters.length === 0 && (
         <div style={{ fontSize: 13, color: T.textFaint }}>

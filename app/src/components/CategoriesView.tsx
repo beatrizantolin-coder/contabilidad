@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Category, CategoryKind, ID } from "../types";
-import { PALETTE, T, dot, inputStyle } from "../theme";
+import { T, dot } from "../theme";
 import { fmt } from "../lib/format";
 import { subcategoryColor } from "../lib/color";
-import { ColorSwatches } from "./ColorSwatches";
 
 export interface CategorySpend {
   id: ID;
@@ -22,8 +21,9 @@ export function CategoriesView({
   categories,
   budgets,
   spendByCategory,
+  spendBySubcategory,
   maxSpend,
-  addCategory,
+  onNewCategory,
   removeCategory,
   onOpenCategory,
   newCategoryTrigger,
@@ -32,29 +32,21 @@ export function CategoriesView({
   categories: Category[];
   budgets: Record<ID, number>;
   spendByCategory: CategorySpend[];
+  spendBySubcategory: CategorySpend[];
   maxSpend: number;
-  addCategory: (name: string, color: string, kind: CategoryKind) => void;
+  onNewCategory: (kind: CategoryKind) => void;
   removeCategory: (id: ID) => void;
   onOpenCategory: (id: ID) => void;
-  /** Se incrementa desde Documento > Nueva Categoria (menú nativo) para abrir el formulario. */
+  /** Se incrementa desde Documento > Nueva Categoria (menú nativo) para abrir el panel lateral. */
   newCategoryTrigger: number;
 }) {
-  const [showCatForm, setShowCatForm] = useState(false);
-  const [catDraft, setCatDraft] = useState<{ name: string; color: string; kind: CategoryKind }>({ name: "", color: PALETTE[0], kind: "expense" });
   const [catTab, setCatTab] = useState<CategoryKind>("expense");
   const [expandedCategories, setExpandedCategories] = useState<Set<ID>>(new Set());
 
   useEffect(() => {
-    if (newCategoryTrigger > 0) setShowCatForm(true);
+    if (newCategoryTrigger > 0) onNewCategory(catTab);
+    // eslint-disable-next-line -- solo debe reaccionar al trigger, no a catTab/onNewCategory
   }, [newCategoryTrigger]);
-
-  function submitCategory(e: React.FormEvent) {
-    e.preventDefault();
-    if (!catDraft.name.trim()) return;
-    addCategory(catDraft.name.trim(), catDraft.color, catDraft.kind);
-    setCatDraft({ name: "", color: PALETTE[0], kind: "expense" });
-    setShowCatForm(false);
-  }
 
   function toggleExpanded(id: ID) {
     setExpandedCategories((prev) => {
@@ -74,43 +66,10 @@ export function CategoriesView({
           <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0 }}>Categorias</h2>
           <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 0" }}>Categorias de {docName}.</p>
         </div>
-        <button onClick={() => setShowCatForm((s) => !s)} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+        <button onClick={() => onNewCategory(catTab)} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
           <Plus size={14} /> Nueva categoria
         </button>
       </div>
-
-      {showCatForm && (
-        <form onSubmit={submitCategory} style={{ margin: "14px 24px", padding: 14, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 10, display: "flex", flexDirection: "column", gap: 10, maxWidth: 340 }}>
-          <input autoFocus placeholder="Nombre de la categoria" value={catDraft.name} onChange={(e) => setCatDraft((d) => ({ ...d, name: e.target.value }))} style={inputStyle} />
-          <div style={{ display: "flex", gap: 6 }}>
-            {TABS.map(([value]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setCatDraft((d) => ({ ...d, kind: value }))}
-                style={{
-                  flex: 1, padding: "7px 0", borderRadius: 6,
-                  border: "1px solid " + (catDraft.kind === value ? T.accent : T.border),
-                  background: catDraft.kind === value ? "#EAF1FC" : "#FFFFFF",
-                  color: catDraft.kind === value ? T.accent : T.textMuted,
-                  fontSize: 12, fontWeight: 600,
-                }}
-              >
-                {value === "expense" ? "Gasto" : value === "income" ? "Ingreso" : "Traspaso"}
-              </button>
-            ))}
-          </div>
-          <ColorSwatches value={catDraft.color} onChange={(c) => setCatDraft((d) => ({ ...d, color: c }))} />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" style={{ background: T.accent, border: "none", borderRadius: 6, padding: "7px 14px", color: "#fff", fontWeight: 600, fontSize: 12.5 }}>
-              Crear
-            </button>
-            <button type="button" onClick={() => setShowCatForm(false)} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "7px 10px", color: T.textMuted, fontSize: 12.5 }}>
-              Cancelar
-            </button>
-          </div>
-        </form>
-      )}
 
       <div style={{ display: "flex", gap: 0, padding: "12px 24px 0", borderBottom: "1px solid " + T.borderSoft, flexShrink: 0 }}>
         {TABS.map(([value, label]) => (
@@ -173,12 +132,25 @@ export function CategoriesView({
               </div>
               {hasSubs &&
                 expanded &&
-                cat.subcategories.map((sub) => (
-                  <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 24px 8px 47px", borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated }}>
-                    <span style={dot(subcategoryColor(cat.color), 9)} />
-                    <span style={{ fontSize: 12.5, color: T.text }}>{sub.name}</span>
-                  </div>
-                ))}
+                cat.subcategories.map((sub) => {
+                  const subVal = spendBySubcategory.find((b) => b.id === sub.id)?.val ?? 0;
+                  const subLimit = budgets[sub.id];
+                  const subPct = subLimit ? Math.min(100, (subVal / subLimit) * 100) : Math.min(100, (subVal / maxSpend) * 100);
+                  const subOver = !!subLimit && subVal > subLimit;
+                  return (
+                    <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 24px 7px 66px", borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated }}>
+                      <span style={dot(subcategoryColor(cat.color), 7)} />
+                      <span style={{ fontSize: 12, color: T.text, flexShrink: 0, width: 134, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
+                      <div style={{ flex: 1, height: 4, background: T.borderSoft, borderRadius: 2 }}>
+                        <div style={{ height: 4, borderRadius: 2, width: subPct + "%", background: subOver ? T.expense : subcategoryColor(cat.color) }} />
+                      </div>
+                      <span className="amount" style={{ fontSize: 11.5, color: T.textMuted, flexShrink: 0, minWidth: 130, textAlign: "right" }}>
+                        {fmt(subVal)}
+                        {subLimit ? " / " + fmt(subLimit) : ""}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
           );
         })}

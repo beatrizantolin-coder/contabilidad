@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CircleDollarSign, CreditCard, FolderOpen, GripVertical, PiggyBank, Pencil, Plus, Repeat, Trash2, Wallet, X } from "lucide-react";
+import { Banknote, CircleDollarSign, CreditCard, FolderOpen, GripVertical, PiggyBank, Pencil, Plus, Repeat, Save, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, ID, LedgerDocument } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -38,6 +38,7 @@ export function Sidebar({
   activeDoc,
   createDocument,
   removeDocument,
+  onSaveDocument,
   accounts,
   balances,
   totalBalance,
@@ -61,6 +62,7 @@ export function Sidebar({
   activeDoc: LedgerDocument;
   createDocument: (name: string) => void;
   removeDocument: (id: string) => void;
+  onSaveDocument: (doc: LedgerDocument) => void;
   accounts: Account[];
   balances: Record<ID, number>;
   totalBalance: number;
@@ -119,6 +121,14 @@ export function Sidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draggedAccountId, dragOverAccountId]);
 
+  // Los formularios de añadir documento/cuenta son estado local de esta
+  // barra lateral: se cierran solos al cambiar de vista o de documento
+  // activo, igual que los paneles laterales de App.tsx.
+  useEffect(() => {
+    setShowDocForm(false);
+    setShowAccForm(false);
+  }, [view, activeDocId]);
+
   function submitDoc(e: React.FormEvent) {
     e.preventDefault();
     if (!docNameDraft.trim()) return;
@@ -156,8 +166,11 @@ export function Sidebar({
 
   return (
     <aside className="no-print" style={{ background: T.sidebar, borderRight: "1px solid " + T.border, padding: "12px 10px", overflowY: "auto", height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
-      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, margin: "2px 10px 6px" }}>
-        Documentos
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 10px 6px" }}>
+        <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Documentos</span>
+        <button onClick={() => setShowDocForm((s) => !s)} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Nuevo archivo">
+          <Plus size={13} />
+        </button>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
         {documents.map((d) => (
@@ -179,11 +192,11 @@ export function Sidebar({
             <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
               <Trash2 size={10} />
             </button>
+            <button onClick={() => onSaveDocument(d)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px 0 0" }} aria-label={"Guardar " + d.name} title="Guardar">
+              <Save size={10} />
+            </button>
           </div>
         ))}
-        <button onClick={() => setShowDocForm((s) => !s)} style={{ background: "none", border: "1px dashed " + T.border, borderRadius: 6, padding: "3px 7px", color: T.textMuted }} aria-label="Nuevo archivo">
-          <Plus size={11} />
-        </button>
       </div>
       {showDocForm && (
         <form onSubmit={submitDoc} style={{ display: "flex", gap: 6, marginBottom: 10 }}>
@@ -327,7 +340,7 @@ export function Sidebar({
 
       <div style={{ marginTop: 22, padding: "0 10px" }}>
         <button
-          onClick={() => setView("recurring")}
+          onClick={() => { clearAccountSelection(); setView("recurring"); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: view === "recurring" ? "#FFFFFF" : "transparent", boxShadow: view === "recurring" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
@@ -340,7 +353,7 @@ export function Sidebar({
 
       <div style={{ marginTop: 10, padding: "0 10px" }}>
         <button
-          onClick={() => setView("categories")}
+          onClick={() => { clearAccountSelection(); setView("categories"); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: view === "categories" ? "#FFFFFF" : "transparent", boxShadow: view === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
@@ -351,7 +364,7 @@ export function Sidebar({
 
       <div style={{ marginTop: 10, padding: "0 10px" }}>
         <button
-          onClick={() => setView("filters")}
+          onClick={() => { clearAccountSelection(); setView("filters"); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: view === "filters" ? "#FFFFFF" : "transparent", boxShadow: view === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >

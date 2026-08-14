@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
 import type { Category, ID, Transaction } from "../types";
 import type { ProgramadorRow } from "../lib/recurring";
 import { T, dot } from "../theme";
@@ -30,6 +30,7 @@ export function RecurringView({
   onRemove: (t: Transaction) => void;
 }) {
   const [sortBy, setSortBy] = useState<ProgramadorSort>("fecha");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const sorters: Record<ProgramadorSort, (a: ProgramadorRow, b: ProgramadorRow) => number> = {
     fecha: (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0),
@@ -102,10 +103,29 @@ export function RecurringView({
             <span />
           </div>
 
-          {groups.map((g, gi) => (
+          {groups.map((g, gi) => {
+            const gKey = g.label || "g" + gi;
+            const gCollapsed = collapsedGroups.has(gKey);
+            return (
             <div key={gi}>
-              {g.label && <div style={{ padding: "8px 24px 4px", fontSize: 11.5, fontWeight: 700, color: T.accent }}>{g.label}</div>}
-              {g.rows.map((row) => {
+              {g.label && (
+                <button
+                  onClick={() =>
+                    setCollapsedGroups((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(gKey)) next.delete(gKey);
+                      else next.add(gKey);
+                      return next;
+                    })
+                  }
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "8px 24px 4px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                >
+                  {gCollapsed ? <ChevronRight size={12} style={{ color: T.textMuted }} /> : <ChevronDown size={12} style={{ color: T.textMuted }} />}
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text }}>{g.label}</span>
+                  <span style={{ fontSize: 10.5, color: T.textFaint }}>({g.rows.length})</span>
+                </button>
+              )}
+              {!gCollapsed && g.rows.map((row) => {
                 const t = row.tx;
                 if (!t.recurring) return null;
                 const info = t.type === "income" || t.type === "expense" ? catInfo(categories, t.categoryId, t.subcategoryId, t.subsubcategoryId) : { name: "-", color: T.textFaint };
@@ -147,7 +167,8 @@ export function RecurringView({
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
