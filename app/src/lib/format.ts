@@ -34,15 +34,51 @@ export const currentWeekRange = (): { from: string; to: string } => {
   return { from: fmtDate(monday), to: fmtDate(sunday) };
 };
 
-export const monthsAgoISO = (n: number): string => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - n);
-  return d.toISOString().slice(0, 10);
-};
-
 export const endOfYearISO = (): string => {
   const d = new Date();
   return d.getFullYear() + "-12-31";
+};
+
+export const startOfCurrentMonthISO = (): string => {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+};
+
+export const startOfCurrentWeekISO = (): string => {
+  const d = new Date();
+  const day = d.getDay();
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return d.toISOString().slice(0, 10);
+};
+
+export const endOfCurrentWeekISO = (): string => {
+  const d = new Date();
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? 0 : 7 - day));
+  return d.toISOString().slice(0, 10);
+};
+
+/** Ultimo dia del mes que cae `n` meses despues del actual (n=0 => fin de este mes). */
+export const endOfNthMonthISO = (n: number): string => {
+  const d = new Date();
+  d.setMonth(d.getMonth() + n + 1, 0);
+  return d.toISOString().slice(0, 10);
+};
+
+export type QuickRangeKey = "1M" | "3M" | "6M" | "1A" | "finDeAno";
+
+/**
+ * Rangos rapidos compartidos por Movimientos, Filtros y Prevision de balance:
+ * todos empiezan hoy. 1M/3M/6M/1A llegan hasta el ultimo dia del mes N meses
+ * despues (1A = mismo mes del ano siguiente); "Fin de ano" llega al 31/12.
+ */
+export const quickRange = (key: QuickRangeKey): { from: string; to: string } => {
+  const from = todayISO();
+  if (key === "1M") return { from, to: endOfNthMonthISO(0) };
+  if (key === "3M") return { from, to: endOfNthMonthISO(3) };
+  if (key === "6M") return { from, to: endOfNthMonthISO(6) };
+  if (key === "1A") return { from, to: endOfNthMonthISO(12) };
+  return { from, to: endOfYearISO() };
 };
 
 export const nextDate = (iso: string, recurring: Recurring): string => {

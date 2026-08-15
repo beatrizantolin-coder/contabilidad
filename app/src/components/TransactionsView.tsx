@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
+import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, FolderPlus, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate, todayISO } from "../lib/format";
@@ -17,6 +17,8 @@ export function TransactionsView({
   title,
   monthIncome,
   monthExpense,
+  monthRangeLabel,
+  onViewCurrentWeek,
   showFilters,
   setShowFilters,
   filters,
@@ -26,9 +28,6 @@ export function TransactionsView({
   showMovementsRange,
   setShowMovementsRange,
   onApplyMovementsRange,
-  viewRangeIsDefault,
-  viewRangeLabel,
-  onResetMovementsRange,
   filteredTx,
   selectedIds,
   onShiftSelect,
@@ -45,6 +44,7 @@ export function TransactionsView({
   onReorderWithinGroup,
   onAdd,
   onSave,
+  onSaveAs,
   onUndo,
   onRedo,
   canUndo,
@@ -62,6 +62,8 @@ export function TransactionsView({
   title: string;
   monthIncome: number;
   monthExpense: number;
+  monthRangeLabel: string;
+  onViewCurrentWeek: () => void;
   showFilters: boolean;
   setShowFilters: (fn: (s: boolean) => boolean) => void;
   filters: Filters;
@@ -71,9 +73,6 @@ export function TransactionsView({
   showMovementsRange: boolean;
   setShowMovementsRange: (fn: (s: boolean) => boolean) => void;
   onApplyMovementsRange: (from: string, to: string) => void;
-  viewRangeIsDefault: boolean;
-  viewRangeLabel: string;
-  onResetMovementsRange: () => void;
   filteredTx: Transaction[];
   selectedIds: Set<ID>;
   onShiftSelect: (id: ID) => void;
@@ -91,6 +90,7 @@ export function TransactionsView({
   onReorderWithinGroup: (draggedId: ID, targetId: ID) => void;
   onAdd: () => void;
   onSave: () => void;
+  onSaveAs: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -164,12 +164,10 @@ export function TransactionsView({
               <TrendingDown size={12} /> <span className="amount">{fmt(monthExpense)}</span>
             </span>
             <span style={{ fontSize: 11, color: T.textFaint }}>
-              {viewRangeIsDefault ? "Semana en curso" : viewRangeLabel}
-              {!viewRangeIsDefault && (
-                <button onClick={onResetMovementsRange} style={{ marginLeft: 6, background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 600, padding: 0 }}>
-                  Ver semana actual
-                </button>
-              )}
+              {monthRangeLabel}
+              <button onClick={onViewCurrentWeek} style={{ marginLeft: 6, background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 600, padding: 0, cursor: "pointer" }}>
+                Ver semana actual
+              </button>
             </span>
           </div>
         </div>
@@ -177,19 +175,34 @@ export function TransactionsView({
           <button onClick={onSave} title="Guardar documento" style={{ ...smallBtn(false), padding: "7px 9px" }}>
             <Save size={12} />
           </button>
+          <button onClick={onSaveAs} title="Guardar como" style={{ ...smallBtn(false), padding: "7px 9px" }}>
+            <FolderPlus size={12} />
+          </button>
           <button onClick={onUndo} disabled={!canUndo} title="Deshacer" style={{ ...smallBtn(false), padding: "7px 9px", opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "default" }}>
             <Undo2 size={12} />
           </button>
           <button onClick={onRedo} disabled={!canRedo} title="Rehacer" style={{ ...smallBtn(false), padding: "7px 9px", opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "default" }}>
             <Redo2 size={12} />
           </button>
-          <button onClick={() => setShowFilters((s) => !s)} style={smallBtn(showFilters)}>
-            <SlidersHorizontal size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
-            Filtros
-          </button>
-          <button onClick={() => setShowMovementsRange((s) => !s)} style={smallBtn(showMovementsRange)}>
+          <button
+            onClick={() => {
+              setShowMovementsRange((s) => !s);
+              setShowFilters(() => false);
+            }}
+            style={smallBtn(showMovementsRange)}
+          >
             <CalendarRange size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
             Movimientos
+          </button>
+          <button
+            onClick={() => {
+              setShowFilters((s) => !s);
+              setShowMovementsRange(() => false);
+            }}
+            style={smallBtn(showFilters)}
+          >
+            <SlidersHorizontal size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
+            Filtros
           </button>
           <button onClick={onExport} style={smallBtn(false)}>
             <Download size={12} style={{ verticalAlign: -1, marginRight: 4 }} />

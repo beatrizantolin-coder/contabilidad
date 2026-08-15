@@ -7,7 +7,7 @@ import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
-import { currentWeekRange, freqPerMonth, monthKey, monthYearLabel, shortDate, todayISO } from "./lib/format";
+import { endOfNthMonthISO, freqPerMonth, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, startOfCurrentWeekISO, endOfCurrentWeekISO, todayISO } from "./lib/format";
 import { computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
@@ -156,8 +156,10 @@ export default function App() {
     setViewRange({ from, to });
     setShowMovementsRange(false);
   }
-  function resetMovementsRange() {
-    setViewRange(null);
+  // Enlace "Ver semana actual" del resumen: es un atajo sobre el panel de
+  // Filtros (no sobre el rango de Movimientos), igual que en la referencia.
+  function viewCurrentWeek() {
+    setFilters((f) => ({ ...f, from: startOfCurrentWeekISO(), to: endOfCurrentWeekISO() }));
   }
 
   const accounts = activeDoc?.accounts ?? [];
@@ -205,19 +207,20 @@ export default function App() {
     return t.manualRank !== undefined ? t.manualRank : t.seq;
   }
 
-  const effectiveViewRange = viewRange ?? currentWeekRange();
   const effectiveSortColumn: SortColumn = sortBy?.column ?? "date";
 
   // Si el panel de Filtros trae su propio rango de fechas, ese rango explicito
-  // sustituye al rango de la vista Movimientos (semana en curso / 1m / 3m...)
-  // en vez de combinarse con AND: si no, un rango de Filtros que no se solape
-  // con la vista activa dejaria el resultado vacio sin que sea evidente por que.
+  // sustituye al rango de la vista Movimientos en vez de combinarse con AND.
+  // Al abrir un documento no hay ningun filtro de fecha activo por defecto
+  // (viewRange es null y filters.from/to estan vacios): se muestran todos
+  // los movimientos, y el rango de Movimientos solo se aplica cuando el
+  // usuario pulsa "Mostrar" en ese panel.
   const filtersHaveDateRange = !!filters.from || !!filters.to;
 
   const filteredTx = useMemo(() => {
     const base = scoped
       .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds))
-      .filter((t) => filtersHaveDateRange || (t.date >= effectiveViewRange.from && t.date <= effectiveViewRange.to))
+      .filter((t) => filtersHaveDateRange || !viewRange || (t.date >= viewRange.from && t.date <= viewRange.to))
       .filter((t) => filters.categories.length === 0 || (t.categoryId && filters.categories.includes(t.categoryId)))
       .filter((t) => filters.subcategories.length === 0 || (t.subcategoryId && filters.subcategories.includes(t.subcategoryId)))
       .filter((t) => filters.type === "all" || (filters.type === "transfer" ? t.type === "transfer" || t.type === "transfer_in" : t.type === filters.type))
@@ -233,7 +236,7 @@ export default function App() {
       if (va > vb) return 1 * dir;
       return (rankOf(a) - rankOf(b)) * dir;
     });
-  }, [scoped, filters, transactions, sortBy, effectiveSortColumn, effectiveViewRange.from, effectiveViewRange.to]);
+  }, [scoped, filters, transactions, sortBy, effectiveSortColumn, viewRange, filtersHaveDateRange]);
 
   // Clave de agrupacion visual: coincide con la columna de orden activa (por
   // fecha se agrupa por mes/año, por estado por su nombre, por descripcion o
@@ -290,6 +293,9 @@ export default function App() {
   const thisMonthTx = scoped.filter((t) => monthKey(t.date) === curMonthKey);
   const monthIncome = thisMonthTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const monthExpense = thisMonthTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  // Rango del mes en curso mostrado en el resumen: puramente informativo, no
+  // filtra ni limita la lista de movimientos del panel central.
+  const monthRangeLabel = shortDate(startOfCurrentMonthISO()) + " - " + shortDate(endOfNthMonthISO(0));
 
   const byCategory = useMemo(() => {
     const map = new Map<ID, number>();
@@ -413,6 +419,20 @@ export default function App() {
   async function handleSave() {
     if (!activeDoc) return;
     await handleSaveDoc(activeDoc);
+  }
+  // "Guardar como": siempre pide una ruta nueva, a diferencia de Guardar
+  // (que solo pregunta la primera vez). Actua sobre el documento activo.
+  async function handleSaveAs() {
+    if (!activeDoc) return;
+    try {
+      const picked = await pickSaveDocumentPath(activeDoc.name);
+      if (!picked) return;
+      setSavedPath(activeDoc.id, picked);
+      addRecentPath(picked);
+      await writeDocumentToPath(activeDoc, picked);
+    } catch (err) {
+      console.error("Error guardando el documento", err);
+    }
   }
   async function handleExport() {
     if (!activeDoc) return;
@@ -1191,6 +1211,8 @@ export default function App() {
                     title={accountsTitle}
                     monthIncome={monthIncome}
                     monthExpense={monthExpense}
+                    monthRangeLabel={monthRangeLabel}
+                    onViewCurrentWeek={viewCurrentWeek}
                     showFilters={showFilters}
                     setShowFilters={setShowFilters}
                     filters={filters}
@@ -1214,11 +1236,9 @@ export default function App() {
                     showMovementsRange={showMovementsRange}
                     setShowMovementsRange={setShowMovementsRange}
                     onApplyMovementsRange={applyMovementsRange}
-                    viewRangeIsDefault={viewRange === null}
-                    viewRangeLabel={shortDate(effectiveViewRange.from) + " - " + shortDate(effectiveViewRange.to)}
-                    onResetMovementsRange={resetMovementsRange}
                     onAdd={openNewTxForm}
                     onSave={handleSave}
+                    onSaveAs={handleSaveAs}
                     onUndo={undo}
                     onRedo={redo}
                     canUndo={canUndo}

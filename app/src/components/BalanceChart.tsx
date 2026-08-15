@@ -1,17 +1,17 @@
 import { useState } from "react";
+import { GripHorizontal } from "lucide-react";
 import { T } from "../theme";
-import { fmt } from "../lib/format";
+import { fmt, quickRange, type QuickRangeKey } from "../lib/format";
 import type { EvoPoint, EvoRange, EvoTick } from "../lib/evolution";
+import { DateField } from "./DateField";
 
-const firstOfMonthISO = (): string => {
-  const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
-};
-const endOfNthMonthISO = (n: number): string => {
-  const d = new Date();
-  d.setMonth(d.getMonth() + n + 1, 0);
-  return d.toISOString().slice(0, 10);
-};
+const QUICK_KEYS: readonly [QuickRangeKey, string][] = [
+  ["1M", "1M"],
+  ["3M", "3M"],
+  ["6M", "6M"],
+  ["1A", "1A"],
+  ["finDeAno", "Fin de año"],
+];
 
 interface EvoMarker {
   xPct: number;
@@ -21,7 +21,9 @@ interface EvoMarker {
 
 export function BalanceChart({ points, ticks, evoRange, setEvoRange }: { points: EvoPoint[]; ticks: EvoTick[]; evoRange: EvoRange; setEvoRange: (fn: (r: EvoRange) => EvoRange) => void }) {
   const [customDraft, setCustomDraft] = useState<EvoRange>({ from: evoRange.from, to: evoRange.to });
+  const [preset, setPreset] = useState<QuickRangeKey | null>(null);
   const [marker, setMarker] = useState<EvoMarker | null>(null);
+  const [chartHeight, setChartHeight] = useState(150);
 
   const hasData = points.length > 0;
   const evoMinB = hasData ? Math.min(0, ...points.map((p) => p.balance)) : 0;
@@ -40,64 +42,79 @@ export function BalanceChart({ points, ticks, evoRange, setEvoRange }: { points:
   });
   const evoAreaPath = hasData ? evoLinePath + " L " + evoX(points[points.length - 1].time) + " " + evoY(0) + " L " + evoX(points[0].time) + " " + evoY(0) + " Z" : "";
 
-  const presetActive = (n: number) => evoRange.from === firstOfMonthISO() && evoRange.to === endOfNthMonthISO(n - 1);
-
-  function applyPreset(n: number) {
-    const range = { from: firstOfMonthISO(), to: endOfNthMonthISO(n - 1) };
-    setEvoRange(() => range);
-    setCustomDraft(range);
+  function applyPreset(key: QuickRangeKey) {
+    setPreset(key);
+    setCustomDraft(quickRange(key));
+  }
+  function showCustomRange() {
+    setEvoRange(() => ({ ...customDraft }));
     setMarker(null);
+  }
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = chartHeight;
+    const onMove = (moveEvent: MouseEvent) => {
+      const next = Math.min(420, Math.max(90, startHeight + (startY - moveEvent.clientY)));
+      setChartHeight(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   return (
-    <div style={{ borderTop: "1px solid " + T.border }}>
-      <div style={{ background: "#E7E7EB", padding: "6px 20px", fontSize: 12.5, fontWeight: 700, color: T.text, borderBottom: "1px solid " + T.border, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <span>Prevision de balance</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 400 }}>
-          {(
-            [
-              [1, "1M"],
-              [3, "3M"],
-              [6, "6M"],
-              [12, "1A"],
-            ] as const
-          ).map(([n, label]) => (
+    <div style={{ borderTop: "1px solid " + T.border, position: "relative" }}>
+      <div
+        onMouseDown={startResize}
+        title="Arrastrar para cambiar el alto"
+        style={{ position: "absolute", top: -4, left: 0, right: 0, height: 8, cursor: "row-resize", zIndex: 5, display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <GripHorizontal size={13} style={{ color: T.textFaint }} />
+      </div>
+      <div style={{ background: "#E7E7EB", padding: "6px 20px", fontSize: 12.5, fontWeight: 700, color: T.text, borderBottom: "1px solid " + T.border, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
+        <span style={{ paddingBottom: 8 }}>Prevision de balance</span>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, fontWeight: 400 }}>
+          {QUICK_KEYS.map(([key, label]) => (
             <button
-              key={n}
-              onClick={() => applyPreset(n)}
+              key={key}
+              onClick={() => applyPreset(key)}
               style={{
-                background: presetActive(n) ? T.accent : "#FFFFFF",
-                color: presetActive(n) ? "#fff" : T.textMuted,
-                border: "1px solid " + (presetActive(n) ? T.accent : T.border),
+                background: preset === key ? T.accent : "#FFFFFF",
+                color: preset === key ? "#fff" : T.textMuted,
+                border: "1px solid " + (preset === key ? T.accent : T.border),
                 borderRadius: 5,
                 padding: "3px 8px",
                 fontSize: 11,
                 fontWeight: 600,
+                height: 26,
               }}
             >
               {label}
             </button>
           ))}
-          <input
-            type="date"
+          <DateField
+            label="Desde"
+            width={140}
             value={customDraft.from}
-            onChange={(e) => setCustomDraft((r) => ({ ...r, from: e.target.value }))}
-            style={{ border: "1px solid " + T.border, borderRadius: 5, padding: "3px 6px", fontSize: 11, background: "#FFFFFF", color: T.text }}
-          />
-          <span style={{ color: T.textFaint }}>-</span>
-          <input
-            type="date"
-            value={customDraft.to}
-            onChange={(e) => setCustomDraft((r) => ({ ...r, to: e.target.value }))}
-            style={{ border: "1px solid " + T.border, borderRadius: 5, padding: "3px 6px", fontSize: 11, background: "#FFFFFF", color: T.text }}
-          />
-          <button
-            onClick={() => {
-              setEvoRange(() => ({ ...customDraft }));
-              setMarker(null);
+            onChange={(v) => {
+              setPreset(null);
+              setCustomDraft((r) => ({ ...r, from: v }));
             }}
-            style={{ background: T.accent, border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#fff" }}
-          >
+          />
+          <DateField
+            label="Hasta"
+            width={140}
+            value={customDraft.to}
+            onChange={(v) => {
+              setPreset(null);
+              setCustomDraft((r) => ({ ...r, to: v }));
+            }}
+          />
+          <button onClick={showCustomRange} style={{ background: T.accent, border: "none", borderRadius: 5, padding: "0 12px", height: 32, fontSize: 11.5, fontWeight: 600, color: "#fff" }}>
             Mostrar
           </button>
         </div>
@@ -109,7 +126,7 @@ export function BalanceChart({ points, ticks, evoRange, setEvoRange }: { points:
           <svg
             viewBox="0 0 1000 128"
             width="100%"
-            height="150"
+            height={chartHeight}
             preserveAspectRatio="none"
             style={{ cursor: "crosshair" }}
             onMouseDown={(e) => {
@@ -168,9 +185,9 @@ export function BalanceChart({ points, ticks, evoRange, setEvoRange }: { points:
               {marker.date} · <span className="amount">{fmt(marker.balance)}</span>
             </div>
           )}
-          <span style={{ position: "absolute", right: 4, top: 12 - 6 + (evoY(evoMaxB) / 128) * 126, fontSize: 10, color: T.textMuted }}>{fmt(evoMaxB)}</span>
-          <span style={{ position: "absolute", right: 4, top: 12 - 6 + (evoY(0) / 128) * 126, fontSize: 10, color: T.textMuted }}>{fmt(0)}</span>
-          {evoMinB < 0 && <span style={{ position: "absolute", right: 4, top: 12 - 6 + (evoY(evoMinB) / 128) * 126, fontSize: 10, color: T.textMuted }}>{fmt(evoMinB)}</span>}
+          <span style={{ position: "absolute", right: 4, top: 12 - 6 + (evoY(evoMaxB) / 128) * (chartHeight - 24), fontSize: 10, color: T.textMuted }}>{fmt(evoMaxB)}</span>
+          <span style={{ position: "absolute", right: 4, top: 12 - 6 + (evoY(0) / 128) * (chartHeight - 24), fontSize: 10, color: T.textMuted }}>{fmt(0)}</span>
+          {evoMinB < 0 && <span style={{ position: "absolute", right: 4, top: 12 - 6 + (evoY(evoMinB) / 128) * (chartHeight - 24), fontSize: 10, color: T.textMuted }}>{fmt(evoMinB)}</span>}
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.textFaint, marginTop: 2 }}>
             {ticks.map((tk, i) => (
               <span key={i}>{tk.label}</span>
