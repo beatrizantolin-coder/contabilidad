@@ -65,7 +65,7 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<Set<ID>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<ID | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
-  const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([], []));
+  const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([]));
   const [showCatEdit, setShowCatEdit] = useState(false);
   const [catEditId, setCatEditId] = useState<ID | null>(null);
   const [catIsNew, setCatIsNew] = useState(false);
@@ -496,34 +496,31 @@ export default function App() {
       return next;
     });
   }
-  function handleAccountClick(id: ID, shiftKey: boolean) {
-    if (!shiftKey) {
-      setActiveAccounts(new Set([id]));
+  function handleAccountClick(id: ID, shiftKey: boolean, toggleKey: boolean) {
+    if (toggleKey) {
+      setActiveAccounts((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
       setLastClickedAccountId(id);
       return;
     }
-    if (lastClickedAccountId !== null) {
+    if (shiftKey && lastClickedAccountId !== null) {
       const orderedIds = ACCOUNT_SECTIONS.flatMap((section) => accounts.filter((a) => (a.type || "checking") === section.key)).map((a) => a.id);
       const lastIdx = orderedIds.indexOf(lastClickedAccountId);
       const curIdx = orderedIds.indexOf(id);
       if (lastIdx !== -1 && curIdx !== -1) {
         const start = Math.min(lastIdx, curIdx);
         const end = Math.max(lastIdx, curIdx);
-        const rangeIds = orderedIds.slice(start, end + 1);
-        setActiveAccounts((prev) => {
-          const next = new Set(prev);
-          rangeIds.forEach((rid) => next.add(rid));
-          return next;
-        });
+        setActiveAccounts(new Set(orderedIds.slice(start, end + 1)));
         setLastClickedAccountId(id);
         return;
       }
     }
-    setActiveAccounts((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
+    // Clic normal: sustituye la seleccion; si ya era la unica cuenta seleccionada, la deselecciona.
+    setActiveAccounts((prev) => (prev.size === 1 && prev.has(id) ? new Set() : new Set([id])));
     setLastClickedAccountId(id);
   }
   function clearAccountSelection() {
@@ -804,6 +801,26 @@ export default function App() {
     setLastClickedId(null);
   }
 
+  // Cualquier cambio de seleccion cierra sin guardar el panel de edicion que
+  // estuviera abierto (movimiento, edicion en masa o categoria), igual que
+  // pinchar en cualquier otro elemento distinto mientras hay un dialogo
+  // abierto (comportamiento general de la app).
+  function closeEditPanels() {
+    setShowTxForm(false);
+    setShowBulkEdit(false);
+    setShowCatEdit(false);
+    setCatEditId(null);
+    setCatIsNew(false);
+  }
+
+  /** Clic normal: sustituye la seleccion por este elemento; si ya era la unica seleccion, la deja vacia. */
+  function selectRow(id: ID) {
+    setSelectedIds((prev) => (prev.size === 1 && prev.has(id) ? new Set() : new Set([id])));
+    setLastClickedId(id);
+    closeEditPanels();
+  }
+
+  /** Mayusculas+clic: sustituye la seleccion por el rango entre el ultimo marcado y este. */
   function handleShiftSelect(id: ID) {
     if (lastClickedId !== null) {
       const ids = filteredTx.map((t) => t.id);
@@ -812,22 +829,27 @@ export default function App() {
       if (lastIdx !== -1 && curIdx !== -1) {
         const start = Math.min(lastIdx, curIdx);
         const end = Math.max(lastIdx, curIdx);
-        const rangeIds = ids.slice(start, end + 1);
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          rangeIds.forEach((rid) => next.add(rid));
-          return next;
-        });
+        setSelectedIds(new Set(ids.slice(start, end + 1)));
         setLastClickedId(id);
+        closeEditPanels();
         return;
       }
     }
+    setSelectedIds(new Set([id]));
+    setLastClickedId(id);
+    closeEditPanels();
+  }
+
+  /** Cmd/Ctrl+clic: anade o quita este elemento sin tocar el resto de la seleccion. */
+  function handleToggleSelect(id: ID) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
     setLastClickedId(id);
+    closeEditPanels();
   }
 
   function duplicateSelected() {
@@ -869,15 +891,26 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedIds, transactions, activeDocId]);
 
+  /** Boton "Editar" de la barra de seleccion: con 1 solo elemento abre la edicion completa, con varios abre la edicion en masa. */
+  function editSelected() {
+    if (selectedIds.size === 1) {
+      const only = transactions.find((t) => selectedIds.has(t.id));
+      if (only) editTx(only);
+      return;
+    }
+    openBulkEdit();
+  }
+
   function openBulkEdit() {
     setShowTxForm(false);
-    setBulkEdit(emptyBulkEdit(accounts, categories));
+    setBulkEdit(emptyBulkEdit(categories));
     setShowBulkEdit(true);
   }
 
   function applyBulkEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!activeDocId) return;
+    if (!window.confirm("Se va a aplicar el cambio a " + selectedIds.size + " movimientos. ¿Continuar?")) return;
     pushHistory();
     const selectedTx = transactions.filter((t) => selectedIds.has(t.id));
     const groupIds = new Set(selectedTx.filter(isTransferTx).map((t) => t.transferGroupId));
@@ -886,9 +919,8 @@ export default function App() {
         const isSelected = selectedIds.has(t.id) || (isTransferTx(t) && groupIds.has(t.transferGroupId));
         if (!isSelected) return t;
         const isTransferLeg = isTransferTx(t);
-        const patch: Partial<Transaction> = { date: bulkEdit.date, status: bulkEdit.status };
+        const patch: Partial<Transaction> = { date: bulkEdit.date };
         if (!isTransferLeg) {
-          (patch as Record<string, unknown>).accountId = bulkEdit.accountId;
           (patch as Record<string, unknown>).categoryId = bulkEdit.categoryId;
           (patch as Record<string, unknown>).subcategoryId = bulkEdit.subcategoryId;
           (patch as Record<string, unknown>).subsubcategoryId = bulkEdit.subsubcategoryId;
@@ -1221,7 +1253,9 @@ export default function App() {
                     onSaveFilter={saveCurrentFilter}
                     filteredTx={filteredTx}
                     selectedIds={selectedIds}
+                    onSelectRow={selectRow}
                     onShiftSelect={handleShiftSelect}
+                    onToggleSelect={handleToggleSelect}
                     resultingBalance={resultingBalance}
                     onEdit={editTx}
                     onRemove={removeTx}
@@ -1247,7 +1281,7 @@ export default function App() {
                     onImport={handleImport}
                     onClearSelection={clearSelection}
                     onDuplicateSelected={duplicateSelected}
-                    onBulkEditSelected={openBulkEdit}
+                    onBulkEditSelected={editSelected}
                     onDeleteSelected={deleteSelected}
                     footerLabel="Total seleccionado"
                     footerAmount={scopedTotal}
@@ -1299,7 +1333,6 @@ export default function App() {
                     <BulkEditForm
                       bulkEdit={bulkEdit}
                       setBulkEdit={(fn) => setBulkEdit(fn)}
-                      accounts={accounts}
                       categories={categories}
                       selectedCount={selectedIds.size}
                       onSubmit={applyBulkEdit}

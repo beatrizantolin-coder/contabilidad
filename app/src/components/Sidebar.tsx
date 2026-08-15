@@ -69,7 +69,7 @@ export function Sidebar({
   balances: Record<ID, number>;
   totalBalance: number;
   activeAccounts: Set<ID>;
-  onAccountClick: (id: ID, shiftKey: boolean) => void;
+  onAccountClick: (id: ID, shiftKey: boolean, toggleKey: boolean) => void;
   clearAccountSelection: () => void;
   addAccount: (name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
   updateAccount: (id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
@@ -316,7 +316,7 @@ export function Sidebar({
                     }}
                     style={{ color: T.textFaint, flexShrink: 0, cursor: "grab" }}
                   />
-                  <button onClick={(e) => { onAccountClick(a.id, e.shiftKey); goToAccounts(); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                  <button onClick={(e) => { onAccountClick(a.id, e.shiftKey, e.metaKey || e.ctrlKey); goToAccounts(); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                     <SectionIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
                     <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                   </button>

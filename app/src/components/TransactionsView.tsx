@@ -30,7 +30,9 @@ export function TransactionsView({
   onApplyMovementsRange,
   filteredTx,
   selectedIds,
+  onSelectRow,
   onShiftSelect,
+  onToggleSelect,
   resultingBalance,
   onEdit,
   onRemove,
@@ -75,7 +77,9 @@ export function TransactionsView({
   onApplyMovementsRange: (from: string, to: string) => void;
   filteredTx: Transaction[];
   selectedIds: Set<ID>;
+  onSelectRow: (id: ID) => void;
   onShiftSelect: (id: ID) => void;
+  onToggleSelect: (id: ID) => void;
   resultingBalance: (t: Transaction) => number;
   onEdit: (t: Transaction) => void;
   onRemove: (t: Transaction) => void;
@@ -316,7 +320,11 @@ export function TransactionsView({
                         data-tx-id={t.id}
                         data-tx-group={groupKey(t) ?? ""}
                         onMouseDown={(e) => { if (e.shiftKey) e.preventDefault(); }}
-                        onClick={(e) => (e.shiftKey ? onShiftSelect(t.id) : onEdit(t))}
+                        onClick={(e) => {
+                          if (e.shiftKey) onShiftSelect(t.id);
+                          else if (e.metaKey || e.ctrlKey) onToggleSelect(t.id);
+                          else onSelectRow(t.id);
+                        }}
                         style={{
                           display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: "8px 20px", fontSize: 13,
                           borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
