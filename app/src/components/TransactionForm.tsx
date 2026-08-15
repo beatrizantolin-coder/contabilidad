@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { AccountType, CategoryKind, ID, LedgerDocument, RecurUnit, TransactionStatus } from "../types";
 import type { TxDraft } from "../lib/txDraft";
 import { Field } from "./Field";
 import { ColorSwatches } from "./ColorSwatches";
-import { T, dot, inputStyle, STATUSES, RECUR_UNITS, PALETTE, ACCOUNT_TYPES } from "../theme";
+import { T, dot, inputStyle, STATUSES, statusInfo, RECUR_UNITS, PALETTE, ACCOUNT_TYPES } from "../theme";
 
 const NEW_OPTION = "__new__";
 
@@ -56,6 +56,17 @@ export function TransactionForm({
 
   const [descColorPickerOpen, setDescColorPickerOpen] = useState(false);
 
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const statusPickerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!statusPickerOpen) return;
+    function onDocDown(e: MouseEvent) {
+      if (statusPickerRef.current && !statusPickerRef.current.contains(e.target as Node)) setStatusPickerOpen(false);
+    }
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, [statusPickerOpen]);
+
   const [newDestinoOpen, setNewDestinoOpen] = useState(false);
   const [newDestinoName, setNewDestinoName] = useState("");
   const [newDestinoType, setNewDestinoType] = useState<AccountType>("checking");
@@ -97,19 +108,21 @@ export function TransactionForm({
 
   return (
     <form onSubmit={onSubmit} style={{ padding: 16, display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
-      <Field label={txDraft.type === "transfer" ? "Cuenta origen" : "Cuenta"}>
-        <select value={txDraft.accountId ?? ""} onChange={(e) => setTxDraft((d) => ({ ...d, accountId: e.target.value }))} style={inputStyle}>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {txDraft.type !== "transfer" && (
+        <Field label="Cuenta">
+          <select value={txDraft.accountId ?? ""} onChange={(e) => setTxDraft((d) => ({ ...d, accountId: e.target.value }))} style={inputStyle}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
 
       {txDraft.type === "transfer" && (
         <>
-          <Field label="Vincular (archivo)">
+          <Field label="Archivo vinculado">
             <select
               value={txDraft.toDocId}
               onChange={(e) => {
@@ -127,7 +140,16 @@ export function TransactionForm({
               ))}
             </select>
           </Field>
-          <Field label="Destino (cuenta)">
+          <Field label="Cuenta origen">
+            <select value={txDraft.accountId ?? ""} onChange={(e) => setTxDraft((d) => ({ ...d, accountId: e.target.value }))} style={inputStyle}>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Cuenta destino">
             <select
               value={newDestinoOpen ? NEW_OPTION : (txDraft.toAccountId ?? "")}
               onChange={(e) => {
@@ -291,15 +313,19 @@ export function TransactionForm({
           Descripcion
         </span>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {selectedCategory && (
-            <button
-              type="button"
-              onClick={() => setDescColorPickerOpen((o) => !o)}
-              style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }}
-              aria-label="Cambiar color de la categoria"
-            >
-              <span style={dot(selectedCategory.color, 14)} />
-            </button>
+          {txDraft.type === "transfer" ? (
+            <span style={dot(T.transfer, 14)} />
+          ) : (
+            selectedCategory && (
+              <button
+                type="button"
+                onClick={() => setDescColorPickerOpen((o) => !o)}
+                style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }}
+                aria-label="Cambiar color de la categoria"
+              >
+                <span style={dot(selectedCategory.color, 14)} />
+              </button>
+            )
           )}
         </div>
         <input
@@ -320,15 +346,54 @@ export function TransactionForm({
         </div>
       )}
 
-      <Field label="Estado">
-        <select value={txDraft.status} onChange={(e) => setTxDraft((d) => ({ ...d, status: e.target.value as TransactionStatus }))} style={inputStyle}>
-          {STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </Field>
+      <div ref={statusPickerRef} style={{ display: "grid", gridTemplateColumns: "auto 1fr", rowGap: 6, columnGap: 8, position: "relative" }}>
+        <span aria-hidden style={{ visibility: "hidden", fontSize: 11 }}>
+          &middot;
+        </span>
+        <span style={{ fontFamily: "Inter, sans-serif", fontSize: 11, letterSpacing: "0.03em", textTransform: "uppercase", color: T.textMuted, fontWeight: 600 }}>
+          Estado
+        </span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {(() => {
+            const StIcon = statusInfo(txDraft.status).icon;
+            return (
+              <button type="button" onClick={() => setStatusPickerOpen((o) => !o)} style={{ background: "none", border: "none", padding: 0, lineHeight: 0 }} aria-label="Cambiar estado">
+                <StIcon size={16} style={{ color: statusInfo(txDraft.status).color }} />
+              </button>
+            );
+          })()}
+        </div>
+        <button
+          type="button"
+          onClick={() => setStatusPickerOpen((o) => !o)}
+          style={{ ...inputStyle, textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center" }}
+        >
+          {statusInfo(txDraft.status).label}
+        </button>
+        {statusPickerOpen && (
+          <div
+            style={{
+              position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 30,
+              background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, padding: 6, boxShadow: "0 4px 14px rgba(0,0,0,0.1)",
+            }}
+          >
+            {STATUSES.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => {
+                  setTxDraft((d) => ({ ...d, status: s.value as TransactionStatus }));
+                  setStatusPickerOpen(false);
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "7px 6px", background: "none", border: "none", textAlign: "left", cursor: "pointer", borderRadius: 6 }}
+              >
+                <s.icon size={15} style={{ color: s.color }} />
+                <span style={{ fontSize: 13 }}>{s.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {!txDraft.recurringOn && (
         <Field label="Fecha">
@@ -360,7 +425,8 @@ export function TransactionForm({
                 {c.name}
               </option>
             ))}
-            <option value={NEW_OPTION}>+ Nueva categoria</option>
+            <option disabled>──────────</option>
+            <option value={NEW_OPTION}>+ Nueva</option>
           </select>
         </Field>
       )}
@@ -411,7 +477,8 @@ export function TransactionForm({
                 {s.name}
               </option>
             ))}
-            <option value={NEW_OPTION}>+ Nueva subcategoria</option>
+            <option disabled>──────────</option>
+            <option value={NEW_OPTION}>+ Nueva</option>
           </select>
         </Field>
       )}
@@ -461,7 +528,8 @@ export function TransactionForm({
                 {s.name}
               </option>
             ))}
-            <option value={NEW_OPTION}>+ Nueva sub-subcategoria</option>
+            <option disabled>──────────</option>
+            <option value={NEW_OPTION}>+ Nueva</option>
           </select>
         </Field>
       )}
@@ -496,11 +564,11 @@ export function TransactionForm({
       </Field>
 
       <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-        <button type="submit" style={{ background: T.accent, border: "none", borderRadius: 6, padding: "8px 16px", color: "#fff", fontWeight: 600, fontSize: 13 }}>
-          {txDraft.id ? "Guardar cambios" : "Guardar movimiento"}
-        </button>
         <button type="button" onClick={onCancel} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "8px 14px", color: T.textMuted, fontSize: 13 }}>
           Cancelar
+        </button>
+        <button type="submit" style={{ background: T.accent, border: "none", borderRadius: 6, padding: "8px 16px", color: "#fff", fontWeight: 600, fontSize: 13 }}>
+          {txDraft.id ? "Guardar cambios" : "Guardar movimiento"}
         </button>
       </div>
     </form>
