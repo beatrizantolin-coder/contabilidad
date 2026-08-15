@@ -1203,6 +1203,8 @@ export default function App() {
               createDocument={createDocument}
               removeDocument={handleRemoveDocumentClick}
               onSaveDocument={handleSaveDoc}
+              onSaveAsDocument={handleSaveAs}
+              onOpenExistingDocument={handleOpenDocumentFile}
               accounts={accounts}
               balances={balances}
               totalBalance={totalBalance}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, CreditCard, FileText, FolderOpen, GripVertical, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, Wallet, X } from "lucide-react";
+import { Banknote, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, CreditCard, FileText, FolderOpen, FolderPlus, GripVertical, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -56,6 +56,8 @@ export function Sidebar({
   createDocument,
   removeDocument,
   onSaveDocument,
+  onSaveAsDocument,
+  onOpenExistingDocument,
   accounts,
   balances,
   totalBalance,
@@ -82,6 +84,8 @@ export function Sidebar({
   createDocument: (name: string) => void;
   removeDocument: (id: string) => void;
   onSaveDocument: (doc: LedgerDocument) => Promise<void>;
+  onSaveAsDocument: () => void;
+  onOpenExistingDocument: () => void;
   accounts: Account[];
   balances: Record<ID, number>;
   totalBalance: number;
@@ -103,6 +107,7 @@ export function Sidebar({
   onToggleCollapsed: () => void;
 }) {
   const [showDocForm, setShowDocForm] = useState(false);
+  const [showDocMenu, setShowDocMenu] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
   const [showAccForm, setShowAccForm] = useState(false);
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
@@ -268,42 +273,75 @@ export function Sidebar({
         </div>
       ) : (
       <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 10px 6px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 10px 6px", position: "relative" }}>
         <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Documentos</span>
-        <button onClick={() => setShowDocForm((s) => !s)} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Nuevo archivo">
-          <Plus size={13} />
-        </button>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
-        {documents.map((d) => (
-          <div
-            key={d.id}
-            style={{
-              display: "flex", alignItems: "center", gap: 3,
-              background: d.id === activeDocId ? "#FFFFFF" : "transparent",
-              border: "1px solid " + (d.id === activeDocId ? T.border : "transparent"),
-              borderRadius: 6, padding: "3px 3px 3px 8px",
-            }}
-          >
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={onOpenExistingDocument} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Vincular documento existente" title="Vincular documento existente">
+            <Link2 size={13} />
+          </button>
+          <button onClick={() => setShowDocMenu((s) => !s)} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Anadir documento" title="Anadir documento">
+            <Plus size={13} />
+          </button>
+        </div>
+        {showDocMenu && (
+          <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 30, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, padding: 4, boxShadow: "0 4px 14px rgba(0,0,0,0.1)", minWidth: 150 }}>
             <button
-              onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
-              style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}
+              onClick={() => { setShowDocMenu(false); onOpenExistingDocument(); }}
+              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "7px 8px", fontSize: 12.5, color: T.text, borderRadius: 6 }}
             >
-              <FolderOpen size={11} /> {d.name}
-            </button>
-            <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
-              <Trash2 size={10} />
+              Abrir existente...
             </button>
             <button
-              onClick={() => handleSaveDocumentClick(d)}
-              style={{ background: "none", border: "none", color: savedDocFeedback === d.id ? T.income : T.textFaint, padding: "0 3px 0 0" }}
-              aria-label={"Guardar " + d.name}
-              title="Guardar"
+              onClick={() => { setShowDocMenu(false); setShowDocForm(true); }}
+              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "7px 8px", fontSize: 12.5, color: T.text, borderRadius: 6 }}
             >
-              {savedDocFeedback === d.id ? <CheckCircle2 size={10} /> : <Save size={10} />}
+              Crear nuevo...
             </button>
           </div>
-        ))}
+        )}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, marginBottom: 10 }}>
+        {documents.map((d, idx) => {
+          const isMother = idx === 0;
+          return (
+            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              {!isMother && <Link2 size={10} style={{ color: T.textFaint, flexShrink: 0 }} aria-label="Vinculado al documento madre" />}
+              <div
+                style={{
+                  display: "flex", alignItems: "center", gap: 3,
+                  background: d.id === activeDocId ? "#FFFFFF" : "transparent",
+                  border: "1px solid " + (d.id === activeDocId ? T.border : "transparent"),
+                  borderRadius: 6, padding: "3px 3px 3px 8px",
+                }}
+              >
+                <button
+                  onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
+                  style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  {isMother ? <FileText size={11} /> : <FolderOpen size={11} />} {d.name}
+                </button>
+                {!isMother && (
+                  <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
+                    <Trash2 size={10} />
+                  </button>
+                )}
+                <button
+                  onClick={() => handleSaveDocumentClick(d)}
+                  style={{ background: "none", border: "none", color: savedDocFeedback === d.id ? T.income : T.textFaint, padding: "0 3px 0 0" }}
+                  aria-label={"Guardar " + d.name}
+                  title="Guardar"
+                >
+                  {savedDocFeedback === d.id ? <CheckCircle2 size={10} /> : <Save size={10} />}
+                </button>
+                {isMother && (
+                  <button onClick={onSaveAsDocument} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px 0 0" }} aria-label="Guardar como" title="Guardar como">
+                    <FolderPlus size={10} />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
       {showDocForm && (
         <form onSubmit={submitDoc} style={{ display: "flex", gap: 6, marginBottom: 10 }}>
