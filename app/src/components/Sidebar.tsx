@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FolderOpen, GripVertical, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, Trash2, Wallet, X } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FileText, FolderOpen, GripVertical, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, ID, LedgerDocument } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -187,7 +187,7 @@ export function Sidebar({
         {!collapsed && (
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
             <CircleDollarSign size={20} style={{ color: T.accent, flexShrink: 0 }} />
-            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>Contabilidad</span>
+            <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>Conta-Nice</span>
           </div>
         )}
         <button onClick={onToggleCollapsed} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label={collapsed ? "Expandir menu" : "Contraer menu"}>
@@ -195,7 +195,29 @@ export function Sidebar({
         </button>
       </div>
 
-      {collapsed ? null : (
+      {collapsed ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 4 }}>
+          {(
+            [
+              [FileText, "Documentos", () => setShowDocForm((s) => !s)],
+              [CircleDollarSign, "Grupos de cuentas", () => { clearAccountSelection(); goToAccounts(); }],
+              [Repeat, "Programador", () => { clearAccountSelection(); setView("recurring"); }],
+              [Tag, "Categorias", () => { clearAccountSelection(); setView("categories"); }],
+              [SlidersHorizontal, "Filtros", () => { clearAccountSelection(); setView("filters"); }],
+            ] as const
+          ).map(([Icon, label, onClick]) => (
+            <button
+              key={label}
+              onClick={onClick}
+              title={label}
+              aria-label={label}
+              style={{ background: "none", border: "none", color: T.textMuted, padding: 6, display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <Icon size={17} />
+            </button>
+          ))}
+        </div>
+      ) : (
       <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 10px 6px" }}>
         <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Documentos</span>
@@ -393,7 +415,9 @@ export function Sidebar({
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: view === "categories" ? "#FFFFFF" : "transparent", boxShadow: view === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
-          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Categorias</span>
+          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+            <Tag size={12} /> Categorias
+          </span>
           {categoriesCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{categoriesCount}</span>}
         </button>
       </div>
@@ -404,7 +428,9 @@ export function Sidebar({
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: view === "filters" ? "#FFFFFF" : "transparent", boxShadow: view === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
-          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Filtros</span>
+          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
+            <SlidersHorizontal size={12} /> Filtros
+          </span>
           {savedFiltersCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{savedFiltersCount}</span>}
         </button>
       </div>

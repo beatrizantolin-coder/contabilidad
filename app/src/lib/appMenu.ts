@@ -83,7 +83,7 @@ export async function buildAppMenu(handlersRef: { current: AppMenuHandlers }, st
         );
 
   const appMenu = await Submenu.new({
-    text: "Contabilidad",
+    text: "Conta-Nice",
     items: [
       await PredefinedMenuItem.new({ item: { About: null } }),
       await PredefinedMenuItem.new({ item: "Separator" }),

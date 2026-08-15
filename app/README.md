@@ -1,4 +1,4 @@
-# Contabilidad
+# Conta-Nice
 
 App de finanzas personales para macOS (Tauri + React + TypeScript), sin
 servidor, sin cuenta de usuario y sin sincronización en la nube. Cada
