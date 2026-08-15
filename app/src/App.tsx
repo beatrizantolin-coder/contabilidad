@@ -364,6 +364,7 @@ export default function App() {
     return id;
   }
   function removeCategory(id: ID) {
+    if (!window.confirm("¿Eliminar esta categoria?")) return;
     setCategories((prev) => prev.filter((c) => c.id !== id));
   }
   function setCategoryName(id: ID, name: string) {
@@ -384,6 +385,7 @@ export default function App() {
     return id;
   }
   function removeSubcategory(catId: ID, subId: ID) {
+    if (!window.confirm("¿Eliminar esta subcategoria?")) return;
     setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.filter((s) => s.id !== subId) } : c)));
   }
   function addSubSubcategory(catId: ID, subId: ID, name: string): ID {
@@ -474,6 +476,7 @@ export default function App() {
     setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, name, type, opening, linkedAccountId: type === "credit" ? linkedAccountId : null } : a)));
   }
   function removeAccount(id: ID) {
+    if (!window.confirm("¿Eliminar esta cuenta? Se perderan tambien sus movimientos.")) return;
     setAccounts((prev) => prev.filter((a) => a.id !== id));
     setTransactions((prev) => prev.filter((t) => t.accountId !== id));
     setActiveAccounts((prev) => {
@@ -497,6 +500,7 @@ export default function App() {
     });
   }
   function handleAccountClick(id: ID, shiftKey: boolean, toggleKey: boolean) {
+    closeEditPanels();
     if (toggleKey) {
       setActiveAccounts((prev) => {
         const next = new Set(prev);
@@ -861,6 +865,7 @@ export default function App() {
 
   function deleteSelected() {
     if (selectedIds.size === 0) return;
+    if (!window.confirm("¿Eliminar " + selectedIds.size + " movimiento" + (selectedIds.size === 1 ? "" : "s") + " seleccionado" + (selectedIds.size === 1 ? "" : "s") + "?")) return;
     pushHistory();
     const toDelete = transactions.filter((t) => selectedIds.has(t.id));
     const groupIds = new Set(toDelete.filter(isTransferTx).map((t) => t.transferGroupId));
@@ -1046,6 +1051,7 @@ export default function App() {
     setView("transactions");
   }
   function removeSavedFilter(id: ID) {
+    if (!window.confirm("¿Eliminar este filtro guardado?")) return;
     setSavedFilters((prev) => prev.filter((sf) => sf.id !== id));
   }
 
@@ -1078,6 +1084,14 @@ export default function App() {
   }
   function handleCloseDocumentMenu() {
     if (activeDocId) removeDocument(activeDocId);
+  }
+  // Icono de papelera de un documento vinculado en la barra lateral: a
+  // diferencia de "Cerrar documento" del menu (que no borra nada, solo deja
+  // de tenerlo abierto), este es el gesto explicito de eliminarlo de la
+  // lista y por tanto pide confirmacion, igual que el resto de borrados.
+  function handleRemoveDocumentClick(id: ID) {
+    if (!window.confirm("¿Eliminar este documento de la lista?")) return;
+    removeDocument(id);
   }
   function handleNewFilterMenu() {
     setFilters(emptyFilters());
@@ -1166,7 +1180,7 @@ export default function App() {
               }}
               activeDoc={activeDoc}
               createDocument={createDocument}
-              removeDocument={removeDocument}
+              removeDocument={handleRemoveDocumentClick}
               onSaveDocument={handleSaveDoc}
               accounts={accounts}
               balances={balances}
