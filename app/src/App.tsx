@@ -624,8 +624,15 @@ export default function App() {
     pushHistory();
     const amount = Number(txDraft.amount);
     const effectiveDate = txDraft.date || todayISO();
+    const overrides: Record<string, number> = {};
+    if (txDraft.amountMode === "variable") {
+      Object.entries(txDraft.overrides).forEach(([d, v]) => {
+        const n = Number(v);
+        if (v !== "" && !Number.isNaN(n)) overrides[d] = n;
+      });
+    }
     const recurring = txDraft.recurringOn
-      ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null }
+      ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null, amountMode: txDraft.amountMode, overrides }
       : null;
 
     if (txDraft.type === "transfer") {
@@ -750,6 +757,8 @@ export default function App() {
         date: t.date, name: t.name, comment: t.comment || "", categoryId: null, subcategoryId: null, subsubcategoryId: null, amount: String(t.amount),
         type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
         recurringEndDate: t.recurring?.endDate ?? "", freqNoEnd: !t.recurring?.endDate,
+        amountMode: t.recurring?.amountMode ?? "fixed",
+        overrides: Object.fromEntries(Object.entries(t.recurring?.overrides ?? {}).map(([d, v]) => [d, String(v)])),
       });
     } else {
       setTxDraft({
@@ -758,6 +767,8 @@ export default function App() {
         amount: String(t.amount),
         type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
         recurringEndDate: t.recurring?.endDate ?? "", freqNoEnd: !t.recurring?.endDate,
+        amountMode: t.recurring?.amountMode ?? "fixed",
+        overrides: Object.fromEntries(Object.entries(t.recurring?.overrides ?? {}).map(([d, v]) => [d, String(v)])),
       });
     }
     setShowTxForm(true);

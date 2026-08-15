@@ -1,6 +1,7 @@
 import type { Account, ID, Transaction } from "../types";
 import { hasLocalSibling } from "./balances";
 import { endOfYearISO, nextDate, todayISO } from "./format";
+import { occurrenceAmount } from "./recurring";
 
 export interface EvoPoint {
   time: number;
@@ -60,7 +61,7 @@ export function computeEvoPoints(
     let d = nextDate(tx.date, tx.recurring);
     let guard = 0;
     while (d <= rangeTo && guard < 500) {
-      if (d >= rangeFrom) projected.push({ date: d, delta: (tx.type === "income" ? 1 : -1) * Number(tx.amount) });
+      if (d >= rangeFrom) projected.push({ date: d, delta: (tx.type === "income" ? 1 : -1) * occurrenceAmount(Number(tx.amount), tx.recurring, d) });
       d = nextDate(d, tx.recurring);
       guard++;
     }

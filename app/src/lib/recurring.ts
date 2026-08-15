@@ -1,6 +1,27 @@
 import { isTransferTx, type LedgerDocument, type Recurring, type Transaction } from "../types";
 import { genId, genSeq } from "./id";
-import { currentWeekRange, nextDate } from "./format";
+import { currentWeekRange, endOfYearISO, nextDate } from "./format";
+
+/** Importe efectivo de una ocurrencia: el personalizado si es variable y existe, si no el predeterminado. */
+export function occurrenceAmount(defaultAmount: number, recurring: Recurring | null, date: string): number {
+  if (!recurring || recurring.amountMode !== "variable") return defaultAmount;
+  const override = recurring.overrides[date];
+  return override !== undefined ? override : defaultAmount;
+}
+
+/** Fechas de las proximas ocurrencias de una serie, desde `fromDate` (excluida) hasta `untilISO` inclusive. */
+export function upcomingOccurrenceDates(fromDate: string, recurring: Recurring, untilISO: string = endOfYearISO()): string[] {
+  const dates: string[] = [];
+  let d = nextDate(fromDate, recurring);
+  let guard = 0;
+  while (d <= untilISO && guard < 500) {
+    if (recurring.endDate && d > recurring.endDate) break;
+    dates.push(d);
+    d = nextDate(d, recurring);
+    guard++;
+  }
+  return dates;
+}
 
 function seriesKey(t: Transaction): string {
   return [t.accountId, t.name, t.categoryId, t.subcategoryId, t.type, t.amount, t.recurring?.interval, t.recurring?.unit].join("|");
@@ -31,6 +52,9 @@ export function generateDueOccurrences(doc: LedgerDocument): Transaction[] {
     const nd = nextDate(tx.date, tx.recurring);
     if (nd > weekLimit) return;
     if (tx.recurring.endDate && nd > tx.recurring.endDate) return;
+    // Importe fijo: siempre el predeterminado de la serie. Variable: el
+    // personalizado para esta fecha si existe, si no tambien el predeterminado.
+    const ndAmount = occurrenceAmount(Number(tx.amount), tx.recurring, nd);
     const exists = txs.some(
       (t) =>
         t.date === nd &&
@@ -38,11 +62,10 @@ export function generateDueOccurrences(doc: LedgerDocument): Transaction[] {
         t.name === tx.name &&
         t.categoryId === tx.categoryId &&
         t.subcategoryId === tx.subcategoryId &&
-        t.type === tx.type &&
-        Number(t.amount) === Number(tx.amount),
+        t.type === tx.type,
     );
     if (exists) return;
-    additions.push({ ...tx, id: genId(), seq: genSeq(), date: nd, status: "programado" } as Transaction);
+    additions.push({ ...tx, id: genId(), seq: genSeq(), date: nd, amount: ndAmount, status: "programado" } as Transaction);
   });
   return additions;
 }

@@ -1,4 +1,4 @@
-import type { Account, Category, ID, RecurUnit, TransactionStatus } from "../types";
+import type { Account, Category, ID, RecurUnit, RecurringAmountMode, TransactionStatus } from "../types";
 import { todayISO } from "./format";
 
 export interface TxDraft {
@@ -22,6 +22,10 @@ export interface TxDraft {
   recurringEndDate: string;
   /** Si es true, la serie se repite indefinidamente y `recurringEndDate` se ignora. */
   freqNoEnd: boolean;
+  /** "fixed" (por defecto): todas las recurrencias usan el mismo importe. "variable": cada ocurrencia hasta fin de ano es personalizable via `overrides`. */
+  amountMode: RecurringAmountMode;
+  /** Solo con amountMode "variable": importes personalizados por fecha de ocurrencia (ISO -> importe en texto). */
+  overrides: Record<string, string>;
 }
 
 export function emptyDraft(accounts: Account[], docId: ID, categories: Category[]): TxDraft {
@@ -44,5 +48,7 @@ export function emptyDraft(accounts: Account[], docId: ID, categories: Category[
     freqUnit: "months",
     recurringEndDate: "",
     freqNoEnd: true,
+    amountMode: "fixed",
+    overrides: {},
   };
 }

@@ -5,6 +5,8 @@ import type { TxDraft } from "../lib/txDraft";
 import { Field } from "./Field";
 import { ColorSwatches } from "./ColorSwatches";
 import { T, dot, inputStyle, STATUSES, statusInfo, RECUR_UNITS, PALETTE, ACCOUNT_TYPES } from "../theme";
+import { shortDate, todayISO } from "../lib/format";
+import { upcomingOccurrenceDates } from "../lib/recurring";
 
 const NEW_OPTION = "__new__";
 
@@ -301,6 +303,65 @@ export function TransactionForm({
               <input type="checkbox" checked={txDraft.freqNoEnd} onChange={(e) => setTxDraft((d) => ({ ...d, freqNoEnd: e.target.checked }))} />
               Sin fecha final (se repite indefinidamente)
             </label>
+
+            <Field label="Importe">
+              <div style={{ display: "flex", gap: 6 }}>
+                {(
+                  [
+                    ["fixed", "Fijo"],
+                    ["variable", "Variable"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTxDraft((d) => ({ ...d, amountMode: value }))}
+                    style={{
+                      flex: 1, padding: "7px 0", borderRadius: 6, border: "1px solid " + (txDraft.amountMode === value ? T.accent : T.border),
+                      background: txDraft.amountMode === value ? "#EAF1FC" : "#FFFFFF", color: txDraft.amountMode === value ? T.accent : T.textMuted,
+                      fontSize: 12, fontWeight: 600,
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            {txDraft.amountMode === "variable" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 10, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 8 }}>
+                <span style={{ fontSize: 11.5, color: T.textMuted }}>
+                  Importe personalizado por recurrencia hasta fin de ano. Sin personalizar, se usa el importe predeterminado ({txDraft.amount || "0"}).
+                </span>
+                {upcomingOccurrenceDates(txDraft.date || todayISO(), {
+                  interval: Number(txDraft.freqInterval) || 1,
+                  unit: txDraft.freqUnit,
+                  endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null,
+                  amountMode: "variable",
+                  overrides: {},
+                }).map((occDate) => (
+                  <div key={occDate} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12, color: T.textMuted, width: 70, flexShrink: 0 }}>{shortDate(occDate)}</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder={txDraft.amount || "0.00"}
+                      value={txDraft.overrides[occDate] ?? ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setTxDraft((d) => {
+                          const next = { ...d.overrides };
+                          if (val === "") delete next[occDate];
+                          else next[occDate] = val;
+                          return { ...d, overrides: next };
+                        });
+                      }}
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

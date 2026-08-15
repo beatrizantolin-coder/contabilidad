@@ -175,9 +175,14 @@ export function RecurringView({
                       <span style={dot(info.color, 8)} />
                       {t.name}
                     </span>
-                    <span className="amount" style={{ textAlign: "right", color: realColor, fontWeight: 500 }}>
-                      {t.type === "income" ? "+" : "-"}
-                      {fmt(Math.abs(t.amount))}
+                    <span style={{ textAlign: "right" }}>
+                      {t.recurring.amountMode === "variable" && (
+                        <span style={{ fontSize: 9.5, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.03em", marginRight: 6 }}>Variable</span>
+                      )}
+                      <span className="amount" style={{ color: realColor, fontWeight: 500 }}>
+                        {t.type === "income" ? "+" : "-"}
+                        {fmt(Math.abs(t.amount))}
+                      </span>
                     </span>
                     <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
                       <button onClick={(e) => { e.stopPropagation(); onOpenRow(row); }} style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar">

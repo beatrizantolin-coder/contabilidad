@@ -24,13 +24,15 @@ function migrateCategory(raw: any): Category {
 function migrateRecurring(raw: any): Recurring | null {
   if (!raw) return null;
   const endDate = typeof raw.endDate === "string" ? raw.endDate : null;
+  const amountMode = raw.amountMode === "variable" ? "variable" : "fixed";
+  const overrides = raw.overrides && typeof raw.overrides === "object" ? raw.overrides : {};
   if (typeof raw.interval === "number" && typeof raw.unit === "string") {
-    return { interval: raw.interval, unit: raw.unit, endDate };
+    return { interval: raw.interval, unit: raw.unit, endDate, amountMode, overrides };
   }
   // Formato antiguo: { frequency: "monthly" | "weekly" | "yearly" }
-  if (raw.frequency === "weekly") return { interval: 7, unit: "days", endDate };
-  if (raw.frequency === "yearly") return { interval: 1, unit: "years", endDate };
-  return { interval: 1, unit: "months", endDate };
+  if (raw.frequency === "weekly") return { interval: 7, unit: "days", endDate, amountMode, overrides };
+  if (raw.frequency === "yearly") return { interval: 1, unit: "years", endDate, amountMode, overrides };
+  return { interval: 1, unit: "months", endDate, amountMode, overrides };
 }
 
 function migrateAccount(raw: any): Account {
