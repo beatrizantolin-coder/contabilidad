@@ -41,6 +41,10 @@ function migrateAccount(raw: any): Account {
     warning: Number(raw.warning) || 0,
     type: (raw.type as AccountType) || "checking",
     linkedAccountId: raw.linkedAccountId ?? null,
+    savingsKind: raw.savingsKind ?? null,
+    cardKind: raw.cardKind ?? null,
+    paymentMode: raw.paymentMode ?? null,
+    monthlyPayment: raw.monthlyPayment ?? null,
   };
 }
 

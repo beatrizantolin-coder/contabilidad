@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FileText, FolderOpen, GripVertical, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, Wallet, X } from "lucide-react";
-import type { Account, AccountType, ID, LedgerDocument } from "../types";
+import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
+import type { AccountDraftFields } from "../lib/accounts";
 
 export type MainView = "transactions" | "recurring" | "categories" | "filters";
 
@@ -25,11 +26,27 @@ interface AccDraft {
   opening: string;
   type: AccountType;
   linkedAccountId: ID | null;
+  savingsKind: SavingsKind | null;
+  cardKind: CardKind | null;
+  paymentMode: PaymentMode | null;
+  monthlyPayment: string;
   /** Si es true, el formulario oculta el selector de tipo (ya viene implicito por la seccion desde la que se abrio). */
   lockType: boolean;
 }
 
-const emptyAccDraft = (type: AccountType, lockType: boolean): AccDraft => ({ id: null, name: "", opening: "", type, linkedAccountId: null, lockType });
+const emptyAccDraft = (type: AccountType, lockType: boolean): AccDraft => ({
+  id: null, name: "", opening: "", type, linkedAccountId: null,
+  savingsKind: type === "savings" ? "savings" : null,
+  cardKind: type === "credit" ? "debit" : null,
+  paymentMode: null, monthlyPayment: "", lockType,
+});
+
+const ACCOUNT_NAME_LABEL: Record<AccountType, string> = {
+  checking: "Nombre de cuenta",
+  savings: "Nombre de cuenta",
+  credit: "Nombre de la tarjeta",
+  cash: "Nombre del monedero",
+};
 
 export function Sidebar({
   documents,
@@ -71,8 +88,8 @@ export function Sidebar({
   activeAccounts: Set<ID>;
   onAccountClick: (id: ID, shiftKey: boolean, toggleKey: boolean) => void;
   clearAccountSelection: () => void;
-  addAccount: (name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
-  updateAccount: (id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) => void;
+  addAccount: (fields: AccountDraftFields) => void;
+  updateAccount: (id: ID, fields: AccountDraftFields) => void;
   removeAccount: (id: ID) => void;
   onReorderAccounts: (draggedId: ID, targetId: ID) => void;
   /** Se incrementa desde Documento > Nueva cuenta (menú nativo) para abrir el formulario sin pasar por el "+" de una sección concreta. */
@@ -150,7 +167,13 @@ export function Sidebar({
 
   function openAccountForm(type: AccountType, existing: Account | null, lockType: boolean) {
     if (existing) {
-      setAccDraft({ id: existing.id, name: existing.name, opening: String(existing.opening), type: existing.type, linkedAccountId: existing.linkedAccountId, lockType: false });
+      setAccDraft({
+        id: existing.id, name: existing.name, opening: String(existing.opening), type: existing.type, linkedAccountId: existing.linkedAccountId,
+        savingsKind: existing.savingsKind ?? (existing.type === "savings" ? "savings" : null),
+        cardKind: existing.cardKind ?? (existing.type === "credit" ? "debit" : null),
+        paymentMode: existing.paymentMode, monthlyPayment: existing.monthlyPayment != null ? String(existing.monthlyPayment) : "",
+        lockType: false,
+      });
     } else {
       setAccDraft(emptyAccDraft(type, lockType));
     }
@@ -165,10 +188,19 @@ export function Sidebar({
   function submitAccount(e: React.FormEvent) {
     e.preventDefault();
     if (!accDraft.name) return;
-    const opening = Number(accDraft.opening) || 0;
-    const linkedAccountId = accDraft.type === "credit" ? accDraft.linkedAccountId : null;
-    if (accDraft.id) updateAccount(accDraft.id, accDraft.name, accDraft.type, opening, linkedAccountId);
-    else addAccount(accDraft.name, accDraft.type, opening, linkedAccountId);
+    if (accDraft.type === "credit" && !accDraft.linkedAccountId) return;
+    const fields: AccountDraftFields = {
+      name: accDraft.name,
+      type: accDraft.type,
+      opening: Number(accDraft.opening) || 0,
+      linkedAccountId: accDraft.linkedAccountId,
+      savingsKind: accDraft.savingsKind,
+      cardKind: accDraft.cardKind,
+      paymentMode: accDraft.paymentMode,
+      monthlyPayment: Number(accDraft.monthlyPayment) || 0,
+    };
+    if (accDraft.id) updateAccount(accDraft.id, fields);
+    else addAccount(fields);
     setAccDraft(emptyAccDraft("checking", false));
     setShowAccForm(false);
   }
@@ -360,11 +392,20 @@ export function Sidebar({
 
       {showAccForm && (
         <form onSubmit={submitAccount} style={{ marginTop: 8, padding: 10, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-          <input autoFocus placeholder="Nombre de la cuenta" value={accDraft.name} onChange={(e) => setAccDraft((d) => ({ ...d, name: e.target.value }))} style={inputStyle} />
+          <input autoFocus placeholder={ACCOUNT_NAME_LABEL[accDraft.type]} value={accDraft.name} onChange={(e) => setAccDraft((d) => ({ ...d, name: e.target.value }))} style={inputStyle} />
           {!accDraft.lockType && (
             <select
               value={accDraft.type}
-              onChange={(e) => setAccDraft((d) => ({ ...d, type: e.target.value as AccountType, linkedAccountId: e.target.value === "credit" ? d.linkedAccountId : null }))}
+              onChange={(e) => {
+                const type = e.target.value as AccountType;
+                setAccDraft((d) => ({
+                  ...d, type,
+                  linkedAccountId: type === "credit" ? d.linkedAccountId : null,
+                  savingsKind: type === "savings" ? d.savingsKind ?? "savings" : null,
+                  cardKind: type === "credit" ? d.cardKind ?? "debit" : null,
+                  paymentMode: type === "credit" ? d.paymentMode : null,
+                }));
+              }}
               style={inputStyle}
             >
               {ACCOUNT_TYPES.map((t) => (
@@ -374,15 +415,48 @@ export function Sidebar({
               ))}
             </select>
           )}
-          {accDraft.type === "credit" && (
-            <select value={accDraft.linkedAccountId ?? ""} onChange={(e) => setAccDraft((d) => ({ ...d, linkedAccountId: e.target.value || null }))} style={inputStyle}>
-              <option value="">Sin cuenta asociada</option>
-              {accounts.filter((a) => a.id !== accDraft.id).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+          {accDraft.type === "savings" && (
+            <select value={accDraft.savingsKind ?? "savings"} onChange={(e) => setAccDraft((d) => ({ ...d, savingsKind: e.target.value as SavingsKind }))} style={inputStyle}>
+              <option value="savings">Ahorro</option>
+              <option value="investment">Inversion</option>
             </select>
+          )}
+          {accDraft.type === "credit" && (
+            <>
+              <select
+                value={accDraft.cardKind ?? "debit"}
+                onChange={(e) => setAccDraft((d) => ({ ...d, cardKind: e.target.value as CardKind, paymentMode: e.target.value === "credit" ? d.paymentMode : null }))}
+                style={inputStyle}
+              >
+                <option value="debit">Debito</option>
+                <option value="credit">Credito</option>
+              </select>
+              <select value={accDraft.linkedAccountId ?? ""} onChange={(e) => setAccDraft((d) => ({ ...d, linkedAccountId: e.target.value || null }))} required style={inputStyle}>
+                <option value="">Cuenta asociada (obligatoria)</option>
+                {accounts.filter((a) => a.id !== accDraft.id).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              {accDraft.cardKind === "credit" && (
+                <select value={accDraft.paymentMode ?? "month_end"} onChange={(e) => setAccDraft((d) => ({ ...d, paymentMode: e.target.value as PaymentMode }))} style={inputStyle}>
+                  <option value="month_end">A fin de mes</option>
+                  <option value="installments">Fraccionada</option>
+                  <option value="fixed">Otro (cantidad fija mensual)</option>
+                </select>
+              )}
+              {accDraft.cardKind === "credit" && accDraft.paymentMode === "fixed" && (
+                <input
+                  placeholder="Cantidad fija mensual"
+                  type="number"
+                  step="0.01"
+                  value={accDraft.monthlyPayment}
+                  onChange={(e) => setAccDraft((d) => ({ ...d, monthlyPayment: e.target.value }))}
+                  style={inputStyle}
+                />
+              )}
+            </>
           )}
           <input placeholder="Saldo inicial" type="number" step="0.01" value={accDraft.opening} onChange={(e) => setAccDraft((d) => ({ ...d, opening: e.target.value }))} style={inputStyle} />
           <div style={{ display: "flex", gap: 8 }}>

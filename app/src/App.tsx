@@ -5,6 +5,7 @@ import { PALETTE, T, statusInfo } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
+import { normalizeAccountFields, type AccountDraftFields } from "./lib/accounts";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
 import { endOfNthMonthISO, freqPerMonth, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, startOfCurrentWeekISO, endOfCurrentWeekISO, todayISO } from "./lib/format";
@@ -464,16 +465,19 @@ export default function App() {
     }
   }
 
-  function addAccount(name: string, type: AccountType, opening: number, linkedAccountId: ID | null) {
-    setAccounts((prev) => prev.concat([{ id: genId(), name, opening, warning: 0, type, linkedAccountId: type === "credit" ? linkedAccountId : null }]));
+  function addAccount(fields: AccountDraftFields) {
+    setAccounts((prev) => prev.concat([{ id: genId(), warning: 0, ...normalizeAccountFields(fields) }]));
   }
   function createDestinoAccount(docId: ID, name: string, type: AccountType, opening: number): ID {
     const id = genId();
-    updateDoc(docId, (d) => ({ ...d, accounts: d.accounts.concat([{ id, name, opening, warning: 0, type, linkedAccountId: null }]) }));
+    updateDoc(docId, (d) => ({
+      ...d,
+      accounts: d.accounts.concat([{ id, warning: 0, ...normalizeAccountFields({ name, type, opening, linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null }) }]),
+    }));
     return id;
   }
-  function updateAccount(id: ID, name: string, type: AccountType, opening: number, linkedAccountId: ID | null) {
-    setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, name, type, opening, linkedAccountId: type === "credit" ? linkedAccountId : null } : a)));
+  function updateAccount(id: ID, fields: AccountDraftFields) {
+    setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, ...normalizeAccountFields(fields) } : a)));
   }
   function removeAccount(id: ID) {
     if (!window.confirm("¿Eliminar esta cuenta? Se perderan tambien sus movimientos.")) return;

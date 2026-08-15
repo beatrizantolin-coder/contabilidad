@@ -2,14 +2,26 @@ export type ID = string;
 
 export type AccountType = "checking" | "savings" | "credit" | "cash";
 
+/** Solo para cuentas de tipo "savings": ahorro tradicional o inversion. */
+export type SavingsKind = "savings" | "investment";
+/** Solo para cuentas de tipo "credit": la tarjeta es de debito o de credito. */
+export type CardKind = "debit" | "credit";
+/** Solo para tarjetas de credito ("credit" + cardKind "credit"): como se paga el saldo cada mes. */
+export type PaymentMode = "month_end" | "installments" | "fixed";
+
 export interface Account {
   id: ID;
   name: string;
   opening: number;
   warning: number;
   type: AccountType;
-  /** Solo relevante para tarjetas de credito: cuenta a la que esta asociada. */
+  /** Tarjetas: cuenta a la que esta asociada (obligatoria). */
   linkedAccountId: ID | null;
+  savingsKind: SavingsKind | null;
+  cardKind: CardKind | null;
+  paymentMode: PaymentMode | null;
+  /** Solo con paymentMode "fixed": cantidad fija que se paga cada mes, independientemente de los cargos. */
+  monthlyPayment: number | null;
 }
 
 export type CategoryKind = "expense" | "income" | "transfer";

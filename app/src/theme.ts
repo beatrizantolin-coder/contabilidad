@@ -53,7 +53,7 @@ export interface AccountTypeInfo {
 export const ACCOUNT_TYPES: AccountTypeInfo[] = [
   { value: "checking", label: "Cuenta corriente", icon: Wallet },
   { value: "savings", label: "Cuenta de ahorro", icon: PiggyBank },
-  { value: "credit", label: "Tarjeta de credito", icon: CreditCard },
+  { value: "credit", label: "Tarjeta", icon: CreditCard },
   { value: "cash", label: "Efectivo", icon: Banknote },
 ];
 
