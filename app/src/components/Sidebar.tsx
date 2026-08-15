@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FileText, FolderOpen, GripVertical, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, Wallet, X } from "lucide-react";
+import { Banknote, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, CreditCard, FileText, FolderOpen, GripVertical, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, Wallet, X } from "lucide-react";
 import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -108,6 +108,23 @@ export function Sidebar({
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
   const [draggedAccountId, setDraggedAccountId] = useState<ID | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<ID | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Set<AccountType>>(new Set());
+
+  function toggleSectionCollapsed(key: AccountType) {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  /** Clic en el nombre del grupo: selecciona todas sus cuentas a la vez, mostrando sus movimientos conjuntos. */
+  function selectAccountGroup(ids: ID[]) {
+    clearAccountSelection();
+    ids.forEach((id, i) => onAccountClick(id, false, i > 0));
+    goToAccounts();
+  }
   const [savedDocFeedback, setSavedDocFeedback] = useState<string | null>(null);
 
   async function handleSaveDocumentClick(d: LedgerDocument) {
@@ -325,18 +342,36 @@ export function Sidebar({
       {ACCOUNT_SECTIONS.map((section) => {
         const SectionIcon = section.icon;
         const group = accounts.filter((a) => (a.type || "checking") === section.key);
+        const isCollapsed = collapsedSections.has(section.key);
+        const groupTotal = group.reduce((s, a) => s + (balances[a.id] || 0), 0);
         return (
           <div key={section.key} style={{ marginBottom: 4 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 2px" }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600 }}>
+              <button
+                onClick={() => toggleSectionCollapsed(section.key)}
+                style={{ background: "none", border: "none", padding: 0, color: T.textFaint, display: "flex" }}
+                aria-label={isCollapsed ? "Expandir " + section.label : "Contraer " + section.label}
+              >
+                {isCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
+              </button>
+              <button
+                onClick={() => selectAccountGroup(group.map((a) => a.id))}
+                title={"Ver movimientos conjuntos de " + section.label}
+                style={{ flex: 1, display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600, background: "none", border: "none", padding: "0 4px", textAlign: "left", cursor: "pointer" }}
+              >
                 <SectionIcon size={10} /> {section.label}
-              </span>
+                {isCollapsed && group.length > 0 && (
+                  <span className="amount" style={{ marginLeft: "auto", fontWeight: 700, color: groupTotal < 0 ? T.expense : T.textMuted }}>
+                    {fmt(groupTotal)}
+                  </span>
+                )}
+              </button>
               <button onClick={() => openAccountForm(section.key, null, true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
                 <Plus size={11} />
               </button>
             </div>
-            {group.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "2px 10px 4px" }}>Sin cuentas.</div>}
-            {group.map((a) => {
+            {!isCollapsed && group.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "2px 10px 4px" }}>Sin cuentas.</div>}
+            {!isCollapsed && group.map((a) => {
               const bal = balances[a.id] || 0;
               const low = (a.warning && bal < a.warning) || bal < 0;
               const highlighted = activeAccounts.has(a.id);
