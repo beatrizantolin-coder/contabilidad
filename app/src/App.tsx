@@ -298,24 +298,28 @@ export default function App() {
   // filtra ni limita la lista de movimientos del panel central.
   const monthRangeLabel = shortDate(startOfCurrentMonthISO()) + " - " + shortDate(endOfNthMonthISO(0));
 
+  // Los presupuestos (barras de gasto acumulado en Categorias) solo cuentan
+  // movimientos marcados como reconciliados, segun especificacion.
+  const reconciledMonthTx = useMemo(() => thisMonthTx.filter((t) => t.status === "reconciliado"), [thisMonthTx]);
+
   const byCategory = useMemo(() => {
     const map = new Map<ID, number>();
-    thisMonthTx
+    reconciledMonthTx
       .filter((t) => t.type === "expense" && t.categoryId)
       .forEach((t) => map.set(t.categoryId as ID, (map.get(t.categoryId as ID) || 0) + Number(t.amount)));
     return Array.from(map.entries())
       .map(([id, val]) => ({ id, val }))
       .sort((a, b) => b.val - a.val);
-  }, [thisMonthTx]);
+  }, [reconciledMonthTx]);
   const maxCat = Math.max(1, ...byCategory.map((c) => c.val));
 
   const bySubcategory = useMemo(() => {
     const map = new Map<ID, number>();
-    thisMonthTx
+    reconciledMonthTx
       .filter((t) => t.type === "expense" && t.subcategoryId)
       .forEach((t) => map.set(t.subcategoryId as ID, (map.get(t.subcategoryId as ID) || 0) + Number(t.amount)));
     return Array.from(map.entries()).map(([id, val]) => ({ id, val }));
-  }, [thisMonthTx]);
+  }, [reconciledMonthTx]);
 
   const recurringList = useMemo(() => transactions.filter((t) => t.recurring && t.type !== "transfer_in"), [transactions]);
   const programadorRows = useMemo(() => computeProgramadorRows(transactions), [transactions]);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronDown, ChevronRight, Pencil, Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import type { Category, CategoryKind, ID } from "../types";
 import { T, dot } from "../theme";
 import { fmt } from "../lib/format";
@@ -10,13 +10,31 @@ export interface CategorySpend {
   val: number;
 }
 
-const TABS: readonly [CategoryKind, string][] = [
+type CatTab = CategoryKind | "all";
+
+const TABS: readonly [CatTab, string][] = [
   ["expense", "Gastos"],
   ["income", "Ingresos"],
   ["transfer", "Traspasos"],
+  ["all", "Todas"],
 ];
 
-const ROW_COLUMNS = "13px 12px 150px 1fr 130px 22px 22px";
+const ROW_COLUMNS = "13px 14px 12px 150px 1fr 130px 22px 22px";
+
+/** 0-70% verde, 71-90% naranja, 91-100%+ rojo; sin presupuesto asignado siempre verde. */
+function budgetColor(val: number, limit: number | undefined): string {
+  if (!limit) return T.income;
+  const ratio = (val / limit) * 100;
+  if (ratio <= 70) return T.income;
+  if (ratio <= 90) return "#D9822B";
+  return T.expense;
+}
+
+function KindIcon({ kind }: { kind: CategoryKind }) {
+  if (kind === "income") return <TrendingUp size={12} style={{ color: T.income }} />;
+  if (kind === "transfer") return <ArrowRightLeft size={12} style={{ color: T.transfer }} />;
+  return <TrendingDown size={12} style={{ color: T.expense }} />;
+}
 
 export function CategoriesView({
   docName,
@@ -44,11 +62,11 @@ export function CategoriesView({
   /** Se incrementa desde Documento > Nueva Categoria (menú nativo) para abrir el panel lateral. */
   newCategoryTrigger: number;
 }) {
-  const [catTab, setCatTab] = useState<CategoryKind>("expense");
+  const [catTab, setCatTab] = useState<CatTab>("expense");
   const [expandedCategories, setExpandedCategories] = useState<Set<ID>>(new Set());
 
   useEffect(() => {
-    if (newCategoryTrigger > 0) onNewCategory(catTab);
+    if (newCategoryTrigger > 0) onNewCategory(catTab === "all" ? "expense" : catTab);
     // eslint-disable-next-line -- solo debe reaccionar al trigger, no a catTab/onNewCategory
   }, [newCategoryTrigger]);
 
@@ -61,7 +79,7 @@ export function CategoriesView({
     });
   }
 
-  const tabCategories = categories.filter((c) => (c.kind || "expense") === catTab);
+  const tabCategories = catTab === "all" ? categories : categories.filter((c) => (c.kind || "expense") === catTab);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -70,7 +88,7 @@ export function CategoriesView({
           <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0 }}>Categorias</h2>
           <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 0" }}>Categorias de {docName}.</p>
         </div>
-        <button onClick={() => onNewCategory(catTab)} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+        <button onClick={() => onNewCategory(catTab === "all" ? "expense" : catTab)} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
           <Plus size={14} /> Nueva categoria
         </button>
       </div>
@@ -95,7 +113,7 @@ export function CategoriesView({
           const val = monthEntry ? monthEntry.val : 0;
           const limit = budgets[cat.id];
           const pct = limit ? Math.min(100, (val / limit) * 100) : Math.min(100, (val / maxSpend) * 100);
-          const over = !!limit && val > limit;
+          const barColor = budgetColor(val, limit);
           const hasSubs = cat.subcategories.length > 0;
           const expanded = expandedCategories.has(cat.id);
           return (
@@ -118,10 +136,11 @@ export function CategoriesView({
                 ) : (
                   <span />
                 )}
+                <KindIcon kind={cat.kind || "expense"} />
                 <span style={dot(cat.color, 12)} />
                 <span style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
                 <div style={{ height: 6, background: T.borderSoft, borderRadius: 3 }}>
-                  <div style={{ height: 6, borderRadius: 3, width: pct + "%", background: over ? T.expense : cat.color }} />
+                  <div style={{ height: 6, borderRadius: 3, width: pct + "%", background: barColor }} />
                 </div>
                 <span className="amount" style={{ fontSize: 13, color: T.textMuted, textAlign: "right" }}>
                   {fmt(val)}
@@ -140,7 +159,7 @@ export function CategoriesView({
                   const subVal = spendBySubcategory.find((b) => b.id === sub.id)?.val ?? 0;
                   const subLimit = budgets[sub.id];
                   const subPct = subLimit ? Math.min(100, (subVal / subLimit) * 100) : Math.min(100, (subVal / maxSpend) * 100);
-                  const subOver = !!subLimit && subVal > subLimit;
+                  const subBarColor = budgetColor(subVal, subLimit);
                   return (
                     <div
                       key={sub.id}
@@ -149,10 +168,11 @@ export function CategoriesView({
                       style={{ display: "grid", gridTemplateColumns: ROW_COLUMNS, alignItems: "center", columnGap: 10, padding: "7px 24px", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated }}
                     >
                       <span />
+                      <span />
                       <span style={dot(subcategoryColor(cat.color), 7)} />
                       <span style={{ fontSize: 12, color: T.text, paddingLeft: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
                       <div style={{ height: 4, background: T.borderSoft, borderRadius: 2 }}>
-                        <div style={{ height: 4, borderRadius: 2, width: subPct + "%", background: subOver ? T.expense : subcategoryColor(cat.color) }} />
+                        <div style={{ height: 4, borderRadius: 2, width: subPct + "%", background: subBarColor }} />
                       </div>
                       <span className="amount" style={{ fontSize: 11, color: T.textMuted, textAlign: "right" }}>
                         {fmt(subVal)}
