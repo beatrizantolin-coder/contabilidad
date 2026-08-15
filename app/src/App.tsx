@@ -150,7 +150,15 @@ export default function App() {
   const canRedo = historyTick >= 0 && redoStackRef.current.length > 0;
 
   function handleSort(column: SortColumn) {
-    setSortBy((prev) => (prev && prev.column === column ? { column, dir: prev.dir === "asc" ? "desc" : "asc" } : { column, dir: "asc" }));
+    setSortBy((prev) => {
+      if (prev && prev.column === column) return { column, dir: prev.dir === "asc" ? "desc" : "asc" };
+      // Cambiar de columna de orden invalida cualquier reordenacion manual
+      // (manualRank) hecha bajo el criterio anterior: si no se limpia, sus
+      // valores siguen desempatando filas bajo el nuevo criterio y dejan
+      // grupos "fantasma" del orden/agrupacion previos.
+      setTransactions((txs) => txs.map((t) => (t.manualRank !== undefined ? { ...t, manualRank: undefined } : t)));
+      return { column, dir: "asc" };
+    });
   }
 
   function applyMovementsRange(from: string, to: string) {
@@ -771,14 +779,19 @@ export default function App() {
     }
   }
 
+  // Icono de cadena de una transferencia: desvincula si esta vinculada, o
+  // revincula automaticamente (sin seleccion manual) con la transferencia
+  // con la que estaba emparejada si esta desvinculada. En ambos casos la
+  // referencia (transferGroupId) se conserva siempre, vinculada o no.
   function toggleTransferLink(t: Transaction) {
-    if (!isTransferTx(t) || !activeDocId || !t.linked) return;
+    if (!isTransferTx(t) || !activeDocId) return;
     pushHistory();
     const otherDocId = otherDocIdOf(t);
     const groupId = t.transferGroupId;
+    const nextLinked = !t.linked;
     const fn = (d: NonNullable<typeof activeDoc>) => ({
       ...d,
-      transactions: d.transactions.map((x) => (isTransferTx(x) && x.transferGroupId === groupId ? { ...x, linked: false } : x)),
+      transactions: d.transactions.map((x) => (isTransferTx(x) && x.transferGroupId === groupId ? { ...x, linked: nextLinked } : x)),
     });
     applyToDocs([
       { docId: activeDocId, fn },

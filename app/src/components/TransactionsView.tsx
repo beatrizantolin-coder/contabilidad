@@ -372,9 +372,9 @@ export function TransactionsView({
                         <span style={{ display: "flex", justifyContent: "center" }}>
                           {isTransfer && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); if (t.linked) onToggleLink(t); }}
-                              title={t.linked ? "Vinculada — clic para desvincular" : "Desvinculada: se edita de forma independiente"}
-                              style={{ background: "none", border: "none", color: t.linked ? T.textFaint : T.expense, padding: 2, cursor: t.linked ? "pointer" : "default", display: "flex" }}
+                              onClick={(e) => { e.stopPropagation(); onToggleLink(t); }}
+                              title={t.linked ? "Vinculada — clic para desvincular" : "Desvinculada — clic para revincular"}
+                              style={{ background: "none", border: "none", color: t.linked ? T.textFaint : T.expense, padding: 2, cursor: "pointer", display: "flex" }}
                             >
                               {t.linked ? <Link2 size={13} /> : <Link2Off size={13} />}
                             </button>
