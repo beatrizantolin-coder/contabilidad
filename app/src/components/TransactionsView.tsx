@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, FolderPlus, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
+import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, Eraser, FolderPlus, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
-import { T, dot, smallBtn, statusInfo } from "../theme";
+import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate, todayISO } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { FiltersBar } from "./FiltersBar";
@@ -17,8 +17,7 @@ export function TransactionsView({
   title,
   monthIncome,
   monthExpense,
-  monthRangeLabel,
-  onViewCurrentWeek,
+  onClearAll,
   showFilters,
   setShowFilters,
   filters,
@@ -65,8 +64,7 @@ export function TransactionsView({
   title: string;
   monthIncome: number;
   monthExpense: number;
-  monthRangeLabel: string;
-  onViewCurrentWeek: () => void;
+  onClearAll: () => void;
   showFilters: boolean;
   setShowFilters: (fn: (s: boolean) => boolean) => void;
   filters: Filters;
@@ -169,25 +167,34 @@ export function TransactionsView({
             <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
               <TrendingDown size={12} /> <span className="amount">{fmt(monthExpense)}</span>
             </span>
-            <span style={{ fontSize: 11, color: T.textFaint }}>
-              {monthRangeLabel}
-              <button onClick={onViewCurrentWeek} style={{ marginLeft: 6, background: "none", border: "none", color: T.accent, fontSize: 11, fontWeight: 600, padding: 0, cursor: "pointer" }}>
-                Ver semana actual
-              </button>
-            </span>
           </div>
         </div>
-        <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={onSave} title="Guardar documento" style={{ ...smallBtn(false), padding: "7px 9px" }}>
+        <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ position: "relative" }}>
+            <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
+            <input
+              placeholder="Buscar movimientos"
+              value={filters.search}
+              onChange={(e) => {
+                const val = e.target.value;
+                setFilters((f) => ({ ...f, search: val }));
+              }}
+              style={{ ...inputStyle, paddingLeft: 28, width: 170, height: 30, boxSizing: "border-box" }}
+            />
+          </div>
+          <button onClick={onClearAll} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
+            <Eraser size={13} />Limpiar
+          </button>
+          <button onClick={onSave} title="Guardar documento" aria-label="Guardar documento" style={smallBtn(false)}>
             <Save size={12} />
           </button>
-          <button onClick={onSaveAs} title="Guardar como" style={{ ...smallBtn(false), padding: "7px 9px" }}>
+          <button onClick={onSaveAs} title="Guardar como" aria-label="Guardar como" style={smallBtn(false)}>
             <FolderPlus size={12} />
           </button>
-          <button onClick={onUndo} disabled={!canUndo} title="Deshacer" style={{ ...smallBtn(false), padding: "7px 9px", opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "default" }}>
+          <button onClick={onUndo} disabled={!canUndo} title="Deshacer" style={{ ...smallBtn(false), opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "default" }}>
             <Undo2 size={12} />
           </button>
-          <button onClick={onRedo} disabled={!canRedo} title="Rehacer" style={{ ...smallBtn(false), padding: "7px 9px", opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "default" }}>
+          <button onClick={onRedo} disabled={!canRedo} title="Rehacer" style={{ ...smallBtn(false), opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "default" }}>
             <Redo2 size={12} />
           </button>
           <button
@@ -197,8 +204,7 @@ export function TransactionsView({
             }}
             style={smallBtn(showMovementsRange)}
           >
-            <CalendarRange size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
-            Movimientos
+            <CalendarRange size={12} />Movimientos
           </button>
           <button
             onClick={() => {
@@ -207,21 +213,18 @@ export function TransactionsView({
             }}
             style={smallBtn(showFilters)}
           >
-            <SlidersHorizontal size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
-            Filtros
+            <SlidersHorizontal size={12} />Filtros
           </button>
           <button onClick={onExport} style={smallBtn(false)}>
-            <Download size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
-            Exportar
+            <Download size={12} />Exportar
           </button>
           <button onClick={onImport} style={smallBtn(false)}>
-            <Upload size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
-            Importar
+            <Upload size={12} />Importar
           </button>
           <button onClick={onTogglePrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(showPrevision)}>
             <TrendingUp size={12} />
           </button>
-          <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600 }}>
+          <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, boxSizing: "border-box", fontSize: 13, fontWeight: 600 }}>
             <Plus size={14} /> Movimiento
           </button>
         </div>

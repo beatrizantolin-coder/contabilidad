@@ -8,7 +8,7 @@ import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibl
 import { normalizeAccountFields, type AccountDraftFields } from "./lib/accounts";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
-import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, startOfCurrentWeekISO, endOfCurrentWeekISO, todayISO } from "./lib/format";
+import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, todayISO } from "./lib/format";
 import { computeProgramadorMonthStats, computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
 import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv } from "./lib/csv";
@@ -80,6 +80,10 @@ export default function App() {
   const [catEditId, setCatEditId] = useState<ID | null>(null);
   const [catIsNew, setCatIsNew] = useState(false);
   const [sortBy, setSortBy] = useState<SortState | null>(null);
+  // La tabla de Movimientos empieza siempre sin agrupar: la agrupacion visual
+  // por mes/estado/etc. solo se activa cuando el usuario pulsa una cabecera
+  // de columna para ordenar, y se puede desactivar de nuevo con "Limpiar".
+  const [groupingActive, setGroupingActive] = useState(false);
   const [showRenameDoc, setShowRenameDoc] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const [newAccountTrigger, setNewAccountTrigger] = useState(0);
@@ -159,6 +163,7 @@ export default function App() {
   const canRedo = historyTick >= 0 && redoStackRef.current.length > 0;
 
   function handleSort(column: SortColumn) {
+    setGroupingActive(true);
     setSortBy((prev) => {
       if (prev && prev.column === column) return { column, dir: prev.dir === "asc" ? "desc" : "asc" };
       // Cambiar de columna de orden invalida cualquier reordenacion manual
@@ -173,11 +178,6 @@ export default function App() {
   function applyMovementsRange(from: string, to: string) {
     setViewRange({ from, to });
     setShowMovementsRange(false);
-  }
-  // Enlace "Ver semana actual" del resumen: es un atajo sobre el panel de
-  // Filtros (no sobre el rango de Movimientos), igual que en la referencia.
-  function viewCurrentWeek() {
-    setFilters((f) => ({ ...f, from: startOfCurrentWeekISO(), to: endOfCurrentWeekISO() }));
   }
 
   const accounts = activeDoc?.accounts ?? [];
@@ -260,6 +260,7 @@ export default function App() {
   // fecha se agrupa por mes/año, por estado por su nombre, por descripcion o
   // comentario por su texto exacto). Por importe no se agrupa (valor continuo).
   function txGroupKey(t: Transaction): string | null {
+    if (!groupingActive) return null;
     switch (effectiveSortColumn) {
       case "date":
         return monthKey(t.date);
@@ -858,6 +859,19 @@ export default function App() {
     setLastClickedId(null);
   }
 
+  // Boton "Limpiar" de la barra de Movimientos: repone la vista a su estado
+  // inicial de un solo golpe (busqueda/filtros, seleccion, orden y
+  // agrupacion, rango de fechas y los paneles de Filtros/Movimientos).
+  function clearTransactionsView() {
+    clearSelection();
+    setFilters(emptyFilters());
+    setSortBy(null);
+    setGroupingActive(false);
+    setViewRange(null);
+    setShowMovementsRange(false);
+    setShowFilters(false);
+  }
+
   // Cualquier cambio de seleccion cierra sin guardar el panel de edicion que
   // estuviera abierto (movimiento, edicion en masa o categoria), igual que
   // pinchar en cualquier otro elemento distinto mientras hay un dialogo
@@ -1339,8 +1353,7 @@ export default function App() {
                     title={accountsTitle}
                     monthIncome={monthIncome}
                     monthExpense={monthExpense}
-                    monthRangeLabel={monthRangeLabel}
-                    onViewCurrentWeek={viewCurrentWeek}
+                    onClearAll={clearTransactionsView}
                     showFilters={showFilters}
                     setShowFilters={setShowFilters}
                     filters={filters}
@@ -1361,7 +1374,7 @@ export default function App() {
                     onSort={handleSort}
                     groupKey={txGroupKey}
                     groupLabel={txGroupLabel}
-                    canReorder={effectiveSortColumn !== "amount"}
+                    canReorder={groupingActive && effectiveSortColumn !== "amount"}
                     onReorderWithinGroup={reorderWithinGroup}
                     showMovementsRange={showMovementsRange}
                     setShowMovementsRange={setShowMovementsRange}
