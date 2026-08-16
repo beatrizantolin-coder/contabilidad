@@ -11,7 +11,7 @@ import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
 import { endOfNthMonthISO, freqPerMonth, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, startOfCurrentWeekISO, endOfCurrentWeekISO, todayISO } from "./lib/format";
 import { computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
-import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
+import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
@@ -487,6 +487,25 @@ export default function App() {
       }
     } catch (err) {
       console.error("Error importando CSV", err);
+    }
+  }
+  async function handleExportCategories() {
+    if (!activeDoc) return;
+    try {
+      await exportCategoriesCsv(activeDoc.name, categories, budgets);
+    } catch (err) {
+      console.error("Error exportando categorias CSV", err);
+    }
+  }
+  async function handleImportCategories() {
+    if (!activeDoc) return;
+    try {
+      const result = await pickAndImportCategoriesCsv(categories);
+      if (!result) return;
+      setCategories(() => result.categories);
+      setBudgets((b) => ({ ...b, ...result.budgetPatch }));
+    } catch (err) {
+      console.error("Error importando categorias CSV", err);
     }
   }
 
@@ -1295,11 +1314,17 @@ export default function App() {
                     spendByCategory={byCategory}
                     spendBySubcategory={bySubcategory}
                     maxSpend={maxCat}
+                    monthIncome={monthIncome}
+                    monthExpense={monthExpense}
                     onNewCategory={openNewCategory}
                     removeCategory={removeCategory}
                     onOpenCategory={openCategoryEdit}
                     removeSubcategory={removeSubcategory}
                     newCategoryTrigger={newCategoryTrigger}
+                    onExport={handleExportCategories}
+                    onImport={handleImportCategories}
+                    showPrevision={showPrevision}
+                    onTogglePrevision={toggleShowPrevisionFromToolbar}
                   />
                 )}
 

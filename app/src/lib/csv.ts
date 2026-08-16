@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Account, AccountType, Category, ID, LedgerDocument, Subcategory, Transaction, TransactionStatus } from "../types";
+import type { Account, AccountType, Budgets, Category, CategoryKind, ID, LedgerDocument, Subcategory, Transaction, TransactionStatus } from "../types";
 import { catInfo } from "./categories";
 import { genId, genSeq } from "./id";
 import { todayISO } from "./format";
@@ -44,6 +44,81 @@ export interface ImportResult {
   accounts: Account[];
   categories: Category[];
   transactions: Transaction[];
+}
+
+function typeLabelEs(kind: CategoryKind): string {
+  return kind === "income" ? "Ingreso" : kind === "transfer" ? "Transferencia" : "Gasto";
+}
+
+export function buildCategoryExportRows(categories: Category[], budgets: Budgets) {
+  const rows: { Nombre: string; Tipo: string; Subcategoria: string; Presupuesto: number | string }[] = [];
+  categories.forEach((c) => {
+    rows.push({ Nombre: c.name, Tipo: typeLabelEs(c.kind), Subcategoria: "", Presupuesto: budgets[c.id] || "" });
+    c.subcategories.forEach((s) => {
+      rows.push({ Nombre: c.name, Tipo: typeLabelEs(c.kind), Subcategoria: s.name, Presupuesto: budgets[s.id] || "" });
+    });
+  });
+  return rows;
+}
+
+export async function exportCategoriesCsv(docName: string, categories: Category[], budgets: Budgets): Promise<boolean> {
+  const rows = buildCategoryExportRows(categories, budgets);
+  const csv = Papa.unparse(rows);
+  const path = await save({
+    defaultPath: docName + "-categorias.csv",
+    filters: [{ name: "CSV", extensions: ["csv"] }],
+  });
+  if (!path) return false;
+  await writeTextFile(path, csv);
+  return true;
+}
+
+export interface CategoryImportResult {
+  categories: Category[];
+  budgetPatch: Budgets;
+}
+
+export function parseCategoriesCsv(csvText: string, categories: Category[]): CategoryImportResult {
+  const parsed = Papa.parse<Record<string, string>>(csvText, { header: true, skipEmptyLines: true });
+  let nextCategories = categories.slice();
+  const budgetPatch: Budgets = {};
+
+  parsed.data.forEach((row) => {
+    const name = (row.Nombre || "").trim();
+    if (!name) return;
+    const kindLabel = (row.Tipo || "").toLowerCase();
+    const kind: CategoryKind = kindLabel.startsWith("ingreso") ? "income" : kindLabel.startsWith("transfer") ? "transfer" : "expense";
+
+    let catIndex = nextCategories.findIndex((c) => c.name.toLowerCase() === name.toLowerCase() && c.kind === kind);
+    if (catIndex === -1) {
+      const newCat: Category = { id: genId(), name, color: PALETTE[nextCategories.length % PALETTE.length], kind, subcategories: [] };
+      nextCategories = nextCategories.concat([newCat]);
+      catIndex = nextCategories.length - 1;
+    }
+    let cat = nextCategories[catIndex];
+
+    const subName = (row.Subcategoria || "").trim();
+    if (subName) {
+      let sub = cat.subcategories.find((s) => s.name.toLowerCase() === subName.toLowerCase());
+      if (!sub) {
+        sub = { id: genId(), name: subName, subcategories: [] };
+        cat = { ...cat, subcategories: cat.subcategories.concat([sub]) };
+        nextCategories[catIndex] = cat;
+      }
+      if (row.Presupuesto) budgetPatch[sub.id] = Number(row.Presupuesto);
+    } else if (row.Presupuesto) {
+      budgetPatch[cat.id] = Number(row.Presupuesto);
+    }
+  });
+
+  return { categories: nextCategories, budgetPatch };
+}
+
+export async function pickAndImportCategoriesCsv(categories: Category[]): Promise<CategoryImportResult | null> {
+  const path = await open({ multiple: false, filters: [{ name: "CSV", extensions: ["csv"] }] });
+  if (!path || Array.isArray(path)) return null;
+  const text = await readTextFile(path);
+  return parseCategoriesCsv(text, categories);
 }
 
 function normalizeKey(s: string): string {
