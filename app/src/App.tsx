@@ -884,11 +884,19 @@ export default function App() {
     setCatIsNew(false);
   }
 
-  /** Clic normal: sustituye la seleccion por este elemento; si ya era la unica seleccion, la deja vacia. */
+  /** Clic normal: selecciona este elemento (sustituyendo la seleccion) y abre su edicion a la vez; si ya era la unica seleccion, deselecciona y cierra el panel. */
   function selectRow(id: ID) {
-    setSelectedIds((prev) => (prev.size === 1 && prev.has(id) ? new Set() : new Set([id])));
     setLastClickedId(id);
+    const wasOnlySelected = selectedIds.size === 1 && selectedIds.has(id);
+    if (wasOnlySelected) {
+      setSelectedIds(new Set());
+      closeEditPanels();
+      return;
+    }
+    setSelectedIds(new Set([id]));
     closeEditPanels();
+    const t = transactions.find((x) => x.id === id);
+    if (t) editTx(t);
   }
 
   /** Mayusculas+clic: sustituye la seleccion por el rango entre el ultimo marcado y este. */
