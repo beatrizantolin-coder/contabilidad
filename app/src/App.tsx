@@ -7,7 +7,7 @@ import { genId, genSeq } from "./lib/id";
 import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibling, pairedTransferId } from "./lib/balances";
 import { normalizeAccountFields, type AccountDraftFields } from "./lib/accounts";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
-import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
+import { computeBulkEditDraft, emptyBulkEditState, type BulkEditField, type BulkEditState } from "./lib/bulkEdit";
 import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, todayISO } from "./lib/format";
 import { computeProgramadorMonthStats, computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
@@ -75,7 +75,8 @@ export default function App() {
   const [selectedIds, setSelectedIds] = useState<Set<ID>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<ID | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
-  const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEdit([]));
+  const [bulkEdit, setBulkEdit] = useState<BulkEditState>(emptyBulkEditState());
+  const [bulkEditTouched, setBulkEditTouched] = useState<Set<BulkEditField>>(new Set());
   const [showCatEdit, setShowCatEdit] = useState(false);
   const [catEditId, setCatEditId] = useState<ID | null>(null);
   const [catIsNew, setCatIsNew] = useState(false);
@@ -983,14 +984,25 @@ export default function App() {
 
   function openBulkEdit() {
     setShowTxForm(false);
-    setBulkEdit(emptyBulkEdit(categories));
+    const selected = transactions.filter((t) => selectedIds.has(t.id));
+    setBulkEdit(computeBulkEditDraft(selected));
+    setBulkEditTouched(new Set());
     setShowBulkEdit(true);
+  }
+
+  function touchBulkField(field: BulkEditField) {
+    setBulkEditTouched((prev) => new Set(prev).add(field));
   }
 
   function applyBulkEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!activeDocId) return;
-    if (!window.confirm("Se va a aplicar el cambio a " + selectedIds.size + " movimientos. ¿Continuar?")) return;
+    if (bulkEditTouched.size === 0) {
+      setShowBulkEdit(false);
+      setSelectedIds(new Set());
+      return;
+    }
+    if (!window.confirm("¿Aplicar los cambios a " + selectedIds.size + " movimientos?")) return;
     pushHistory();
     const selectedTx = transactions.filter((t) => selectedIds.has(t.id));
     const groupIds = new Set(selectedTx.filter(isTransferTx).map((t) => t.transferGroupId));
@@ -999,12 +1011,11 @@ export default function App() {
         const isSelected = selectedIds.has(t.id) || (isTransferTx(t) && groupIds.has(t.transferGroupId));
         if (!isSelected) return t;
         const isTransferLeg = isTransferTx(t);
-        const patch: Partial<Transaction> = { date: bulkEdit.date };
-        if (!isTransferLeg) {
-          (patch as Record<string, unknown>).categoryId = bulkEdit.categoryId;
-          (patch as Record<string, unknown>).subcategoryId = bulkEdit.subcategoryId;
-          (patch as Record<string, unknown>).subsubcategoryId = bulkEdit.subsubcategoryId;
-        }
+        const patch: Record<string, unknown> = {};
+        bulkEditTouched.forEach((field) => {
+          if (isTransferLeg && (field === "accountId" || field === "categoryId" || field === "subcategoryId" || field === "subsubcategoryId")) return;
+          patch[field] = bulkEdit[field];
+        });
         return { ...t, ...patch } as Transaction;
       });
       return { ...d, transactions: txs };
@@ -1464,6 +1475,9 @@ export default function App() {
                     <BulkEditForm
                       bulkEdit={bulkEdit}
                       setBulkEdit={(fn) => setBulkEdit(fn)}
+                      touchedFields={bulkEditTouched}
+                      touchField={touchBulkField}
+                      accounts={accounts}
                       categories={categories}
                       selectedCount={selectedIds.size}
                       onSubmit={applyBulkEdit}
