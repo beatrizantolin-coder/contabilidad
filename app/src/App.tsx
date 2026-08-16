@@ -14,7 +14,7 @@ import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoR
 import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
-import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
+import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type CustomAmountEntry, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
 import { ACCOUNT_SECTIONS, Sidebar, type MainView, type SidebarSection } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
@@ -649,15 +649,11 @@ export default function App() {
     pushHistory();
     const amount = Number(txDraft.amount);
     const effectiveDate = txDraft.date || todayISO();
-    const overrides: Record<string, number> = {};
-    if (txDraft.amountMode === "variable") {
-      Object.entries(txDraft.overrides).forEach(([d, v]) => {
-        const n = Number(v);
-        if (v !== "" && !Number.isNaN(n)) overrides[d] = n;
-      });
-    }
+    const customAmounts: CustomAmountEntry[] = txDraft.variableAmount
+      ? txDraft.customAmounts.filter((e) => e.date && e.amount !== "").map((e) => ({ date: e.date, amount: Number(e.amount) || 0 }))
+      : [];
     const recurring = txDraft.recurringOn
-      ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null, amountMode: txDraft.amountMode, overrides }
+      ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null, customAmounts }
       : null;
 
     if (txDraft.type === "transfer") {
@@ -782,8 +778,8 @@ export default function App() {
         date: t.date, name: t.name, comment: t.comment || "", categoryId: null, subcategoryId: null, subsubcategoryId: null, amount: String(t.amount),
         type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
         recurringEndDate: t.recurring?.endDate ?? "", freqNoEnd: !t.recurring?.endDate,
-        amountMode: t.recurring?.amountMode ?? "fixed",
-        overrides: Object.fromEntries(Object.entries(t.recurring?.overrides ?? {}).map(([d, v]) => [d, String(v)])),
+        variableAmount: !!t.recurring && t.recurring.customAmounts.length > 0,
+        customAmounts: (t.recurring?.customAmounts ?? []).map((e) => ({ date: e.date, amount: String(e.amount) })),
       });
     } else {
       setTxDraft({
@@ -792,8 +788,8 @@ export default function App() {
         amount: String(t.amount),
         type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months",
         recurringEndDate: t.recurring?.endDate ?? "", freqNoEnd: !t.recurring?.endDate,
-        amountMode: t.recurring?.amountMode ?? "fixed",
-        overrides: Object.fromEntries(Object.entries(t.recurring?.overrides ?? {}).map(([d, v]) => [d, String(v)])),
+        variableAmount: !!t.recurring && t.recurring.customAmounts.length > 0,
+        customAmounts: (t.recurring?.customAmounts ?? []).map((e) => ({ date: e.date, amount: String(e.amount) })),
       });
     }
     setShowTxForm(true);

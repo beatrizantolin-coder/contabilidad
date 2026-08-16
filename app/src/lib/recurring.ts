@@ -2,16 +2,15 @@ import { isTransferTx, type LedgerDocument, type Recurring, type Transaction } f
 import { genId, genSeq } from "./id";
 import { currentWeekRange, endOfNthMonthISO, endOfYearISO, nextDate, startOfCurrentMonthISO } from "./format";
 
-/** Importe efectivo de una ocurrencia: el personalizado si es variable y existe, si no el predeterminado. */
+/** Importe efectivo de una ocurrencia: el personalizado para esa fecha si existe, si no el predeterminado. */
 export function occurrenceAmount(defaultAmount: number, recurring: Recurring | null, date: string): number {
-  if (!recurring || recurring.amountMode !== "variable") return defaultAmount;
-  const override = recurring.overrides[date];
-  return override !== undefined ? override : defaultAmount;
+  const entry = recurring?.customAmounts.find((e) => e.date === date);
+  return entry ? entry.amount : defaultAmount;
 }
 
-/** Una serie es "Variable" (importe distinto por ocurrencia) frente a "Fija" (mismo importe siempre). */
+/** Una serie es "Variable" (algun importe personalizado por fecha) frente a "Fija" (siempre el mismo importe). */
 export function isVariableSeries(recurring: Recurring | null): boolean {
-  return recurring?.amountMode === "variable";
+  return !!recurring && recurring.customAmounts.length > 0;
 }
 
 /** Fechas de las proximas ocurrencias de una serie, desde `fromDate` (excluida) hasta `untilISO` inclusive. */

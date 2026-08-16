@@ -46,17 +46,18 @@ export type TransactionStatus = "reconciliado" | "pendiente" | "programado" | "a
 
 export type RecurUnit = "days" | "months" | "years";
 
-export type RecurringAmountMode = "fixed" | "variable";
+export interface CustomAmountEntry {
+  date: string;
+  amount: number;
+}
 
 export interface Recurring {
   interval: number;
   unit: RecurUnit;
   /** Si se rellena, la serie deja de generar nuevas ocurrencias a partir de esta fecha (ISO). */
   endDate: string | null;
-  /** "fixed" (por defecto): todas las ocurrencias usan el importe del movimiento. "variable": cada ocurrencia puede personalizar su propio importe via `overrides`. */
-  amountMode: RecurringAmountMode;
-  /** Solo con amountMode "variable": importes personalizados por fecha de ocurrencia (ISO -> importe). Sin entrada para una fecha, se usa el importe predeterminado del movimiento. */
-  overrides: Record<string, number>;
+  /** Importes personalizados para fechas de ocurrencia concretas. La serie es "Variable" si tiene alguna entrada, "Fija" si esta vacia; sin entrada para una fecha dada, se usa el importe predeterminado del movimiento. */
+  customAmounts: CustomAmountEntry[];
 }
 
 interface TransactionBase {

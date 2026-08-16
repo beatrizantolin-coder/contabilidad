@@ -1,4 +1,4 @@
-import type { Account, AccountType, Category, CategoryKind, Filters, LedgerDocument, Recurring, SavedFilter, Subcategory, Transaction, TransactionStatus } from "../types";
+import type { Account, AccountType, Category, CategoryKind, CustomAmountEntry, Filters, LedgerDocument, Recurring, SavedFilter, Subcategory, Transaction, TransactionStatus } from "../types";
 import { genSeq } from "./id";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -21,18 +21,28 @@ function migrateCategory(raw: any): Category {
   };
 }
 
+/** Formato nuevo: array de {date, amount}. Formato antiguo (amountMode/overrides): mapa fecha -> importe. */
+function migrateCustomAmounts(raw: any): CustomAmountEntry[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((e) => e && typeof e.date === "string").map((e) => ({ date: e.date, amount: Number(e.amount) || 0 }));
+  }
+  if (raw && typeof raw === "object") {
+    return Object.entries(raw).map(([date, amount]) => ({ date, amount: Number(amount) || 0 }));
+  }
+  return [];
+}
+
 function migrateRecurring(raw: any): Recurring | null {
   if (!raw) return null;
   const endDate = typeof raw.endDate === "string" ? raw.endDate : null;
-  const amountMode = raw.amountMode === "variable" ? "variable" : "fixed";
-  const overrides = raw.overrides && typeof raw.overrides === "object" ? raw.overrides : {};
+  const customAmounts = migrateCustomAmounts(raw.customAmounts ?? raw.overrides);
   if (typeof raw.interval === "number" && typeof raw.unit === "string") {
-    return { interval: raw.interval, unit: raw.unit, endDate, amountMode, overrides };
+    return { interval: raw.interval, unit: raw.unit, endDate, customAmounts };
   }
   // Formato antiguo: { frequency: "monthly" | "weekly" | "yearly" }
-  if (raw.frequency === "weekly") return { interval: 7, unit: "days", endDate, amountMode, overrides };
-  if (raw.frequency === "yearly") return { interval: 1, unit: "years", endDate, amountMode, overrides };
-  return { interval: 1, unit: "months", endDate, amountMode, overrides };
+  if (raw.frequency === "weekly") return { interval: 7, unit: "days", endDate, customAmounts };
+  if (raw.frequency === "yearly") return { interval: 1, unit: "years", endDate, customAmounts };
+  return { interval: 1, unit: "months", endDate, customAmounts };
 }
 
 function migrateAccount(raw: any): Account {

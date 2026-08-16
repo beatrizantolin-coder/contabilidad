@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import type { AccountType, CategoryKind, ID, LedgerDocument, RecurUnit, TransactionStatus } from "../types";
 import type { TxDraft } from "../lib/txDraft";
 import { Field } from "./Field";
 import { ColorSwatches } from "./ColorSwatches";
+import { DateField } from "./DateField";
 import { T, dot, inputStyle, STATUSES, statusInfo, RECUR_UNITS, PALETTE, ACCOUNT_TYPES } from "../theme";
-import { shortDate, todayISO } from "../lib/format";
-import { upcomingOccurrenceDates } from "../lib/recurring";
+import { todayISO } from "../lib/format";
 
 const NEW_OPTION = "__new__";
 
@@ -304,62 +304,59 @@ export function TransactionForm({
               Sin fecha final (se repite indefinidamente)
             </label>
 
-            <Field label="Importe">
-              <div style={{ display: "flex", gap: 6 }}>
-                {(
-                  [
-                    ["fixed", "Fijo"],
-                    ["variable", "Variable"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setTxDraft((d) => ({ ...d, amountMode: value }))}
-                    style={{
-                      flex: 1, padding: "7px 0", borderRadius: 6, border: "1px solid " + (txDraft.amountMode === value ? T.accent : T.border),
-                      background: txDraft.amountMode === value ? "#EAF1FC" : "#FFFFFF", color: txDraft.amountMode === value ? T.accent : T.textMuted,
-                      fontSize: 12, fontWeight: 600,
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </Field>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.textMuted }}>
+              <input type="checkbox" checked={txDraft.variableAmount} onChange={(e) => setTxDraft((d) => ({ ...d, variableAmount: e.target.checked }))} />
+              Importe personalizado
+            </label>
 
-            {txDraft.amountMode === "variable" && (
+            {txDraft.variableAmount && (
               <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 10, background: T.bgElevated, border: "1px solid " + T.border, borderRadius: 8 }}>
-                <span style={{ fontSize: 11.5, color: T.textMuted }}>
-                  Importe personalizado por recurrencia hasta fin de ano. Sin personalizar, se usa el importe predeterminado ({txDraft.amount || "0"}).
-                </span>
-                {upcomingOccurrenceDates(txDraft.date || todayISO(), {
-                  interval: Number(txDraft.freqInterval) || 1,
-                  unit: txDraft.freqUnit,
-                  endDate: txDraft.freqNoEnd ? null : txDraft.recurringEndDate || null,
-                  amountMode: "variable",
-                  overrides: {},
-                }).map((occDate) => (
-                  <div key={occDate} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 12, color: T.textMuted, width: 70, flexShrink: 0 }}>{shortDate(occDate)}</span>
+                {txDraft.customAmounts.map((entry, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <div style={{ flex: 1 }}>
+                      <DateField
+                        value={entry.date}
+                        onChange={(v) =>
+                          setTxDraft((d) => {
+                            const next = d.customAmounts.slice();
+                            next[idx] = { ...next[idx], date: v };
+                            return { ...d, customAmounts: next };
+                          })
+                        }
+                      />
+                    </div>
                     <input
                       type="number"
                       step="0.01"
-                      placeholder={txDraft.amount || "0.00"}
-                      value={txDraft.overrides[occDate] ?? ""}
+                      placeholder="Importe"
+                      value={entry.amount}
                       onChange={(e) => {
                         const val = e.target.value;
                         setTxDraft((d) => {
-                          const next = { ...d.overrides };
-                          if (val === "") delete next[occDate];
-                          else next[occDate] = val;
-                          return { ...d, overrides: next };
+                          const next = d.customAmounts.slice();
+                          next[idx] = { ...next[idx], amount: val };
+                          return { ...d, customAmounts: next };
                         });
                       }}
-                      style={{ ...inputStyle, flex: 1 }}
+                      style={{ ...inputStyle, width: 100 }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setTxDraft((d) => ({ ...d, customAmounts: d.customAmounts.filter((_, i) => i !== idx) }))}
+                      style={{ background: "none", border: "none", color: T.textFaint, padding: 4 }}
+                      aria-label="Eliminar importe personalizado"
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setTxDraft((d) => ({ ...d, customAmounts: d.customAmounts.concat([{ date: d.date || todayISO(), amount: d.amount || "" }]) }))}
+                  style={{ background: "none", border: "1px dashed " + T.border, borderRadius: 6, padding: "6px 10px", color: T.accent, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5, justifyContent: "center" }}
+                >
+                  <Plus size={12} /> Añadir importe personalizado
+                </button>
               </div>
             )}
           </>

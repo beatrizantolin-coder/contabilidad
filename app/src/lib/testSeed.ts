@@ -33,7 +33,7 @@ export function createTestDocument(): LedgerDocument {
   push({
     accountId: checkingId, date: daysAgoISO(25), name: "Nomina", comment: "",
     categoryId: catNomina, subcategoryId: null, subsubcategoryId: null,
-    amount: 2200, type: "income", recurring: { interval: 1, unit: "months", endDate: null, amountMode: "fixed", overrides: {} }, status: "reconciliado",
+    amount: 2200, type: "income", recurring: { interval: 1, unit: "months", endDate: null, customAmounts: [] }, status: "reconciliado",
   } as Omit<Transaction, "id" | "seq">);
   push({
     accountId: checkingId, date: daysAgoISO(20), name: "Supermercado", comment: "Compra semanal",

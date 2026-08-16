@@ -4,7 +4,7 @@ import type { Account, AccountType, Budgets, Category, CategoryKind, ID, LedgerD
 import { catInfo } from "./categories";
 import { genId, genSeq } from "./id";
 import { freqLabel, todayISO } from "./format";
-import { occurrenceAmount, type ProgramadorRow } from "./recurring";
+import { isVariableSeries, occurrenceAmount, type ProgramadorRow } from "./recurring";
 import { readTextFile, writeTextFile } from "./storage";
 import { PALETTE } from "../theme";
 
@@ -129,7 +129,7 @@ export function buildProgramadorExportRows(rows: ProgramadorRow[], accounts: Acc
     Tipo: row.tx.type === "income" ? "Ingreso" : row.tx.type === "expense" ? "Gasto" : "Transferencia",
     Periodicidad: freqLabel(row.tx.recurring),
     Descripcion: row.tx.name,
-    Recurrencia: row.tx.recurring?.amountMode === "variable" ? "Variable" : "Fija",
+    Recurrencia: isVariableSeries(row.tx.recurring) ? "Variable" : "Fija",
     Importe: occurrenceAmount(Number(row.tx.amount), row.tx.recurring, row.date),
   }));
 }
