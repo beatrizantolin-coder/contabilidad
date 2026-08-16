@@ -10,7 +10,7 @@ import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
 import { endOfNthMonthISO, freqPerMonth, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, startOfCurrentWeekISO, endOfCurrentWeekISO, todayISO } from "./lib/format";
 import { computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
-import { computeEvoPoints, computeEvoTicks, type EvoRange } from "./lib/evolution";
+import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
 import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
@@ -24,7 +24,7 @@ import { RecurringView } from "./components/RecurringView";
 import { CategoriesView } from "./components/CategoriesView";
 import { CategoryEditForm } from "./components/CategoryEditForm";
 import { FiltersView } from "./components/FiltersView";
-import { BalanceChart } from "./components/BalanceChart";
+import { PrevisionPanel } from "./components/PrevisionPanel";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { RenameDocumentModal } from "./components/RenameDocumentModal";
 import { buildAppMenu, type AppMenuHandlers } from "./lib/appMenu";
@@ -58,6 +58,13 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("cuentas");
   const [showPrevision, setShowPrevision] = useState(true);
+  // El icono de la barra de herramientas (en cualquier pantalla) y el de la
+  // barra lateral controlan el mismo estado; alternar desde la toolbar
+  // tambien marca "previsiones" como seccion activa del sidebar.
+  function toggleShowPrevisionFromToolbar() {
+    setShowPrevision((s) => !s);
+    setSidebarSection("previsiones");
+  }
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters());
@@ -347,6 +354,10 @@ export default function App() {
     [accounts, chronological, transactions, scopeIds, runningMaps, evoRange],
   );
   const evoTicks = useMemo(() => computeEvoTicks(evoPoints), [evoPoints]);
+  const previsionMovements = useMemo(
+    () => computePrevisionMovements(chronological, transactions, scopeIds, evoRange),
+    [chronological, transactions, scopeIds, evoRange],
+  );
 
   function setAccounts(fn: (a: Account[]) => Account[]) {
     if (!activeDocId) return;
@@ -1292,7 +1303,17 @@ export default function App() {
                   />
                 )}
 
-                {view === "filters" && <FiltersView docName={activeDoc.name} savedFilters={savedFilters} onApply={applySavedFilter} onRemove={removeSavedFilter} onNewFilter={handleNewFilterMenu} />}
+                {view === "filters" && (
+                  <FiltersView
+                    docName={activeDoc.name}
+                    savedFilters={savedFilters}
+                    onApply={applySavedFilter}
+                    onRemove={removeSavedFilter}
+                    onNewFilter={handleNewFilterMenu}
+                    showPrevision={showPrevision}
+                    onTogglePrevision={toggleShowPrevisionFromToolbar}
+                  />
+                )}
 
                 {view === "transactions" && (
                   <TransactionsView
@@ -1341,7 +1362,21 @@ export default function App() {
                     onDeleteSelected={deleteSelected}
                     footerLabel="Total seleccionado"
                     footerAmount={scopedTotal}
-                    chart={<BalanceChart points={evoPoints} ticks={evoTicks} evoRange={evoRange} setEvoRange={setEvoRange} />}
+                    showPrevision={showPrevision}
+                    onTogglePrevision={toggleShowPrevisionFromToolbar}
+                  />
+                )}
+
+                {showPrevision && (
+                  <PrevisionPanel
+                    points={evoPoints}
+                    ticks={evoTicks}
+                    movements={previsionMovements}
+                    categories={categories}
+                    accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
+                    evoRange={evoRange}
+                    setEvoRange={setEvoRange}
+                    onClose={() => setShowPrevision(() => false)}
                   />
                 )}
               </div>

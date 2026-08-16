@@ -88,9 +88,28 @@ export const smallBtn = (active: boolean): CSSProperties => ({
   border: "1px solid " + (active ? T.accent : T.border),
   color: active ? T.accent : T.textMuted,
   borderRadius: 6,
-  padding: "6px 10px",
+  padding: "0 10px",
   fontSize: 12,
   fontWeight: 600,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 5,
+  height: 30,
+  boxSizing: "border-box",
+});
+
+/** Version reducida (24px) de smallBtn, reservada a los presets rapidos de rango de fechas (1M/3M/6M/1A/Fin de año). */
+export const tinyBtn = (active: boolean): CSSProperties => ({
+  background: active ? T.accent : "#FFFFFF",
+  color: active ? "#fff" : T.textMuted,
+  border: "1px solid " + (active ? T.accent : T.border),
+  borderRadius: 5,
+  padding: "0 8px",
+  fontSize: 11,
+  fontWeight: 600,
+  height: 24,
+  boxSizing: "border-box",
 });
 
 export const dot = (color: string, size?: number): CSSProperties => ({

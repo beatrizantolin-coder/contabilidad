@@ -1,6 +1,6 @@
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, TrendingUp } from "lucide-react";
 import type { SavedFilter } from "../types";
-import { T } from "../theme";
+import { T, smallBtn } from "../theme";
 import { shortDate } from "../lib/format";
 
 export function FiltersView({
@@ -9,12 +9,16 @@ export function FiltersView({
   onApply,
   onRemove,
   onNewFilter,
+  showPrevision,
+  onTogglePrevision,
 }: {
   docName: string;
   savedFilters: SavedFilter[];
   onApply: (sf: SavedFilter) => void;
   onRemove: (id: string) => void;
   onNewFilter: () => void;
+  showPrevision: boolean;
+  onTogglePrevision: () => void;
 }) {
   return (
     <div style={{ padding: "20px 24px", overflow: "auto", flex: 1, minHeight: 0 }}>
@@ -23,9 +27,14 @@ export function FiltersView({
           <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: "0 0 4px" }}>Filtros</h2>
           <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 18px" }}>Filtros guardados en {docName}. Haz clic en uno para aplicarlo.</p>
         </div>
-        <button onClick={onNewFilter} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
-          <Plus size={14} /> Nuevo filtro
-        </button>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <button onClick={onTogglePrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(showPrevision)}>
+            <TrendingUp size={12} />
+          </button>
+          <button onClick={onNewFilter} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600 }}>
+            <Plus size={14} /> Nuevo filtro
+          </button>
+        </div>
       </div>
 
       {savedFilters.length === 0 && (

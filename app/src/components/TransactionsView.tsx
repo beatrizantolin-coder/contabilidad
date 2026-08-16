@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, FolderPlus, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, smallBtn, statusInfo } from "../theme";
@@ -59,7 +59,8 @@ export function TransactionsView({
   onDeleteSelected,
   footerLabel,
   footerAmount,
-  chart,
+  showPrevision,
+  onTogglePrevision,
 }: {
   title: string;
   monthIncome: number;
@@ -107,7 +108,8 @@ export function TransactionsView({
   onDeleteSelected: () => void;
   footerLabel: string;
   footerAmount: number;
-  chart?: ReactNode;
+  showPrevision: boolean;
+  onTogglePrevision: () => void;
 }) {
   const [draggedTxId, setDraggedTxId] = useState<ID | null>(null);
   const [dragOverTxId, setDragOverTxId] = useState<ID | null>(null);
@@ -215,6 +217,9 @@ export function TransactionsView({
           <button onClick={onImport} style={smallBtn(false)}>
             <Upload size={12} style={{ verticalAlign: -1, marginRight: 4 }} />
             Importar
+          </button>
+          <button onClick={onTogglePrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(showPrevision)}>
+            <TrendingUp size={12} />
           </button>
           <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600 }}>
             <Plus size={14} /> Movimiento
@@ -399,8 +404,6 @@ export function TransactionsView({
           });
         })()}
       </div>
-
-      <div className="no-print">{chart}</div>
 
       <div style={{ borderTop: "1px solid " + T.border, padding: "8px 20px", background: T.bgElevated, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11.5, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{footerLabel}</span>

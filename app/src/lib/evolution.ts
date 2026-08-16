@@ -83,6 +83,51 @@ export function computeEvoPoints(
   return pts;
 }
 
+export interface PrevisionMovement {
+  date: string;
+  tx: Transaction;
+  amount: number;
+  real: boolean;
+}
+
+/** Lista de movimientos (reales + proyectados) dentro del rango de la Prevision de balance, para su tabla de detalle. */
+export function computePrevisionMovements(
+  chronological: Transaction[],
+  transactions: Transaction[],
+  scopeIds: Set<ID>,
+  evoRange: EvoRange,
+): PrevisionMovement[] {
+  const fullSrc = chronological.filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds)));
+  const rangeFrom = evoRange.from || todayISO();
+  const rangeTo = evoRange.to || endOfYearISO();
+  const realInRange = fullSrc.filter((t) => t.date >= rangeFrom && t.date <= rangeTo);
+
+  const seriesLatest = new Map<string, Transaction>();
+  transactions.forEach((t) => {
+    if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
+    if (!scopeIds.has(t.accountId)) return;
+    const key = seriesKey(t);
+    const current = seriesLatest.get(key);
+    if (!current || t.date > current.date) seriesLatest.set(key, t);
+  });
+  const projected: PrevisionMovement[] = [];
+  seriesLatest.forEach((tx) => {
+    if (!tx.recurring) return;
+    let d = nextDate(tx.date, tx.recurring);
+    let guard = 0;
+    while (d <= rangeTo && guard < 500) {
+      if (d >= rangeFrom) projected.push({ date: d, tx, amount: occurrenceAmount(Number(tx.amount), tx.recurring, d), real: false });
+      d = nextDate(d, tx.recurring);
+      guard++;
+    }
+  });
+
+  return realInRange
+    .map((t): PrevisionMovement => ({ date: t.date, tx: t, amount: Number(t.amount), real: true }))
+    .concat(projected)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
 export interface EvoTick {
   time: number;
   label: string;
