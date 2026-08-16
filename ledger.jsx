@@ -5,8 +5,8 @@ import {
   Repeat, ArrowRightLeft, Search, Download, Upload, SlidersHorizontal, FolderOpen,
   PiggyBank, CreditCard, CheckCircle2, Circle, CircleDashed, Clock, XCircle,
   CircleDollarSign, Banknote, ChevronDown, ChevronRight, Save, Undo2, Redo2, PanelLeftClose, PanelLeft, List,
-  FileText, Link2, FolderPlus, CalendarDays, Eraser, ArrowUpCircle, ArrowDownCircle, ArrowUpDown,
-  Calendar as CalendarIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon,
+  FileText, Link2, FolderPlus, CalendarDays, Eraser, ArrowUpCircle, ArrowDownCircle, ArrowUpDown, ArrowLeftRight,
+  Calendar as CalendarIcon, ChevronLeft as ChevronLeftIcon, ChevronRight as ChevronRightIcon, LineChart as TrendingUpIcon, Landmark, Tag,
 } from "lucide-react";
 
 const STATUSES = [
@@ -65,6 +65,16 @@ function freqLabel(r) {
   const word = Number(r.interval) === 1 ? labels[0] : labels[1];
   return "Cada " + r.interval + " " + word;
 }
+function occurrenceAmount(recurring, defaultAmount, date) {
+  if (recurring && recurring.customAmounts) {
+    const match = recurring.customAmounts.find((e) => e.date === date);
+    if (match) return match.amount;
+  }
+  return Number(defaultAmount);
+}
+function isVariableSeries(recurring) {
+  return !!(recurring && recurring.customAmounts && recurring.customAmounts.length > 0);
+}
 function freqPerMonth(r) {
   const interval = Number(r.interval) || 1;
   if (r.unit === "days") return 30.44 / interval;
@@ -77,6 +87,11 @@ const endOfYearISO = () => new Date().getFullYear() + "-12-31";
 const startOfCurrentMonthISO = () => {
   const d = new Date();
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+};
+const endOfCurrentMonthISO = () => {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1, 0);
+  return d.toISOString().slice(0, 10);
 };
 const endOfNthMonthISO = (n) => {
   const d = new Date();
@@ -293,6 +308,7 @@ const emptyDraft = (accounts, docId, categories) => ({
   status: "pendiente",
   recurringOn: false,
   variableAmount: false,
+  customAmounts: [],
   freqInterval: 1,
   freqUnit: "months",
   freqEndDate: "",
@@ -446,6 +462,10 @@ const smallBtn = (active) => ({
   color: active ? T.accent : T.textMuted, borderRadius: 6, padding: "0 10px", fontSize: 12, fontWeight: 600,
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 30, boxSizing: "border-box",
 });
+const tinyBtn = (active) => ({
+  background: active ? T.accent : "#FFFFFF", color: active ? "#fff" : T.textMuted, border: "1px solid " + (active ? T.accent : T.border),
+  borderRadius: 5, padding: "0 8px", fontSize: 11, fontWeight: 600, height: 24, boxSizing: "border-box",
+});
 const dot = (color, size) => ({ width: size || 8, height: size || 8, borderRadius: "50%", background: color, flexShrink: 0, display: "inline-block" });
 
 function KindBadge({ kind, size }) {
@@ -453,7 +473,7 @@ function KindBadge({ kind, size }) {
   if (kind === "income") return <ArrowUpCircle size={s} style={{ color: T.income, flexShrink: 0 }} />;
   if (kind === "transfer") return (
     <div style={{ width: s, height: s, borderRadius: "50%", border: "1.5px solid " + T.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-      <ArrowUpDown size={s - 6} style={{ color: T.accent }} />
+      <ArrowLeftRight size={s - 6} style={{ color: T.accent }} />
     </div>
   );
   return <ArrowDownCircle size={s} style={{ color: T.expense, flexShrink: 0 }} />;
@@ -521,19 +541,32 @@ export default function LedgerApp() {
   });
   const [bulkEditTouched, setBulkEditTouched] = useState(new Set());
   const fileInputRef = useRef(null);
+  const catImportRef = useRef(null);
+  const progImportRef = useRef(null);
   const draggedGroupKeyRef = useRef(null);
 
   const [filters, setFilters] = useState({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "", matchMode: "all" });
   const [showSaveFilterForm, setShowSaveFilterForm] = useState(false);
-  const [programadorSort, setProgramadorSort] = useState("fecha");
+  const [programadorSort, setProgramadorSort] = useState({ field: null, dir: "desc" });
+  const [progSearch, setProgSearch] = useState("");
+  const [progAccountFilter, setProgAccountFilter] = useState(new Set());
+  const [progTypeFilter, setProgTypeFilter] = useState("all");
+  const [progGroupBy, setProgGroupBy] = useState("none");
+  const [progAccountPopoverOpen, setProgAccountPopoverOpen] = useState(false);
   const [collapsedMonths, setCollapsedMonths] = useState(new Set());
   const [sidebarWidth, setSidebarWidth] = useState(230);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNewDestino, setShowNewDestino] = useState(false);
   const [newDestinoDraft, setNewDestinoDraft] = useState({ name: "", opening: "", type: "checking" });
   const [txSort, setTxSort] = useState({ field: "fecha", dir: "desc" });
+  const [groupingActive, setGroupingActive] = useState(false);
+  const [showPrevision, setShowPrevision] = useState(true);
+  const [sidebarSection, setSidebarSection] = useState("cuentas");
   const [collapsedProgramadorGroups, setCollapsedProgramadorGroups] = useState(new Set());
-  const [catTab, setCatTab] = useState("expense");
+  const [catTypeFilter, setCatTypeFilter] = useState("all");
+  const [catShowMode, setCatShowMode] = useState("categories");
+  const [catSearch, setCatSearch] = useState("");
+  const [catSort, setCatSort] = useState({ field: null, dir: "asc" });
   const [expandedCategories, setExpandedCategories] = useState(new Set());
   const [showCatEdit, setShowCatEdit] = useState(false);
   const [catEditId, setCatEditId] = useState(null);
@@ -710,6 +743,38 @@ export default function LedgerApp() {
     return runningMaps.idToTotal[t.id];
   }
 
+  const previsionMovements = useMemo(() => {
+    const fullSrc = chronological.filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t)));
+    const rangeFrom = evoRange.from || todayISO();
+    const rangeTo = evoRange.to || endOfYearISO();
+    const realInRange = fullSrc.filter((t) => t.date >= rangeFrom && t.date <= rangeTo);
+
+    const seriesLatest = {};
+    transactions.forEach((t) => {
+      if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
+      if (!scopeIds.has(t.accountId)) return;
+      const key = seriesKeyOf(t);
+      if (!seriesLatest[key] || t.date > seriesLatest[key].date) seriesLatest[key] = t;
+    });
+    const projected = [];
+    Object.values(seriesLatest).forEach((tx) => {
+      let d = nextDate(tx.date, tx.recurring);
+      let guard = 0;
+      const until = tx.recurring.until;
+      while (d <= rangeTo && guard < 500 && (!until || d <= until)) {
+        if (d >= rangeFrom) {
+          projected.push({ date: d, tx: tx, amount: occurrenceAmount(tx.recurring, tx.amount, d), real: false });
+        }
+        d = nextDate(d, tx.recurring);
+        guard++;
+      }
+    });
+
+    return realInRange.map((t) => ({ date: t.date, tx: t, amount: Number(t.amount), real: true }))
+      .concat(projected)
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }, [chronological, scopeIds, transactions, evoRange]);
+
   const evoPoints = useMemo(() => {
     const openingSum = accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + a.opening, 0);
     const fullSrc = chronological.filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t)));
@@ -743,7 +808,7 @@ export default function LedgerApp() {
       const until = tx.recurring.until;
       while (d <= rangeTo && guard < 500 && (!until || d <= until)) {
         if (d >= rangeFrom) {
-          projected.push({ date: d, amount: Number(tx.amount), sign: tx.type === "income" ? 1 : -1 });
+          projected.push({ date: d, amount: occurrenceAmount(tx.recurring, tx.amount, d), sign: tx.type === "income" ? 1 : -1 });
         }
         d = nextDate(d, tx.recurring);
         guard++;
@@ -787,6 +852,40 @@ export default function LedgerApp() {
     return transactions.filter((t) => t.recurring && t.type !== "transfer_in");
   }, [transactions]);
 
+  const programadorMonthStats = useMemo(() => {
+    const start = startOfCurrentMonthISO();
+    const end = endOfCurrentMonthISO();
+    const latestBySeries = {};
+    transactions.forEach((t) => {
+      if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
+      const key = seriesKeyOf(t);
+      if (!latestBySeries[key] || t.date > latestBySeries[key].date) latestBySeries[key] = t;
+    });
+    let income = 0;
+    let expense = 0;
+    Object.values(latestBySeries).forEach((tx) => {
+      let d = tx.date;
+      let guard = 0;
+      const until = tx.recurring.until;
+      // Incluye la propia fecha ancla si cae dentro del mes en curso.
+      if (d >= start && d <= end) {
+        const amt = occurrenceAmount(tx.recurring, tx.amount, d);
+        if (tx.type === "income") income += amt; else expense += amt;
+      }
+      while (guard < 60) {
+        d = nextDate(d, tx.recurring);
+        guard++;
+        if (until && d > until) break;
+        if (d > end) break;
+        if (d >= start) {
+          const amt = occurrenceAmount(tx.recurring, tx.amount, d);
+          if (tx.type === "income") income += amt; else expense += amt;
+        }
+      }
+    });
+    return { income: income, expense: expense };
+  }, [transactions]);
+
   const programadorRows = useMemo(() => {
     const latestBySeries = {};
     transactions.forEach((t) => {
@@ -818,7 +917,7 @@ export default function LedgerApp() {
 
   function openProgramadorRow(row) {
     if (row.real) { editTx(row.tx); return; }
-    const newTx = Object.assign({}, row.tx, { id: nextId(), date: row.date, status: "programado" });
+    const newTx = Object.assign({}, row.tx, { id: nextId(), date: row.date, status: "programado", amount: occurrenceAmount(row.tx.recurring, row.tx.amount, row.date) });
     setTransactions((prev) => prev.concat([newTx]));
     editTx(newTx);
   }
@@ -906,7 +1005,7 @@ export default function LedgerApp() {
           if (tx.recurring.until && nd > tx.recurring.until) return;
           const exists = txs.some((t) => t.date === nd && t.accountId === tx.accountId && t.name === tx.name && t.categoryId === tx.categoryId && t.subcategoryId === tx.subcategoryId && t.type === tx.type && Number(t.amount) === Number(tx.amount));
           if (exists) return;
-          additions.push(Object.assign({}, tx, { id: nextId(), date: nd, status: "programado" }));
+          additions.push(Object.assign({}, tx, { id: nextId(), date: nd, status: "programado", amount: occurrenceAmount(tx.recurring, tx.amount, nd) }));
         });
         if (additions.length === 0 && dueFlip.length === 0) return doc;
         changed = true;
@@ -921,7 +1020,8 @@ export default function LedgerApp() {
     if (!txDraft.name || !txDraft.amount || !txDraft.accountId) return;
     const effectiveDate = txDraft.date || todayISO();
     const amount = Number(txDraft.amount);
-    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, until: txDraft.freqNoEnd ? null : (txDraft.freqEndDate || null), variable: !!txDraft.variableAmount, defaultAmount: amount } : null;
+    const cleanCustomAmounts = (txDraft.customAmounts || []).filter((e) => e.date && e.amount !== "" && e.amount !== null).map((e) => ({ date: e.date, amount: Number(e.amount) }));
+    const recurring = txDraft.recurringOn ? { interval: Number(txDraft.freqInterval) || 1, unit: txDraft.freqUnit, until: txDraft.freqNoEnd ? null : (txDraft.freqEndDate || null), variable: !!txDraft.variableAmount, customAmounts: cleanCustomAmounts } : null;
 
     if (txDraft.type === "transfer") {
       if (txDraft.toDocId === activeDocId && txDraft.toAccountId === txDraft.accountId) return;
@@ -987,14 +1087,14 @@ export default function LedgerApp() {
         toDocId: isIncoming ? activeDocId : (t.toDocId || activeDocId),
         toAccountId: isIncoming ? t.accountId : t.toAccountId,
         date: t.date, name: t.name, categoryId: null, subcategoryId: null, amount: String(t.amount),
-        type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, variableAmount: !!(t.recurring && t.recurring.variable), freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months", freqEndDate: (t.recurring && t.recurring.until) || "", freqNoEnd: !(t.recurring && t.recurring.until),
+        type: "transfer", status: t.status || "pendiente", recurringOn: !!t.recurring, variableAmount: !!(t.recurring && t.recurring.variable), customAmounts: (t.recurring && t.recurring.customAmounts) ? t.recurring.customAmounts.map((e) => ({ date: e.date, amount: String(e.amount) })) : [], freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months", freqEndDate: (t.recurring && t.recurring.until) || "", freqNoEnd: !(t.recurring && t.recurring.until),
       });
     } else {
       setTxDraft({
         id: t.id, accountId: t.accountId, toDocId: activeDocId, toAccountId: accounts[0]?.id,
         date: t.date, name: t.name, comment: t.comment || "", categoryId: t.categoryId, subcategoryId: t.subcategoryId, subsubcategoryId: t.subsubcategoryId,
         amount: String(t.amount),
-        type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, variableAmount: !!(t.recurring && t.recurring.variable), freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months", freqEndDate: (t.recurring && t.recurring.until) || "", freqNoEnd: !(t.recurring && t.recurring.until),
+        type: t.type, status: t.status || "pendiente", recurringOn: !!t.recurring, variableAmount: !!(t.recurring && t.recurring.variable), customAmounts: (t.recurring && t.recurring.customAmounts) ? t.recurring.customAmounts.map((e) => ({ date: e.date, amount: String(e.amount) })) : [], freqInterval: t.recurring ? t.recurring.interval : 1, freqUnit: t.recurring ? t.recurring.unit : "months", freqEndDate: (t.recurring && t.recurring.until) || "", freqNoEnd: !(t.recurring && t.recurring.until),
       });
     }
     setShowTxForm(true);
@@ -1066,6 +1166,7 @@ export default function LedgerApp() {
     setTxSort({ field: "fecha", dir: "desc" });
     setMovementRangeDraft({ from: todayISO(), to: endOfYearISO() });
     setCollapsedMonths(new Set());
+    setGroupingActive(false);
     setShowMovementsRange(false);
     setShowFilters(false);
   }
@@ -1373,6 +1474,59 @@ export default function LedgerApp() {
     URL.revokeObjectURL(url);
   }
 
+  function exportCategories() {
+    const rows = [];
+    categories.forEach((c) => {
+      rows.push({ Nombre: c.name, Tipo: c.kind === "income" ? "Ingreso" : c.kind === "transfer" ? "Transferencia" : "Gasto", Subcategoria: "", Presupuesto: budgets[c.id] || "" });
+      c.subcategories.forEach((s) => {
+        rows.push({ Nombre: c.name, Tipo: c.kind === "income" ? "Ingreso" : c.kind === "transfer" ? "Transferencia" : "Gasto", Subcategoria: s.name, Presupuesto: budgets[s.id] || "" });
+      });
+    });
+    const csv = Papa.unparse(rows);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = activeDoc.name + "-categorias.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importCategoriesCSV(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true,
+      complete: (res) => {
+        let nextCategories = categories.slice();
+        const budgetPatch = {};
+        res.data.forEach((row) => {
+          const name = (row.Nombre || "").trim();
+          if (!name) return;
+          const kindLabel = (row.Tipo || "").toLowerCase();
+          const kind = kindLabel.indexOf("ingreso") === 0 ? "income" : kindLabel.indexOf("transfer") === 0 ? "transfer" : "expense";
+          let cat = nextCategories.find((c) => c.name.toLowerCase() === name.toLowerCase() && (c.kind || "expense") === kind);
+          if (!cat) {
+            cat = { id: nextId(), name: name, color: PALETTE[nextCategories.length % PALETTE.length], kind: kind, subcategories: [] };
+            nextCategories = nextCategories.concat([cat]);
+          }
+          const subName = (row.Subcategoria || "").trim();
+          if (subName) {
+            let sub = cat.subcategories.find((s) => s.name.toLowerCase() === subName.toLowerCase());
+            if (!sub) {
+              sub = { id: nextId(), name: subName, color: cat.color, subcategories: [] };
+              cat.subcategories = cat.subcategories.concat([sub]);
+            }
+            if (row.Presupuesto) budgetPatch[sub.id] = Number(row.Presupuesto);
+          } else if (row.Presupuesto) {
+            budgetPatch[cat.id] = Number(row.Presupuesto);
+          }
+        });
+        setCategories(nextCategories);
+        setBudgets((b) => Object.assign({}, b, budgetPatch));
+      },
+    });
+    e.target.value = "";
+  }
+
   function importCSV(e) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -1410,6 +1564,53 @@ export default function LedgerApp() {
             const unit = ["days", "months", "years"].indexOf(parts[1]) >= 0 ? parts[1] : "months";
             return { interval: Number(parts[0]) || 1, unit: unit };
           })() : null,
+        });
+      });
+      setAccounts(nextAccounts);
+      setCategories(nextCategories);
+      setTransactions((prev) => prev.concat(imported));
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  function importProgramadorCSV(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const parsed = Papa.parse(String(reader.result), { header: true, skipEmptyLines: true });
+      const data = parsed.data;
+      const byName = {};
+      accounts.forEach((a) => (byName[a.name] = a.id));
+      let nextAccounts = accounts.slice();
+      let nextCategories = categories.slice();
+      const imported = [];
+      data.forEach((row) => {
+        const accNameField = row.Cuenta && row.Cuenta.trim();
+        if (!accNameField) return;
+        let accId = byName[accNameField];
+        if (!accId) {
+          accId = nextId();
+          nextAccounts.push({ id: accId, name: accNameField, opening: 0, warning: 0, type: "checking" });
+          byName[accNameField] = accId;
+        }
+        const tipo = (row.Tipo || "").toLowerCase();
+        const type = tipo.indexOf("ingreso") === 0 ? "income" : "expense";
+        const catName = (row.Categoria || "Otros").trim();
+        let cat = nextCategories.find((c) => c.name.toLowerCase() === catName.toLowerCase() && (c.kind || "expense") === type);
+        if (!cat) {
+          cat = { id: nextId(), name: catName, color: PALETTE[nextCategories.length % PALETTE.length], kind: type, subcategories: [] };
+          nextCategories.push(cat);
+        }
+        const freqMatch = String(row.Periodicidad || "").match(/(\d+)\s+(\S+)/);
+        const interval = freqMatch ? Number(freqMatch[1]) || 1 : 1;
+        const unitWord = freqMatch ? freqMatch[2].toLowerCase() : "";
+        const unit = unitWord.indexOf("dia") === 0 ? "days" : unitWord.indexOf("ano") === 0 ? "years" : "months";
+        imported.push({
+          id: nextId(), accountId: accId, date: row.Fecha || todayISO(), name: row.Descripcion || "Importado",
+          categoryId: cat.id, subcategoryId: null, amount: Number(row.Importe) || 0, type: type, status: "programado",
+          recurring: { interval: interval, unit: unit },
         });
       });
       setAccounts(nextAccounts);
@@ -1555,8 +1756,48 @@ export default function LedgerApp() {
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.textMuted }}>
               <input type="checkbox" checked={!!txDraft.variableAmount} onChange={(e) => setTxDraft((d) => Object.assign({}, d, { variableAmount: e.target.checked }))} />
-              Importe variable (las recurrencias usan este importe por defecto hasta que se personalicen)
+              Importe personalizado
             </label>
+            {txDraft.variableAmount && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 10, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8 }}>
+                {(txDraft.customAmounts || []).map((entry, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <div style={{ flex: 1 }}>
+                      <DatePicker
+                        value={entry.date}
+                        onChange={(v) => setTxDraft((d) => {
+                          const next = d.customAmounts.slice();
+                          next[idx] = Object.assign({}, next[idx], { date: v });
+                          return Object.assign({}, d, { customAmounts: next });
+                        })}
+                      />
+                    </div>
+                    <input
+                      type="number" step="0.01" placeholder="Importe" value={entry.amount}
+                      onChange={(e) => setTxDraft((d) => {
+                        const next = d.customAmounts.slice();
+                        next[idx] = Object.assign({}, next[idx], { amount: e.target.value });
+                        return Object.assign({}, d, { customAmounts: next });
+                      })}
+                      style={Object.assign({}, inputStyle, { width: 100 })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setTxDraft((d) => Object.assign({}, d, { customAmounts: d.customAmounts.filter((_, i) => i !== idx) }))}
+                      style={{ background: "none", border: "none", color: T.textFaint, padding: 4 }}
+                      aria-label="Eliminar importe personalizado"
+                    ><X size={13} /></button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setTxDraft((d) => Object.assign({}, d, { customAmounts: (d.customAmounts || []).concat([{ date: todayISO(), amount: d.amount || "" }]) }))}
+                  style={{ background: "none", border: "1px dashed " + T.border, borderRadius: 6, padding: "6px 10px", color: T.accent, fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 5, justifyContent: "center" }}
+                >
+                  <Plus size={12} /> Anadir importe personalizado
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1884,25 +2125,40 @@ export default function LedgerApp() {
           </div>
 
           {sidebarCollapsed ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, color: T.textMuted }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, color: T.textMuted }}>
               <FileText size={17} title="Documentos" />
-              <Wallet size={17} title="Cuentas" />
+              <div style={{ width: 20, borderTop: "1px solid " + T.border }} />
+              <CircleDollarSign size={17} title="Cuentas" />
+              <Landmark size={15} title="Bancos" />
+              <PiggyBank size={15} title="Ahorro" />
+              <CreditCard size={15} title="Tarjetas" />
+              <Banknote size={15} title="Efectivo" />
+              <div style={{ width: 20, borderTop: "1px solid " + T.border }} />
               <Repeat size={17} title="Programador" />
-              <CircleDollarSign size={17} title="Categorias" />
+              <Tag size={15} title="Categorias" />
               <SlidersHorizontal size={17} title="Filtros" />
+              <TrendingUpIcon size={17} title="Previsiones" style={{ color: showPrevision ? T.accent : T.textMuted }} />
             </div>
           ) : (
           <>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 10px 6px" }}>
-            <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Documentos</span>
-            <button onClick={() => setShowDocForm((s) => !s)} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Nuevo documento"><Plus size={13} /></button>
+          <div style={{ padding: "0 10px" }}>
+            <button
+              onClick={() => { setSidebarSection("documentos"); setShowDocForm((s) => !s); }}
+              className="navitem"
+              style={{ width: "100%", textAlign: "left", background: sidebarSection === "documentos" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "documentos" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}
+            >
+              <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                <FileText size={13} style={{ color: sidebarSection === "documentos" ? T.accent : T.textMuted }} /> Documentos
+              </span>
+              <Plus size={13} style={{ color: T.textMuted }} />
+            </button>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 14, padding: "0 6px 0 18px" }}>
             {documents.map((d) => (
-              <div key={d.id} className="doctab" style={{ display: "flex", flexDirection: "column", gap: 2, background: d.id === activeDocId ? "#FFFFFF" : "transparent", border: "1px solid " + (d.id === activeDocId ? T.border : "transparent"), borderRadius: 6, padding: "3px 8px" }}>
+              <div key={d.id} className="doctab" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, background: d.id === activeDocId ? "#FFFFFF" : "transparent", border: "1px solid " + (d.id === activeDocId ? T.border : "transparent"), borderRadius: 6, padding: "3px 8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <button onClick={() => { setActiveDocId(d.id); setActiveAccounts(new Set()); setView("transactions"); }} style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
-                    <FileText size={11} /> {d.name}
+                  <button onClick={() => { setActiveDocId(d.id); setActiveAccounts(new Set()); setView("transactions"); }} style={{ background: "none", border: "none", padding: 0, fontSize: 10.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
+                    <FileText size={10} /> {d.name}
                   </button>
                   {documents.length > 1 && (
                     <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}><Trash2 size={10} /></button>
@@ -1917,8 +2173,8 @@ export default function LedgerApp() {
                   <button style={{ background: "none", border: "none", color: T.textFaint, padding: "0 2px" }} aria-label={"Guardar como " + d.name} title="Guardar como"><FolderPlus size={10} /></button>
                 </div>
                 {d.id === activeDocId && (
-                  <button onClick={() => setShowDocForm(true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 0, display: "flex", alignItems: "center", gap: 3, fontSize: 10 }} aria-label="Vincular documento" title="Vincular documento">
-                    <Link2 size={10} /> Vincular
+                  <button onClick={() => setShowDocForm(true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 0, flexShrink: 0 }} aria-label="Vincular documento" title="Vincular documento">
+                    <Link2 size={11} />
                   </button>
                 )}
               </div>
@@ -1932,20 +2188,24 @@ export default function LedgerApp() {
             </form>
           )}
 
-          <div style={{ padding: "2px 8px 14px", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>{activeDoc.name}</div>
 
-          <div
-            className="navitem"
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, background: activeAccounts.size === 0 && view === "transactions" ? "#FFFFFF" : "transparent", boxShadow: activeAccounts.size === 0 && view === "transactions" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", borderRadius: 7, padding: "7px 10px 7px 10px" }}
-          >
-            <button onClick={() => { setActiveAccounts(new Set()); setView("transactions"); }} style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}>
-              <CircleDollarSign size={15} style={{ color: T.accent }} /> Grupos de cuentas
-            </button>
-            <button onClick={() => openAccountForm("checking", null, false)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1, marginLeft: 6 }} aria-label="Anadir cuenta"><Plus size={13} /></button>
+          <div style={{ padding: "0 10px", marginTop: 18 }}>
+            <div
+              className="navitem"
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: sidebarSection === "cuentas" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "cuentas" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", borderRadius: 7, padding: "7px 8px" }}
+            >
+              <button onClick={() => { setSidebarSection("cuentas"); setActiveAccounts(new Set()); setView("transactions"); }} style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                  <CircleDollarSign size={13} style={{ color: sidebarSection === "cuentas" ? T.accent : T.textMuted }} /> Cuentas
+                </span>
+              </button>
+              <button onClick={() => openAccountForm("checking", null, false)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label="Anadir cuenta"><Plus size={13} /></button>
+            </div>
           </div>
 
+          <div style={{ marginTop: 6 }}>
           {[
-            { key: "checking", label: "Cuentas", icon: Wallet },
+            { key: "checking", label: "Bancos", icon: Landmark },
             { key: "savings", label: "Ahorro", icon: PiggyBank },
             { key: "credit", label: "Tarjetas", icon: CreditCard },
             { key: "cash", label: "Efectivo", icon: Banknote },
@@ -1954,14 +2214,14 @@ export default function LedgerApp() {
             const group = accounts.filter((a) => (a.type || "checking") === section.key);
             return (
               <div key={section.key} style={{ marginBottom: 4 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 2px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 2px 18px" }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600 }}>
                     <SectionIcon size={10} /> {section.label}
                   </span>
                   <button onClick={() => openAccountForm(section.key, null, true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}><Plus size={11} /></button>
                 </div>
                 {group.length === 0 && (
-                  <div style={{ fontSize: 11, color: T.textFaint, padding: "2px 10px 4px" }}>Sin cuentas.</div>
+                  <div style={{ fontSize: 11, color: T.textFaint, padding: "2px 10px 4px 18px" }}>Sin cuentas.</div>
                 )}
                 {group.map((a) => {
                   const bal = balances[a.id] || 0;
@@ -1969,12 +2229,12 @@ export default function LedgerApp() {
                   const selected = activeAccounts.size === 0 || activeAccounts.has(a.id);
                   const highlighted = activeAccounts.size > 0 && activeAccounts.has(a.id);
                   return (
-                    <div key={a.id} className="accrow navitem" style={{ borderRadius: 7, background: highlighted ? "#FFFFFF" : "transparent", boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none", marginBottom: 2, padding: "7px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                      <button onClick={(e) => { toggleAccountSelect(a.id, e.shiftKey); setView("transactions"); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                        <SectionIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
-                        <span style={{ fontSize: 13 }}>{a.name}</span>
+                    <div key={a.id} className="accrow navitem" style={{ borderRadius: 7, background: highlighted ? "#FFFFFF" : "transparent", boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none", marginBottom: 2, padding: "7px 10px 7px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                      <button onClick={(e) => { toggleAccountSelect(a.id, e.shiftKey); setView("transactions"); setSidebarSection("cuentas"); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                        <SectionIcon size={11} style={{ color: T.textFaint, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11.5 }}>{a.name}</span>
                       </button>
-                      <span className="amount" style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA" }}>{fmt(bal)}</span>
+                      <span className="amount" style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA" }}>{fmt(bal)}</span>
                       <button onClick={() => openAccountForm(a.type, a)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Editar " + a.name}><Pencil size={11} /></button>
                       <button onClick={() => removeAccount(a.id)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Eliminar " + a.name}><Trash2 size={12} /></button>
                     </div>
@@ -1983,6 +2243,7 @@ export default function LedgerApp() {
               </div>
             );
           })}
+          </div>
 
           {showAccForm && (
             <form onSubmit={addAccount} style={{ marginTop: 8, padding: 10, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -2030,36 +2291,46 @@ export default function LedgerApp() {
 
           <div style={{ marginTop: 22, padding: "0 10px" }}>
             <button
-              onClick={() => setView("recurring")}
+              onClick={() => { setSidebarSection("recurring"); setView("recurring"); }}
               className="navitem"
-              style={{ width: "100%", textAlign: "left", background: view === "recurring" ? "#FFFFFF" : "transparent", boxShadow: view === "recurring" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+              style={{ width: "100%", textAlign: "left", background: sidebarSection === "recurring" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "recurring" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
             >
-              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                <Repeat size={12} style={{ color: view === "recurring" ? T.accent : T.textMuted }} /> Programador
+              <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                <Repeat size={13} style={{ color: sidebarSection === "recurring" ? T.accent : T.textMuted }} /> Programador
               </span>
               {programadorRows.length > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{programadorRows.length}</span>}
             </button>
           </div>
 
-          <div style={{ marginTop: 10, padding: "0 10px" }}>
+          <div style={{ marginTop: 6, padding: "0 10px" }}>
             <button
-              onClick={() => setView("categories")}
+              onClick={() => { setSidebarSection("categories"); setView("categories"); }}
               className="navitem"
-              style={{ width: "100%", textAlign: "left", background: view === "categories" ? "#FFFFFF" : "transparent", boxShadow: view === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+              style={{ width: "100%", textAlign: "left", background: sidebarSection === "categories" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
             >
-              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><List size={12} style={{ color: view === "categories" ? T.accent : T.textMuted }} /> Categorias</span>
+              <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><Tag size={13} style={{ color: sidebarSection === "categories" ? T.accent : T.textMuted }} /> Categorias</span>
               {categories.length > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{categories.length}</span>}
             </button>
           </div>
 
-          <div style={{ marginTop: 10, padding: "0 10px" }}>
+          <div style={{ marginTop: 6, padding: "0 10px" }}>
             <button
-              onClick={() => setView("filters")}
+              onClick={() => { setSidebarSection("filters"); setView("filters"); }}
               className="navitem"
-              style={{ width: "100%", textAlign: "left", background: view === "filters" ? "#FFFFFF" : "transparent", boxShadow: view === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+              style={{ width: "100%", textAlign: "left", background: sidebarSection === "filters" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
             >
-              <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><SlidersHorizontal size={12} style={{ color: view === "filters" ? T.accent : T.textMuted }} /> Filtros</span>
+              <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><SlidersHorizontal size={13} style={{ color: sidebarSection === "filters" ? T.accent : T.textMuted }} /> Filtros</span>
               {savedFilters.length > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{savedFilters.length}</span>}
+            </button>
+          </div>
+
+          <div style={{ marginTop: 6, padding: "0 10px" }}>
+            <button
+              onClick={() => { setSidebarSection("previsiones"); setShowPrevision((s) => !s); }}
+              className="navitem"
+              style={{ width: "100%", textAlign: "left", background: sidebarSection === "previsiones" && showPrevision ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "previsiones" && showPrevision ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+            >
+              <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}><TrendingUpIcon size={13} style={{ color: sidebarSection === "previsiones" && showPrevision ? T.accent : T.textMuted }} /> Previsiones</span>
             </button>
           </div>
 
@@ -2098,90 +2369,181 @@ export default function LedgerApp() {
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
           {view === "recurring" && (() => {
+            const gridTemplate = "78px 120px 36px 100px 1fr 90px 100px 56px";
+
+            const matchesProgSearch = (name) => !progSearch.trim() || name.toLowerCase().includes(progSearch.trim().toLowerCase());
+            const matchesProgAccount = (accId) => progAccountFilter.size === 0 || progAccountFilter.has(accId);
+            const matchesProgType = (type) => progTypeFilter === "all" || type === progTypeFilter;
+
+            let filteredRows = programadorRows.filter((row) => matchesProgSearch(row.tx.name) && matchesProgAccount(row.tx.accountId) && matchesProgType(row.tx.type));
+
             const sorters = {
               fecha: (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0),
               cuenta: (a, b) => accountName(a.tx.accountId).localeCompare(accountName(b.tx.accountId)) || (a.date < b.date ? -1 : 1),
+              tipo: (a, b) => a.tx.type.localeCompare(b.tx.type) || (a.date < b.date ? -1 : 1),
               periodicidad: (a, b) => freqPerMonth(a.tx.recurring) - freqPerMonth(b.tx.recurring),
               descripcion: (a, b) => a.tx.name.localeCompare(b.tx.name),
+              recurrencia: (a, b) => Number(isVariableSeries(a.tx.recurring)) - Number(isVariableSeries(b.tx.recurring)),
               importe: (a, b) => Number(a.tx.amount) - Number(b.tx.amount),
-              tipo: (a, b) => a.tx.type.localeCompare(b.tx.type) || (a.date < b.date ? -1 : 1),
             };
-            const sorted = programadorRows.slice().sort(sorters[programadorSort] || sorters.fecha);
 
+            const activeField = programadorSort.field;
+            const dirMul = programadorSort.dir === "asc" ? 1 : -1;
+            let sorted = filteredRows.slice().sort(sorters.fecha);
+            if (activeField) {
+              sorted = filteredRows.slice().sort((a, b) => dirMul * sorters[activeField](a, b));
+            }
+
+            const groupField = progGroupBy !== "none" ? progGroupBy : activeField;
             const groups = [];
-            if (programadorSort === "cuenta") {
+            const groupLabelFor = (row) => {
+              if (groupField === "cuenta") return accountName(row.tx.accountId);
+              if (groupField === "tipo") return row.tx.type === "income" ? "Ingresos" : row.tx.type === "expense" ? "Gastos" : "Transferencias";
+              if (groupField === "fecha") return monthYearLabel(row.date);
+              if (groupField === "periodicidad") return freqLabel(row.tx.recurring);
+              if (groupField === "recurrencia") return isVariableSeries(row.tx.recurring) ? "Variable" : "Fija";
+              return null;
+            };
+            if (groupField) {
               sorted.forEach((row) => {
-                const label = accountName(row.tx.accountId);
-                let g = groups.find((x) => x.label === label);
-                if (!g) { g = { label: label, rows: [] }; groups.push(g); }
-                g.rows.push(row);
-              });
-            } else if (programadorSort === "tipo") {
-              sorted.forEach((row) => {
-                const label = row.tx.type === "income" ? "Ingresos" : "Gastos";
-                let g = groups.find((x) => x.label === label);
-                if (!g) { g = { label: label, rows: [] }; groups.push(g); }
-                g.rows.push(row);
-              });
-            } else if (programadorSort === "fecha") {
-              sorted.forEach((row) => {
-                const label = monthYearLabel(row.date);
-                let g = groups.find((x) => x.label === label);
-                if (!g) { g = { label: label, rows: [] }; groups.push(g); }
+                const label = groupLabelFor(row);
+                let g = groups.length > 0 ? groups[groups.length - 1] : null;
+                if (!g || g.label !== label) { g = { label: label, rows: [] }; groups.push(g); }
                 g.rows.push(row);
               });
             } else {
               groups.push({ label: null, rows: sorted });
             }
 
-            const SortBtn = ({ value, label }) => {
-              const active = programadorSort === value;
+            const SortHead = ({ field, label, align }) => {
+              const active = activeField === field;
               return (
                 <button
-                  onClick={() => setProgramadorSort(value)}
-                  style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", color: active ? T.text : T.textMuted, fontWeight: active ? 700 : 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: 10.5, whiteSpace: "nowrap" }}
+                  onClick={() => setProgramadorSort((s) => (s.field === field ? { field: field, dir: s.dir === "desc" ? "asc" : "desc" } : { field: field, dir: "desc" }))}
+                  style={{ background: "none", border: "none", padding: 0, textAlign: align || "left", cursor: "pointer", color: active ? T.text : T.textMuted, fontWeight: active ? 700 : 600, textTransform: "uppercase", letterSpacing: "0.04em", fontSize: 10.5, whiteSpace: "nowrap", width: "100%" }}
                 >
                   {label}
                 </button>
               );
             };
 
+            const clearProgramador = () => {
+              setProgSearch("");
+              setProgAccountFilter(new Set());
+              setProgTypeFilter("all");
+              setProgGroupBy("none");
+              setProgramadorSort({ field: null, dir: "desc" });
+              setCollapsedProgramadorGroups(new Set());
+            };
+
+            const exportProgramador = () => {
+              const rows = filteredRows.map((row) => ({
+                Fecha: row.date, Cuenta: accountName(row.tx.accountId), Tipo: row.tx.type === "income" ? "Ingreso" : "Gasto",
+                Periodicidad: freqLabel(row.tx.recurring), Descripcion: row.tx.name, Recurrencia: isVariableSeries(row.tx.recurring) ? "Variable" : "Fija",
+                Importe: occurrenceAmount(row.tx.recurring, row.tx.amount, row.date),
+              }));
+              const csv = Papa.unparse(rows);
+              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url; a.download = activeDoc.name + "-programador.csv"; a.click();
+              URL.revokeObjectURL(url);
+            };
+
             return (
               <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px" }}>
-                  <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px", gap: 10, flexWrap: "nowrap" }}>
+                  <div style={{ minWidth: 0 }}>
                     <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Repeat size={17} style={{ color: T.accent }} /> Programador</h2>
-                    <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 0" }}>Proxima instancia de cada movimiento recurrente en {activeDoc.name}.</p>
-                  </div>
-                  <button onClick={openScheduledForm} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
-                    <Plus size={14} /> Nueva operacion
-                  </button>
-                </div>
-
-                {programadorRows.length > 0 && (
-                  <div style={{ padding: "10px 24px 0", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                    <span style={{ fontSize: 13, color: T.textMuted }}>
-                      Neto recurrente: <span className="amount" style={{ color: forecast.netPerMonth < 0 ? T.expense : T.income, fontWeight: 700 }}>{fmt(forecast.netPerMonth)}</span> / mes
-                    </span>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 11, color: T.textFaint, textTransform: "uppercase", letterSpacing: "0.04em" }}>Agrupar por</span>
-                      {[["fecha", "Fecha"], ["cuenta", "Cuenta"], ["tipo", "Tipo"]].map((p) => (
-                        <button key={p[0]} onClick={() => setProgramadorSort(p[0])} style={smallBtn(programadorSort === p[0])}>{p[1]}</button>
-                      ))}
+                    <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 12.5, color: T.textMuted }}>Movimientos recurrentes</span>
+                      <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}><ArrowUpCircle size={12} /> <span className="amount">{fmt(programadorMonthStats.income)}</span></span>
+                      <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}><ArrowDownCircle size={12} /> <span className="amount">{fmt(programadorMonthStats.expense)}</span></span>
+                      <span style={{ fontSize: 12, color: T.textFaint }}>{shortDate(startOfCurrentMonthISO())} - {shortDate(endOfCurrentMonthISO())}</span>
                     </div>
                   </div>
-                )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <button onClick={exportProgramador} style={smallBtn(false)}><Download size={13} />Exportar</button>
+                    <button onClick={() => progImportRef.current && progImportRef.current.click()} style={smallBtn(false)}><Upload size={13} />Importar</button>
+                    <input ref={progImportRef} type="file" accept=".csv" onChange={importProgramadorCSV} style={{ display: "none" }} />
+                    <button onClick={openScheduledForm} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600 }}>
+                      <Plus size={14} /> Nueva operacion
+                    </button>
+                  </div>
+                </div>
 
-                {programadorRows.length === 0 ? (
-                  <div style={{ fontSize: 13, color: T.textFaint, padding: "18px 24px" }}>Sin movimientos recurrentes todavia.</div>
+                <div style={{ padding: 14, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <Field label="Descripcion">
+                      <div style={{ position: "relative" }}>
+                        <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
+                        <input placeholder="Buscar" value={progSearch} onChange={(e) => setProgSearch(e.target.value)} style={Object.assign({}, inputStyle, { paddingLeft: 28, width: 160 })} />
+                      </div>
+                    </Field>
+                    <Field label="Cuenta">
+                      <div style={{ position: "relative" }}>
+                        <button
+                          type="button" onClick={() => setProgAccountPopoverOpen((s) => !s)}
+                          style={Object.assign({}, inputStyle, { width: 150, textAlign: "left", cursor: "pointer", color: progAccountFilter.size === 0 ? T.textFaint : T.text })}
+                        >
+                          {progAccountFilter.size === 0 ? "Todas" : progAccountFilter.size + " seleccionada" + (progAccountFilter.size === 1 ? "" : "s")}
+                        </button>
+                        {progAccountPopoverOpen && (
+                          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, padding: 8, zIndex: 30, minWidth: 190, maxHeight: 240, overflowY: "auto", boxShadow: "0 4px 14px rgba(0,0,0,0.1)" }}>
+                            <button type="button" onClick={() => setProgAccountFilter(new Set())} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 4px", background: "none", border: "none", textAlign: "left", cursor: "pointer" }}>
+                              <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid " + (progAccountFilter.size === 0 ? T.accent : T.border), background: progAccountFilter.size === 0 ? T.accent : "#FFFFFF" }} />
+                              <span style={{ fontSize: 12.5, fontWeight: 600 }}>Todas</span>
+                            </button>
+                            <div style={{ borderTop: "1px solid " + T.borderSoft, margin: "4px 0" }} />
+                            {accounts.map((a) => (
+                              <button
+                                key={a.id} type="button"
+                                onClick={() => setProgAccountFilter((prev) => { const next = new Set(prev); if (next.has(a.id)) next.delete(a.id); else next.add(a.id); return next; })}
+                                style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 4px", background: "none", border: "none", textAlign: "left", cursor: "pointer" }}
+                              >
+                                <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid " + (progAccountFilter.has(a.id) ? T.accent : T.border), background: progAccountFilter.has(a.id) ? T.accent : "#FFFFFF" }} />
+                                <span style={{ fontSize: 12.5 }}>{a.name}</span>
+                              </button>
+                            ))}
+                            <button type="button" onClick={() => setProgAccountPopoverOpen(false)} style={{ marginTop: 6, width: "100%", background: T.accent, border: "none", borderRadius: 6, padding: "6px 0", color: "#fff", fontSize: 12, fontWeight: 600 }}>Hecho</button>
+                          </div>
+                        )}
+                      </div>
+                    </Field>
+                    <Field label="Tipo">
+                      <select value={progTypeFilter} onChange={(e) => setProgTypeFilter(e.target.value)} style={Object.assign({}, inputStyle, { width: 150 })}>
+                        <option value="all">Todos los tipos</option>
+                        <option value="expense">Gastos</option>
+                        <option value="income">Ingresos</option>
+                        <option value="transfer">Transferencias</option>
+                      </select>
+                    </Field>
+                    <Field label="Agrupar">
+                      <select value={progGroupBy} onChange={(e) => setProgGroupBy(e.target.value)} style={Object.assign({}, inputStyle, { width: 150 })}>
+                        <option value="none">Ninguna</option>
+                        <option value="fecha">Fecha</option>
+                        <option value="cuenta">Cuenta</option>
+                        <option value="tipo">Tipo</option>
+                        <option value="periodicidad">Periodicidad</option>
+                        <option value="recurrencia">Recurrencia</option>
+                      </select>
+                    </Field>
+                    <button onClick={clearProgramador} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar"><Eraser size={13} /></button>
+                  </div>
+                </div>
+
+                {filteredRows.length === 0 ? (
+                  <div style={{ fontSize: 13, color: T.textFaint, padding: "18px 24px" }}>Sin movimientos recurrentes que coincidan.</div>
                 ) : (
-                  <div style={{ flex: 1, minHeight: 0, overflow: "auto", marginTop: 10 }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "78px 130px 110px 1fr 110px 56px", padding: "7px 24px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0, zIndex: 1 }}>
-                      <SortBtn value="fecha" label="Fecha" />
-                      <SortBtn value="cuenta" label="Cuenta" />
-                      <SortBtn value="periodicidad" label="Periodicidad" />
-                      <SortBtn value="descripcion" label="Descripcion" />
-                      <span style={{ textAlign: "right" }}><SortBtn value="importe" label="Importe" /></span>
+                  <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: gridTemplate, columnGap: 10, padding: "7px 24px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0, zIndex: 1 }}>
+                      <SortHead field="fecha" label="Fecha" />
+                      <SortHead field="cuenta" label="Cuenta" />
+                      <span style={{ textAlign: "center" }}>Tipo</span>
+                      <SortHead field="periodicidad" label="Periodicidad" />
+                      <SortHead field="descripcion" label="Descripcion" />
+                      <SortHead field="recurrencia" label="Recurrencia" />
+                      <span style={{ textAlign: "right" }}><SortHead field="importe" label="Importe" align="right" /></span>
                       <span />
                     </div>
 
@@ -2189,48 +2551,48 @@ export default function LedgerApp() {
                       const gKey = g.label || ("g" + gi);
                       const gCollapsed = collapsedProgramadorGroups.has(gKey);
                       return (
-                      <div key={gi}>
-                        {g.label && (
-                          <button
-                            onClick={() => setCollapsedProgramadorGroups((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(gKey)) next.delete(gKey); else next.add(gKey);
-                              return next;
-                            })}
-                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "8px 24px 4px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
-                          >
-                            {gCollapsed ? <ChevronRight size={12} style={{ color: T.textMuted }} /> : <ChevronDown size={12} style={{ color: T.textMuted }} />}
-                            <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text }}>{g.label}</span>
-                            <span style={{ fontSize: 10.5, color: T.textFaint }}>({g.rows.length})</span>
-                          </button>
-                        )}
-                        {!gCollapsed && g.rows.map((row) => {
-                          const t = row.tx;
-                          const info = catInfo(t.categoryId, t.subcategoryId, t.subsubcategoryId);
-                          const realColor = t.type === "income" ? T.income : T.expense;
-                          return (
-                            <div
-                              key={t.id + "-" + row.date} className="accrow" onClick={() => openProgramadorRow(row)}
-                              style={{ display: "grid", gridTemplateColumns: "78px 130px 110px 1fr 110px 56px", alignItems: "center", padding: "8px 24px", fontSize: 13, borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", opacity: row.real ? 1 : 0.7 }}
+                        <div key={gi}>
+                          {g.label && (
+                            <button
+                              onClick={() => setCollapsedProgramadorGroups((prev) => { const next = new Set(prev); if (next.has(gKey)) next.delete(gKey); else next.add(gKey); return next; })}
+                              style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "8px 24px 4px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
                             >
-                              <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>{shortDate(row.date)}</span>
-                              <span style={{ color: T.textMuted, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountName(t.accountId)}</span>
-                              <span style={{ color: T.textMuted, fontSize: 12 }}>{freqLabel(t.recurring)}</span>
-                              <span style={{ display: "flex", alignItems: "center", gap: 7, color: T.text }}>
-                                <span style={dot(info.color, 8)} />
-                                {t.name}
-                              </span>
-                              <span className="amount" style={{ textAlign: "right", color: realColor, fontWeight: 500 }}>
-                                {t.type === "income" ? "+" : "-"}{fmt(Math.abs(t.amount))}
-                              </span>
-                              <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
-                                <button onClick={(e) => { e.stopPropagation(); openProgramadorRow(row); }} style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar"><Pencil size={12} /></button>
-                                <button onClick={(e) => { e.stopPropagation(); removeProgramadorSeries(row); }} style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Eliminar"><Trash2 size={12} /></button>
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
+                              {gCollapsed ? <ChevronRight size={12} style={{ color: T.textMuted }} /> : <ChevronDown size={12} style={{ color: T.textMuted }} />}
+                              <span style={{ fontSize: 11.5, fontWeight: 700, color: T.text }}>{g.label}</span>
+                              <span style={{ fontSize: 10.5, color: T.textFaint }}>({g.rows.length})</span>
+                            </button>
+                          )}
+                          {!gCollapsed && g.rows.map((row) => {
+                            const t = row.tx;
+                            const info = catInfo(t.categoryId, t.subcategoryId, t.subsubcategoryId);
+                            const amt = occurrenceAmount(t.recurring, t.amount, row.date);
+                            const realColor = t.type === "income" ? T.income : T.expense;
+                            const variable = isVariableSeries(t.recurring);
+                            return (
+                              <div
+                                key={t.id + "-" + row.date} className="accrow" onClick={() => openProgramadorRow(row)}
+                                style={{ display: "grid", gridTemplateColumns: gridTemplate, alignItems: "center", padding: "8px 24px", fontSize: 13, borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", opacity: row.real ? 1 : 0.7 }}
+                              >
+                                <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>{shortDate(row.date)}</span>
+                                <span style={{ color: T.textMuted, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountName(t.accountId)}</span>
+                                <span style={{ display: "flex", justifyContent: "center" }}><KindBadge kind={t.type} size={15} /></span>
+                                <span style={{ color: T.textMuted, fontSize: 12 }}>{freqLabel(t.recurring)}</span>
+                                <span style={{ display: "flex", alignItems: "center", gap: 7, color: T.text, overflow: "hidden" }}>
+                                  <span style={dot(info.color, 8)} />
+                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+                                </span>
+                                <span style={{ fontSize: 11.5, color: variable ? T.accent : T.textFaint, fontWeight: variable ? 600 : 400 }}>{variable ? "Variable" : "Fija"}</span>
+                                <span className="amount" style={{ textAlign: "right", color: realColor, fontWeight: 500 }}>
+                                  {t.type === "income" ? "+" : "-"}{fmt(Math.abs(amt))}
+                                </span>
+                                <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
+                                  <button onClick={(e) => { e.stopPropagation(); openProgramadorRow(row); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar"><Pencil size={12} /></button>
+                                  <button onClick={(e) => { e.stopPropagation(); removeProgramadorSeries(row); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Eliminar"><Trash2 size={12} /></button>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       );
                     })}
                   </div>
@@ -2239,117 +2601,236 @@ export default function LedgerApp() {
             );
           })()}
 
-          {view === "categories" && (
-            <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px" }}>
-                <div>
-                  <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><List size={17} style={{ color: T.accent }} /> Categorias</h2>
-                  <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 0" }}>Categorias de {activeDoc.name}.</p>
-                </div>
+          {view === "categories" && (() => {
+            const typeLabel = (k) => (k === "income" ? "Ingreso" : k === "transfer" ? "Transferencia" : "Gasto");
+            const typeSortOrder = { expense: 0, income: 1, transfer: 2 };
+
+            const matchesSearch = (name) => !catSearch.trim() || name.toLowerCase().includes(catSearch.trim().toLowerCase());
+            const matchesType = (k) => catTypeFilter === "all" || (k || "expense") === catTypeFilter;
+
+            const catRowData = (cat) => {
+              const monthEntry = byCategory.find((b) => b.id === cat.id);
+              const val = monthEntry ? monthEntry.val : 0;
+              const limit = budgets[cat.id];
+              const pct = limit ? Math.min(100, (val / limit) * 100) : Math.min(100, (val / maxCat) * 100);
+              const ratio = limit ? (val / limit) * 100 : 0;
+              return { val: val, limit: limit, pct: pct, ratio: ratio };
+            };
+            const subRowData = (cat, sub) => {
+              const subVal = bySubcategory[sub.id] || 0;
+              const subLimit = budgets[sub.id];
+              const subPct = subLimit ? Math.min(100, (subVal / subLimit) * 100) : Math.min(100, (subVal / maxCat) * 100);
+              const subRatio = subLimit ? (subVal / subLimit) * 100 : 0;
+              return { val: subVal, limit: subLimit, pct: subPct, ratio: subRatio };
+            };
+
+            let visibleCategories = categories.filter((c) => matchesType(c.kind));
+            if (catShowMode !== "subcategories") {
+              visibleCategories = visibleCategories.filter((c) => matchesSearch(c.name) || c.subcategories.some((s) => matchesSearch(s.name)));
+            }
+
+            const sortCats = (list) => {
+              if (!catSort.field) return list;
+              const dirMul = catSort.dir === "asc" ? 1 : -1;
+              return list.slice().sort((a, b) => {
+                let av, bv;
+                if (catSort.field === "tipo") { av = typeSortOrder[a.kind || "expense"]; bv = typeSortOrder[b.kind || "expense"]; }
+                else if (catSort.field === "categoria") { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
+                else if (catSort.field === "progreso") { av = catRowData(a).ratio; bv = catRowData(b).ratio; }
+                else if (catSort.field === "presupuesto") { av = budgets[a.id] || 0; bv = budgets[b.id] || 0; }
+                if (av < bv) return -1 * dirMul;
+                if (av > bv) return 1 * dirMul;
+                return 0;
+              });
+            };
+            visibleCategories = sortCats(visibleCategories);
+
+            let flatSubcats = [];
+            if (catShowMode === "subcategories") {
+              categories.filter((c) => matchesType(c.kind)).forEach((cat) => {
+                cat.subcategories.filter((s) => matchesSearch(s.name)).forEach((sub) => flatSubcats.push({ cat: cat, sub: sub }));
+              });
+              if (catSort.field) {
+                const dirMul = catSort.dir === "asc" ? 1 : -1;
+                flatSubcats.sort((A, B) => {
+                  let av, bv;
+                  if (catSort.field === "tipo") { av = typeSortOrder[A.cat.kind || "expense"]; bv = typeSortOrder[B.cat.kind || "expense"]; }
+                  else if (catSort.field === "categoria") { av = A.sub.name.toLowerCase(); bv = B.sub.name.toLowerCase(); }
+                  else if (catSort.field === "progreso") { av = subRowData(A.cat, A.sub).ratio; bv = subRowData(B.cat, B.sub).ratio; }
+                  else if (catSort.field === "presupuesto") { av = budgets[A.sub.id] || 0; bv = budgets[B.sub.id] || 0; }
+                  if (av < bv) return -1 * dirMul;
+                  if (av > bv) return 1 * dirMul;
+                  return 0;
+                });
+              }
+            }
+
+            const SortHead = ({ field, label }) => {
+              const active = catSort.field === field;
+              return (
                 <button
-                  onClick={() => {
-                    setCatDraft({ name: "", color: PALETTE[0], kind: catTab });
-                    setShowCatForm(true);
-                    setShowTxForm(false); setShowBulkEdit(false); setShowCatEdit(false); setCatEditId(null);
-                  }}
-                  style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, flexShrink: 0 }}
+                  onClick={() => setCatSort((s) => ({ field: field, dir: s.field === field && s.dir === "asc" ? "desc" : "asc" }))}
+                  style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.04em", fontSize: 10.5, color: active ? T.text : T.textMuted, fontWeight: active ? 700 : 600 }}
                 >
-                  <Plus size={14} /> Nueva
+                  {label}
                 </button>
+              );
+            };
+
+            const gridTemplate = "36px 190px 1fr 150px 22px 22px";
+
+            const renderCatRow = (cat) => {
+              const { val, limit, pct, ratio } = catRowData(cat);
+              const budgetColor = !limit ? null : ratio <= 70 ? T.income : ratio <= 90 ? "#D9822B" : T.expense;
+              const barColor = !limit ? cat.color : budgetColor;
+              const hasSubs = cat.subcategories.length > 0;
+              const expanded = expandedCategories.has(cat.id);
+              return (
+                <div key={cat.id}>
+                  <div
+                    className="accrow"
+                    onClick={() => { setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }}
+                    style={{ display: "grid", gridTemplateColumns: gridTemplate, alignItems: "center", columnGap: 10, padding: "9px 24px", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft }}
+                  >
+                    <span style={{ display: "flex", justifyContent: "center" }}><KindBadge kind={cat.kind || "expense"} size={16} /></span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+                      {hasSubs ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setExpandedCategories((prev) => { const next = new Set(prev); if (next.has(cat.id)) next.delete(cat.id); else next.add(cat.id); return next; }); }}
+                          style={{ background: "none", border: "none", color: T.textMuted, padding: 0, flexShrink: 0 }}
+                        >
+                          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                        </button>
+                      ) : (
+                        <span style={{ width: 13, flexShrink: 0 }} />
+                      )}
+                      <span style={dot(cat.color, 12)} />
+                      <span style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
+                    </span>
+                    <div style={{ height: 6, background: T.borderSoft, borderRadius: 3 }}>
+                      <div style={{ height: 6, borderRadius: 3, width: pct + "%", background: barColor }} />
+                    </div>
+                    <span className="amount" style={{ fontSize: 13, textAlign: "right" }}>
+                      <span style={{ color: T.textMuted }}>{fmt(val)}</span>
+                      {limit ? <> <span style={{ color: T.textMuted }}>/</span> <span style={{ fontWeight: 700, color: budgetColor }}>{fmt(limit)}</span></> : <span style={{ color: T.textFaint, fontWeight: 400 }}> / Sin asignar</span>}
+                    </span>
+                    <button onClick={(e) => { e.stopPropagation(); setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Editar " + cat.name}><Pencil size={11} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); removeCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Eliminar " + cat.name}><Trash2 size={12} /></button>
+                  </div>
+                  {hasSubs && expanded && cat.subcategories.filter((s) => matchesSearch(s.name) || matchesSearch(cat.name)).map((sub) => renderSubRow(cat, sub))}
+                </div>
+              );
+            };
+
+            const renderSubRow = (cat, sub) => {
+              const { val: subVal, limit: subLimit, pct: subPct, ratio: subRatio } = subRowData(cat, sub);
+              const subBudgetColor = !subLimit ? null : subRatio <= 70 ? T.income : subRatio <= 90 ? "#D9822B" : T.expense;
+              const subBarColor = !subLimit ? tintColor(cat.color, 0.2) : subBudgetColor;
+              return (
+                <div
+                  key={sub.id}
+                  onClick={() => { setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }}
+                  className="accrow"
+                  style={{ display: "grid", gridTemplateColumns: gridTemplate, alignItems: "center", columnGap: 10, padding: "7px 24px", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated }}
+                >
+                  <span style={{ display: "flex", justifyContent: "center" }}><KindBadge kind={cat.kind || "expense"} size={14} /></span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 21, overflow: "hidden" }}>
+                    <span style={dot(tintColor(cat.color, 0.2), 8)} />
+                    <span style={{ fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
+                    {catShowMode === "subcategories" && <span style={{ fontSize: 10.5, color: T.textFaint }}>({cat.name})</span>}
+                  </span>
+                  <div style={{ height: 4, background: T.borderSoft, borderRadius: 2 }}>
+                    <div style={{ height: 4, borderRadius: 2, width: subPct + "%", background: subBarColor }} />
+                  </div>
+                  <span className="amount" style={{ fontSize: 11, textAlign: "right" }}>
+                    <span style={{ color: T.textMuted }}>{fmt(subVal)}</span>
+                    {subLimit ? <> <span style={{ color: T.textMuted }}>/</span> <span style={{ fontWeight: 700, color: subBudgetColor }}>{fmt(subLimit)}</span></> : <span style={{ color: T.textFaint, fontWeight: 400 }}> / Sin asignar</span>}
+                  </span>
+                  <button onClick={(e) => { e.stopPropagation(); setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Editar " + sub.name}><Pencil size={10} /></button>
+                  <button onClick={(e) => { e.stopPropagation(); removeSubcategory(cat.id, sub.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Eliminar " + sub.name}><Trash2 size={11} /></button>
+                </div>
+              );
+            };
+
+            const isEmpty = catShowMode === "subcategories" ? flatSubcats.length === 0 : visibleCategories.length === 0;
+
+            return (
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px", gap: 10, flexWrap: "nowrap" }}>
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><Tag size={17} style={{ color: T.accent }} /> Categorias</h2>
+                  <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}><TrendingUp size={12} /> <span className="amount">{fmt(monthIncome)}</span></span>
+                    <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}><TrendingDown size={12} /> <span className="amount">{fmt(monthExpense)}</span></span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <button onClick={exportCategories} style={smallBtn(false)}><Download size={13} />Exportar</button>
+                  <button onClick={() => catImportRef.current && catImportRef.current.click()} style={smallBtn(false)}><Upload size={13} />Importar</button>
+                  <input ref={catImportRef} type="file" accept=".csv" onChange={importCategoriesCSV} style={{ display: "none" }} />
+                  <button
+                    onClick={() => {
+                      setCatDraft({ name: "", color: PALETTE[0], kind: catTypeFilter !== "all" ? catTypeFilter : "expense" });
+                      setShowCatForm(true);
+                      setShowTxForm(false); setShowBulkEdit(false); setShowCatEdit(false); setCatEditId(null);
+                    }}
+                    style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600 }}
+                  >
+                    <Plus size={14} /> Nueva categoria
+                  </button>
+                </div>
               </div>
 
-              <div style={{ display: "flex", gap: 0, padding: "12px 24px 0", borderBottom: "1px solid " + T.borderSoft, flexShrink: 0 }}>
-                {[["expense", "Gastos"], ["income", "Ingresos"], ["transfer", "Traspasos"], ["all", "Todas"]].map((pair) => (
+              <div style={{ padding: 14, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <Field label="Descripcion">
+                    <div style={{ position: "relative" }}>
+                      <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
+                      <input placeholder="Buscar" value={catSearch} onChange={(e) => setCatSearch(e.target.value)} style={Object.assign({}, inputStyle, { paddingLeft: 28, width: 170 })} />
+                    </div>
+                  </Field>
+                  <Field label="Tipo">
+                    <select value={catTypeFilter} onChange={(e) => setCatTypeFilter(e.target.value)} style={Object.assign({}, inputStyle, { width: 150 })}>
+                      <option value="all">Todos los tipos</option>
+                      <option value="expense">Gastos</option>
+                      <option value="income">Ingresos</option>
+                      <option value="transfer">Transferencias</option>
+                    </select>
+                  </Field>
+                  <Field label="Mostrar">
+                    <select value={catShowMode} onChange={(e) => setCatShowMode(e.target.value)} style={Object.assign({}, inputStyle, { width: 150 })}>
+                      <option value="categories">Categorias</option>
+                      <option value="subcategories">Subcategorias</option>
+                      <option value="all">Todas</option>
+                    </select>
+                  </Field>
                   <button
-                    key={pair[0]} onClick={() => setCatTab(pair[0])}
-                    style={{ background: "none", border: "none", borderBottom: "2px solid " + (catTab === pair[0] ? T.accent : "transparent"), padding: "8px 4px", marginRight: 18, fontSize: 13, fontWeight: 700, color: catTab === pair[0] ? T.text : T.textMuted, cursor: "pointer" }}
-                  >
-                    {pair[1]}
-                  </button>
-                ))}
+                    onClick={() => { setCatSearch(""); setCatTypeFilter("all"); setCatShowMode("categories"); setCatSort({ field: null, dir: "asc" }); }}
+                    style={smallBtn(false)} aria-label="Limpiar" title="Limpiar"
+                  ><Eraser size={13} /></button>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: gridTemplate, columnGap: 10, padding: "7px 24px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
+                <SortHead field="tipo" label="Tipo" />
+                <SortHead field="categoria" label="Categoria" />
+                <SortHead field="progreso" label="Progreso" />
+                <span style={{ textAlign: "right" }}><SortHead field="presupuesto" label="Presupuesto" /></span>
+                <span />
+                <span />
               </div>
 
               <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-                {categories.filter((c) => catTab === "all" || (c.kind || "expense") === catTab).length === 0 && (
-                  <div style={{ fontSize: 13, color: T.textFaint, padding: "18px 24px" }}>Sin categorias todavia.</div>
+                {isEmpty && (
+                  <div style={{ fontSize: 13, color: T.textFaint, padding: "18px 24px" }}>Sin categorias que coincidan.</div>
                 )}
-
-                {categories.filter((c) => catTab === "all" || (c.kind || "expense") === catTab).map((cat) => {
-                  const monthEntry = byCategory.find((b) => b.id === cat.id);
-                  const val = monthEntry ? monthEntry.val : 0;
-                  const limit = budgets[cat.id];
-                  const pct = limit ? Math.min(100, (val / limit) * 100) : Math.min(100, (val / maxCat) * 100);
-                  const ratio = limit ? (val / limit) * 100 : 0;
-                  const budgetColor = !limit ? cat.color : ratio <= 70 ? T.income : ratio <= 90 ? "#D9822B" : T.expense;
-                  const spentColor = !limit ? T.textMuted : ratio <= 70 ? T.income : ratio <= 90 ? "#D9822B" : T.expense;
-                  const hasSubs = cat.subcategories.length > 0;
-                  const expanded = expandedCategories.has(cat.id);
-                  return (
-                    <div key={cat.id}>
-                      <div
-                        className="accrow"
-                        onClick={() => { setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }}
-                        style={{ display: "grid", gridTemplateColumns: "13px 12px 150px 1fr 130px 22px 22px 24px", alignItems: "center", columnGap: 10, padding: "9px 24px", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft }}
-                      >
-                        {hasSubs ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setExpandedCategories((prev) => { const next = new Set(prev); if (next.has(cat.id)) next.delete(cat.id); else next.add(cat.id); return next; }); }}
-                            style={{ background: "none", border: "none", color: T.textMuted, padding: 0, flexShrink: 0 }}
-                          >
-                            {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                          </button>
-                        ) : (
-                          <span />
-                        )}
-                        <span style={dot(cat.color, 12)} />
-                        <span style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
-                        <div style={{ height: 6, background: T.borderSoft, borderRadius: 3 }}>
-                          <div style={{ height: 6, borderRadius: 3, width: pct + "%", background: budgetColor }} />
-                        </div>
-                        <span className="amount" style={{ fontSize: 13, textAlign: "right" }}>
-                          <span style={{ color: spentColor }}>{fmt(val)}</span>
-                          {limit ? <span style={{ color: T.textMuted }}>{" / " + fmt(limit)}</span> : null}
-                        </span>
-                        <button onClick={(e) => { e.stopPropagation(); setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }} style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Editar " + cat.name}><Pencil size={11} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); removeCategory(cat.id); }} style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Eliminar " + cat.name}><Trash2 size={12} /></button>
-                        <span style={{ display: "flex", justifyContent: "center" }}><KindBadge kind={cat.kind || "expense"} size={16} /></span>
-                      </div>
-                      {hasSubs && expanded && cat.subcategories.map((sub) => {
-                        const subVal = bySubcategory[sub.id] || 0;
-                        const subLimit = budgets[sub.id];
-                        const subPct = subLimit ? Math.min(100, (subVal / subLimit) * 100) : Math.min(100, (subVal / maxCat) * 100);
-                        const subRatio = subLimit ? (subVal / subLimit) * 100 : 0;
-                        const subBudgetColor = !subLimit ? tintColor(cat.color, 0.2) : subRatio <= 70 ? T.income : subRatio <= 90 ? "#D9822B" : T.expense;
-                        const subSpentColor = !subLimit ? T.textMuted : subRatio <= 70 ? T.income : subRatio <= 90 ? "#D9822B" : T.expense;
-                        return (
-                          <div
-                            key={sub.id}
-                            onClick={() => { setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }}
-                            className="accrow"
-                            style={{ display: "grid", gridTemplateColumns: "13px 12px 150px 1fr 130px 22px 22px 24px", alignItems: "center", columnGap: 10, padding: "7px 24px", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated }}
-                          >
-                            <span />
-                            <span style={dot(tintColor(cat.color, 0.2), 7)} />
-                            <span style={{ fontSize: 12, color: T.text, paddingLeft: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
-                            <div style={{ height: 4, background: T.borderSoft, borderRadius: 2 }}>
-                              <div style={{ height: 4, borderRadius: 2, width: subPct + "%", background: subBudgetColor }} />
-                            </div>
-                            <span className="amount" style={{ fontSize: 11, textAlign: "right" }}>
-                              <span style={{ color: subSpentColor }}>{fmt(subVal)}</span>
-                              {subLimit ? <span style={{ color: T.textMuted }}>{" / " + fmt(subLimit)}</span> : null}
-                            </span>
-                            <button onClick={(e) => { e.stopPropagation(); setCatEditId(cat.id); setShowCatEdit(true); setShowTxForm(false); setShowBulkEdit(false); setShowCatForm(false); }} style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Editar " + sub.name}><Pencil size={10} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); removeSubcategory(cat.id, sub.id); }} style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Eliminar " + sub.name}><Trash2 size={11} /></button>
-                            <span style={{ display: "flex", justifyContent: "center" }}><KindBadge kind={cat.kind || "expense"} size={14} /></span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                {catShowMode === "subcategories"
+                  ? flatSubcats.map(({ cat, sub }) => renderSubRow(cat, sub))
+                  : visibleCategories.map((cat) => renderCatRow(cat))}
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {view === "filters" && (
             <div style={{ padding: "20px 24px", overflow: "auto", flex: 1, minHeight: 0 }}>
@@ -2398,8 +2879,8 @@ export default function LedgerApp() {
             const HeaderIcon = singleAccount ? accountTypeInfo(singleAccount.type).icon : CircleDollarSign;
             return (
           <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid " + T.border, gap: 10, flexWrap: "wrap" }}>
-            <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid " + T.border, gap: 10, flexWrap: "nowrap" }}>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
                 <HeaderIcon size={17} style={{ color: T.accent }} />
                 {activeAccounts.size === 0
@@ -2411,10 +2892,9 @@ export default function LedgerApp() {
               <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}><TrendingUp size={12} /> <span className="amount">{fmt(monthIncome)}</span></span>
                 <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}><TrendingDown size={12} /> <span className="amount">{fmt(monthExpense)}</span></span>
-                <span style={{ fontSize: 12, color: T.textFaint }}>{shortDate(startOfCurrentMonthISO())} - {shortDate(todayISO())}</span>
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "nowrap", flexShrink: 0 }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <div style={{ position: "relative" }}>
                   <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
@@ -2425,19 +2905,14 @@ export default function LedgerApp() {
                     style={Object.assign({}, inputStyle, { paddingLeft: 28, width: 170 })}
                   />
                 </div>
-                <button onClick={clearSelectionAndFilters} style={smallBtn(false)} aria-label="Limpiar seleccion y filtros" title="Limpiar seleccion y filtros"><Eraser size={13} /></button>
+                <button onClick={clearSelectionAndFilters} style={smallBtn(false)} aria-label="Limpiar"><Eraser size={13} />Limpiar</button>
                 <button onClick={undoLastAction} disabled={historyPastRef.current.length === 0} style={Object.assign({}, smallBtn(false), { opacity: historyPastRef.current.length === 0 ? 0.4 : 1 })} aria-label="Deshacer" title="Deshacer"><Undo2 size={13} /></button>
                 <button onClick={redoLastAction} disabled={historyFutureRef.current.length === 0} style={Object.assign({}, smallBtn(false), { opacity: historyFutureRef.current.length === 0 ? 0.4 : 1 })} aria-label="Rehacer" title="Rehacer"><Redo2 size={13} /></button>
-                <button
-                  onClick={() => { setSavedDocFeedback(activeDocId); setTimeout(() => setSavedDocFeedback((cur) => (cur === activeDocId ? null : cur)), 1200); }}
-                  style={smallBtn(false)} aria-label="Guardar" title="Guardar"
-                >
-                  {savedDocFeedback === activeDocId ? <CheckCircle2 size={13} style={{ color: T.income }} /> : <Save size={13} />}
-                </button>
                 <button onClick={() => { setShowMovementsRange((s) => !s); setShowFilters(false); }} style={smallBtn(showMovementsRange)}><CalendarDays size={13} />Movimientos</button>
                 <button onClick={() => { setShowFilters((s) => !s); setShowMovementsRange(false); }} style={smallBtn(showFilters)}><SlidersHorizontal size={13} />Filtros</button>
                 <button onClick={exportCSV} style={smallBtn(false)}><Download size={13} />Exportar</button>
                 <button onClick={() => fileInputRef.current && fileInputRef.current.click()} style={smallBtn(false)}><Upload size={13} />Importar</button>
+                <button onClick={() => { setShowPrevision((s) => !s); setSidebarSection("previsiones"); }} style={smallBtn(showPrevision)} aria-label="Previsión de balance" title="Previsión de balance"><TrendingUpIcon size={13} /></button>
                 <input ref={fileInputRef} type="file" accept=".csv" onChange={importCSV} style={{ display: "none" }} />
               </div>
               <button onClick={() => { resetDraft(); setShowTxForm(true); }} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600, marginLeft: 6 }}>
@@ -2449,7 +2924,7 @@ export default function LedgerApp() {
           {showMovementsRange && (
             <div style={{ padding: 14, borderBottom: "1px solid " + T.border, background: T.bgElevated, display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
               <button title="Restaurar rango" onClick={() => setMovementRangeDraft({ from: todayISO(), to: endOfYearISO() })} style={smallBtn(false)}><Eraser size={13} /></button>
-              {["1M", "3M", "6M", "1A", "Fin de año"].map((key) => <button key={key} onClick={() => setMovementRangeDraft(quickRange(key))} style={smallBtn(false)}>{key}</button>)}
+              {["1M", "3M", "6M", "1A", "Fin de año"].map((key) => <button key={key} onClick={() => setMovementRangeDraft(quickRange(key))} style={tinyBtn(false)}>{key}</button>)}
               <Field label="DESDE"><DatePicker value={movementRangeDraft.from} onChange={(v) => setMovementRangeDraft((r) => Object.assign({}, r, { from: v }))} style={{ width: 150 }} /></Field>
               <Field label="HASTA"><DatePicker value={movementRangeDraft.to} onChange={(v) => setMovementRangeDraft((r) => Object.assign({}, r, { to: v }))} style={{ width: 150 }} /></Field>
               <button onClick={() => setFilters((f) => Object.assign({}, f, movementRangeDraft))} style={{ background: T.accent, border: "none", borderRadius: 6, padding: "0 24px", height: 30, color: "#fff", fontWeight: 600, fontSize: 12 }}>Mostrar</button>
@@ -2593,7 +3068,7 @@ export default function LedgerApp() {
                   const active = txSort.field === field;
                   return (
                     <button
-                      onClick={() => setTxSort((s) => ({ field: field, dir: s.field === field && s.dir === "asc" ? "desc" : "asc" }))}
+                      onClick={() => { setTxSort((s) => ({ field: field, dir: s.field === field && s.dir === "asc" ? "desc" : "asc" })); setGroupingActive(true); }}
                       style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: align || "left", width: "100%", textTransform: "uppercase", letterSpacing: "0.04em", fontSize: 10.5, color: active ? T.text : T.textMuted, fontWeight: active ? 700 : 600 }}
                     >
                       {label}
@@ -2620,24 +3095,30 @@ export default function LedgerApp() {
 
             {(() => {
               const groups = [];
-              filteredTx.forEach((t) => {
-                const key = txGroupKey(t);
-                let g = groups.length > 0 ? groups[groups.length - 1] : null;
-                if (!g || g.key !== key) { g = { key: key, label: txGroupLabel(t), rows: [] }; groups.push(g); }
-                g.rows.push(t);
-              });
+              if (groupingActive) {
+                filteredTx.forEach((t) => {
+                  const key = txGroupKey(t);
+                  let g = groups.length > 0 ? groups[groups.length - 1] : null;
+                  if (!g || g.key !== key) { g = { key: key, label: txGroupLabel(t), rows: [] }; groups.push(g); }
+                  g.rows.push(t);
+                });
+              } else {
+                groups.push({ key: "__flat__", label: null, rows: filteredTx });
+              }
               return groups.map((g) => {
                 const isCollapsed = collapsedMonths.has(g.key);
                 return (
                   <div key={g.key}>
-                    <button
-                      onClick={() => toggleMonthCollapse(g.key)}
-                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: T.bgElevated, border: "none", borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", textAlign: "left" }}
-                    >
-                      {isCollapsed ? <ChevronRight size={13} style={{ color: T.textMuted }} /> : <ChevronDown size={13} style={{ color: T.textMuted }} />}
-                      <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{g.label}</span>
-                      <span style={{ fontSize: 11, color: T.textFaint }}>({g.rows.length})</span>
-                    </button>
+                    {g.label !== null && (
+                      <button
+                        onClick={() => toggleMonthCollapse(g.key)}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: T.bgElevated, border: "none", borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", textAlign: "left" }}
+                      >
+                        {isCollapsed ? <ChevronRight size={13} style={{ color: T.textMuted }} /> : <ChevronDown size={13} style={{ color: T.textMuted }} />}
+                        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{g.label}</span>
+                        <span style={{ fontSize: 11, color: T.textFaint }}>({g.rows.length})</span>
+                      </button>
+                    )}
                     {!isCollapsed && g.rows.map((t) => {
               const isTransferOut = t.type === "transfer";
               const isTransferIn = t.type === "transfer_in";
@@ -2693,7 +3174,18 @@ export default function LedgerApp() {
             })()}
           </div>
 
-          {(() => {
+
+          <div style={{ borderTop: "1px solid " + T.border, padding: "8px 20px", background: T.bgElevated, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11.5, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Total seleccionado</span>
+            <span className="amount" style={{ fontSize: 14, fontWeight: 700 }}>{fmt(scopedTotal)}</span>
+          </div>
+          </>
+            );
+          })()}
+        </div>
+
+        {showPrevision && (
+          (() => {
             const hasData = evoPoints.length > 0;
             const evoMinB = hasData ? Math.min(0, ...evoPoints.map((p) => p.balance)) : 0;
             const evoMaxB = hasData ? Math.max(1, ...evoPoints.map((p) => p.balance)) : 1;
@@ -2717,31 +3209,64 @@ export default function LedgerApp() {
               return evoRange.from === range.from && evoRange.to === range.to;
             };
             return (
-              <div style={{ borderTop: "1px solid " + T.border }}>
-                <div style={{ background: "#E7E7EB", padding: "6px 20px", fontSize: 12.5, fontWeight: 700, color: T.text, borderBottom: "1px solid " + T.border, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-                  <span>Prevision de balance</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 400 }}>
+              <div style={{ borderTop: "1px solid " + T.border, display: "flex", flexDirection: "column", height: 440, flexShrink: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px", flexShrink: 0 }}>
+                  <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}><TrendingUpIcon size={17} style={{ color: T.accent }} /> Prevision de balance</h2>
+                  <button onClick={() => setShowPrevision(false)} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label="Cerrar previsión"><X size={17} /></button>
+                </div>
+                <div style={{ padding: "10px 24px 14px", flexShrink: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", justifyContent: "flex-start" }}>
                     {[[1, "1M"], [3, "3M"], [6, "6M"], [12, "1A"]].map((p) => (
                       <button
                         key={p[0]}
                         onClick={() => { const key = p[0] === 1 ? "1M" : p[0] === 3 ? "3M" : p[0] === 6 ? "6M" : "1A"; const range = quickRange(key); setEvoRange(range); setEvoCustomDraft(range); }}
-                        style={{ background: presetActive(p[0]) ? T.accent : "#FFFFFF", color: presetActive(p[0]) ? "#fff" : T.textMuted, border: "1px solid " + (presetActive(p[0]) ? T.accent : T.border), borderRadius: 5, padding: "3px 8px", fontSize: 11, fontWeight: 600 }}
+                        style={tinyBtn(presetActive(p[0]))}
                       >{p[1]}</button>
                     ))}
-                    <button onClick={() => { const range = quickRange("Fin de año"); setEvoRange(range); setEvoCustomDraft(range); }} style={{ background: "#FFFFFF", color: T.textMuted, border: "1px solid " + T.border, borderRadius: 5, padding: "3px 8px", fontSize: 11, fontWeight: 600 }}>Fin de año</button>
-                    <DatePicker value={evoCustomDraft.from} onChange={(v) => setEvoCustomDraft((r) => Object.assign({}, r, { from: v }))} style={{ border: "1px solid " + T.border, borderRadius: 5, padding: "0 6px", fontSize: 11, background: "#FFFFFF", color: T.text, width: 112, height: 26 }} />
+                    <button onClick={() => { const range = quickRange("Fin de año"); setEvoRange(range); setEvoCustomDraft(range); }} style={tinyBtn(false)}>Fin de año</button>
+                    <DatePicker value={evoCustomDraft.from} onChange={(v) => setEvoCustomDraft((r) => Object.assign({}, r, { from: v }))} style={{ border: "1px solid " + T.border, borderRadius: 5, padding: "0 6px", fontSize: 11, background: "#FFFFFF", color: T.text, width: 112, height: 24 }} />
                     <span style={{ color: T.textFaint }}>-</span>
-                    <DatePicker value={evoCustomDraft.to} onChange={(v) => setEvoCustomDraft((r) => Object.assign({}, r, { to: v }))} style={{ border: "1px solid " + T.border, borderRadius: 5, padding: "0 6px", fontSize: 11, background: "#FFFFFF", color: T.text, width: 112, height: 26 }} />
+                    <DatePicker value={evoCustomDraft.to} onChange={(v) => setEvoCustomDraft((r) => Object.assign({}, r, { to: v }))} style={{ border: "1px solid " + T.border, borderRadius: 5, padding: "0 6px", fontSize: 11, background: "#FFFFFF", color: T.text, width: 112, height: 24 }} />
                     <button
                       onClick={() => setEvoRange({ from: evoCustomDraft.from, to: evoCustomDraft.to })}
-                      style={{ background: T.accent, border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 11, fontWeight: 600, color: "#fff" }}
+                      style={tinyBtn(false)}
                     >Mostrar</button>
                   </div>
                 </div>
+                <div style={{ flex: 1, minHeight: 0, overflow: "auto", borderTop: "1px solid " + T.border }}>
+                  {previsionMovements.length === 0 ? (
+                    <div style={{ fontSize: 12.5, color: T.textFaint, padding: "16px 24px" }}>Sin movimientos previstos en este rango.</div>
+                  ) : (
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "74px 130px 1fr 110px", padding: "6px 24px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated, position: "sticky", top: 0 }}>
+                        <span>Fecha</span><span>Cuenta</span><span>Descripcion</span><span style={{ textAlign: "right" }}>Importe</span>
+                      </div>
+                      {previsionMovements.map((m, idx) => {
+                        const t = m.tx;
+                        const isTransfer = t.type === "transfer" || t.type === "transfer_in";
+                        const info = isTransfer ? { color: T.transfer } : catInfo(t.categoryId, t.subcategoryId, t.subsubcategoryId);
+                        const color = t.type === "income" ? T.income : isTransfer ? T.transfer : T.expense;
+                        return (
+                          <div key={idx} style={{ display: "grid", gridTemplateColumns: "74px 130px 1fr 110px", alignItems: "center", padding: "6px 24px", fontSize: 12, borderBottom: "1px solid " + T.borderSoft, opacity: m.real ? 1 : 0.6 }}>
+                            <span className="amount" style={{ color: T.textMuted, fontSize: 11.5 }}>{shortDate(m.date)}</span>
+                            <span style={{ color: T.textMuted, fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountName(t.accountId)}</span>
+                            <span style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                              <span style={dot(info.color, 7)} />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+                            </span>
+                            <span className="amount" style={{ textAlign: "right", color: color, fontWeight: 500, fontSize: 12 }}>
+                              {t.type === "income" ? "+" : "-"}{fmt(Math.abs(m.amount))}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
                 {!hasData ? (
-                  <div style={{ padding: "18px 20px", color: T.textMuted, fontSize: 12.5 }}>Sin datos suficientes todavia.</div>
+                  <div style={{ padding: "18px 20px", color: T.textMuted, fontSize: 12.5, flexShrink: 0 }}>Sin datos suficientes todavia.</div>
                 ) : (
-                  <div style={{ padding: "12px 44px 8px 20px", background: T.bg, position: "relative" }}>
+                  <div style={{ padding: "12px 44px 8px 20px", background: T.bg, position: "relative", flexShrink: 0, borderTop: "1px solid " + T.border }}>
                     <svg
                       viewBox="0 0 1000 128" width="100%" height="150" preserveAspectRatio="none" style={{ cursor: "crosshair" }}
                       onMouseDown={(e) => {
@@ -2799,16 +3324,8 @@ export default function LedgerApp() {
                 )}
               </div>
             );
-          })()}
-
-          <div style={{ borderTop: "1px solid " + T.border, padding: "8px 20px", background: T.bgElevated, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11.5, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Total seleccionado</span>
-            <span className="amount" style={{ fontSize: 14, fontWeight: 700 }}>{fmt(scopedTotal)}</span>
-          </div>
-          </>
-            );
-          })()}
-        </div>
+          })()
+        )}
 
         {(showTxForm || showBulkEdit || showCatEdit || showCatForm) && (
           <div style={{ width: 320, flexShrink: 0, minHeight: 0, borderLeft: "1px solid " + T.border, background: T.bgElevated, overflowY: "auto" }}>
