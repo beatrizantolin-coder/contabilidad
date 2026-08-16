@@ -3,7 +3,8 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import type { Account, AccountType, Budgets, Category, CategoryKind, ID, LedgerDocument, Subcategory, Transaction, TransactionStatus } from "../types";
 import { catInfo } from "./categories";
 import { genId, genSeq } from "./id";
-import { todayISO } from "./format";
+import { freqLabel, todayISO } from "./format";
+import { occurrenceAmount, type ProgramadorRow } from "./recurring";
 import { readTextFile, writeTextFile } from "./storage";
 import { PALETTE } from "../theme";
 
@@ -119,6 +120,29 @@ export async function pickAndImportCategoriesCsv(categories: Category[]): Promis
   if (!path || Array.isArray(path)) return null;
   const text = await readTextFile(path);
   return parseCategoriesCsv(text, categories);
+}
+
+export function buildProgramadorExportRows(rows: ProgramadorRow[], accounts: Account[]) {
+  return rows.map((row) => ({
+    Fecha: row.date,
+    Cuenta: accountName(accounts, row.tx.accountId),
+    Tipo: row.tx.type === "income" ? "Ingreso" : row.tx.type === "expense" ? "Gasto" : "Transferencia",
+    Periodicidad: freqLabel(row.tx.recurring),
+    Descripcion: row.tx.name,
+    Recurrencia: row.tx.recurring?.amountMode === "variable" ? "Variable" : "Fija",
+    Importe: occurrenceAmount(Number(row.tx.amount), row.tx.recurring, row.date),
+  }));
+}
+
+export async function exportProgramadorCsv(docName: string, rows: ProgramadorRow[], accounts: Account[]): Promise<boolean> {
+  const csv = Papa.unparse(buildProgramadorExportRows(rows, accounts));
+  const path = await save({
+    defaultPath: docName + "-programador.csv",
+    filters: [{ name: "CSV", extensions: ["csv"] }],
+  });
+  if (!path) return false;
+  await writeTextFile(path, csv);
+  return true;
 }
 
 function normalizeKey(s: string): string {

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Search, Tag, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Search, Tag, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
 import type { Budgets, Category, CategoryKind, ID } from "../types";
 import { T, dot, inputStyle, smallBtn } from "../theme";
 import { fmt } from "../lib/format";
 import { subcategoryColor } from "../lib/color";
 import { Field } from "./Field";
+import { KindBadge } from "./KindBadge";
 
 export interface CategorySpend {
   id: ID;
@@ -27,17 +28,6 @@ function budgetColorForRatio(ratio: number): string {
   if (ratio <= 70) return T.income;
   if (ratio <= 90) return "#D9822B";
   return T.expense;
-}
-
-function KindBadge({ kind, size }: { kind: CategoryKind; size: number }) {
-  if (kind === "income") return <ArrowUpCircle size={size} style={{ color: T.income, flexShrink: 0 }} />;
-  if (kind === "transfer")
-    return (
-      <div style={{ width: size, height: size, borderRadius: "50%", border: "1.5px solid " + T.accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <ArrowLeftRight size={size - 6} style={{ color: T.accent }} />
-      </div>
-    );
-  return <ArrowDownCircle size={size} style={{ color: T.expense, flexShrink: 0 }} />;
 }
 
 function SortHead({ field, label, sort, onSort }: { field: CatSortField; label: string; sort: CatSort; onSort: (field: CatSortField) => void }) {

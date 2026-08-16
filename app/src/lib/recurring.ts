@@ -1,12 +1,17 @@
 import { isTransferTx, type LedgerDocument, type Recurring, type Transaction } from "../types";
 import { genId, genSeq } from "./id";
-import { currentWeekRange, endOfYearISO, nextDate } from "./format";
+import { currentWeekRange, endOfNthMonthISO, endOfYearISO, nextDate, startOfCurrentMonthISO } from "./format";
 
 /** Importe efectivo de una ocurrencia: el personalizado si es variable y existe, si no el predeterminado. */
 export function occurrenceAmount(defaultAmount: number, recurring: Recurring | null, date: string): number {
   if (!recurring || recurring.amountMode !== "variable") return defaultAmount;
   const override = recurring.overrides[date];
   return override !== undefined ? override : defaultAmount;
+}
+
+/** Una serie es "Variable" (importe distinto por ocurrencia) frente a "Fija" (mismo importe siempre). */
+export function isVariableSeries(recurring: Recurring | null): boolean {
+  return recurring?.amountMode === "variable";
 }
 
 /** Fechas de las proximas ocurrencias de una serie, desde `fromDate` (excluida) hasta `untilISO` inclusive. */
@@ -68,6 +73,55 @@ export function generateDueOccurrences(doc: LedgerDocument): Transaction[] {
     additions.push({ ...tx, id: genId(), seq: genSeq(), date: nd, amount: ndAmount, status: "programado" } as Transaction);
   });
   return additions;
+}
+
+export interface ProgramadorMonthStats {
+  income: number;
+  expense: number;
+}
+
+/**
+ * Proyecta, para cada serie recurrente, todas sus ocurrencias (real ancla +
+ * futuras) que caen dentro del mes en curso, y suma su importe por tipo.
+ * A diferencia de `computeProgramadorRows` (una fila por serie), aqui se
+ * enumeran todas las ocurrencias del mes: una serie diaria puede aportar
+ * varias.
+ */
+export function computeProgramadorMonthStats(transactions: Transaction[]): ProgramadorMonthStats {
+  const start = startOfCurrentMonthISO();
+  const end = endOfNthMonthISO(0);
+  const latestBySeries = new Map<string, Transaction>();
+  transactions.forEach((t) => {
+    if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
+    const key = seriesKey(t);
+    const current = latestBySeries.get(key);
+    if (!current || t.date > current.date) latestBySeries.set(key, t);
+  });
+
+  let income = 0;
+  let expense = 0;
+  latestBySeries.forEach((tx) => {
+    const recurring = tx.recurring as Recurring;
+    let d = tx.date;
+    if (d >= start && d <= end) {
+      const amt = occurrenceAmount(Number(tx.amount), recurring, d);
+      if (tx.type === "income") income += amt;
+      else expense += amt;
+    }
+    let guard = 0;
+    while (guard < 60) {
+      d = nextDate(d, recurring);
+      guard++;
+      if (recurring.endDate && d > recurring.endDate) break;
+      if (d > end) break;
+      if (d >= start) {
+        const amt = occurrenceAmount(Number(tx.amount), recurring, d);
+        if (tx.type === "income") income += amt;
+        else expense += amt;
+      }
+    }
+  });
+  return { income, expense };
 }
 
 export interface ProgramadorRow {

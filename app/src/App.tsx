@@ -8,8 +8,8 @@ import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibl
 import { normalizeAccountFields, type AccountDraftFields } from "./lib/accounts";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { emptyBulkEdit, type BulkEditState } from "./lib/bulkEdit";
-import { endOfNthMonthISO, freqPerMonth, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, startOfCurrentWeekISO, endOfCurrentWeekISO, todayISO } from "./lib/format";
-import { computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
+import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, startOfCurrentWeekISO, endOfCurrentWeekISO, todayISO } from "./lib/format";
+import { computeProgramadorMonthStats, computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
 import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
@@ -340,14 +340,7 @@ export default function App() {
 
   const recurringList = useMemo(() => transactions.filter((t) => t.recurring && t.type !== "transfer_in"), [transactions]);
   const programadorRows = useMemo(() => computeProgramadorRows(transactions), [transactions]);
-  const forecastNetPerMonth = useMemo(() => {
-    let net = 0;
-    recurringList.forEach((t) => {
-      if (!t.recurring) return;
-      net += (t.type === "income" ? 1 : -1) * Number(t.amount) * freqPerMonth(t.recurring);
-    });
-    return net;
-  }, [recurringList]);
+  const programadorMonthStats = useMemo(() => computeProgramadorMonthStats(transactions), [transactions]);
 
   const evoPoints = useMemo(
     () => computeEvoPoints(accounts, chronological, transactions, scopeIds, resultingBalance, evoRange),
@@ -1297,12 +1290,17 @@ export default function App() {
                   <RecurringView
                     docName={activeDoc.name}
                     programadorRows={programadorRows}
-                    netPerMonth={forecastNetPerMonth}
+                    monthIncome={programadorMonthStats.income}
+                    monthExpense={programadorMonthStats.expense}
+                    monthRangeLabel={monthRangeLabel}
+                    accounts={accounts}
                     categories={categories}
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                     onNewScheduled={openScheduledForm}
                     onOpenRow={openProgramadorRow}
                     onRemove={removeTx}
+                    showPrevision={showPrevision}
+                    onTogglePrevision={toggleShowPrevisionFromToolbar}
                   />
                 )}
 
