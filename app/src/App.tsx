@@ -15,7 +15,7 @@ import { exportTransactionsCsv, pickAndImportIcomptaCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
-import { ACCOUNT_SECTIONS, Sidebar, type MainView } from "./components/Sidebar";
+import { ACCOUNT_SECTIONS, Sidebar, type MainView, type SidebarSection } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
 import { SidePanel } from "./components/SidePanel";
@@ -56,6 +56,8 @@ export default function App() {
   const [view, setView] = useState<MainView>("transactions");
   const [sidebarWidth, setSidebarWidth] = useState(270);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarSection, setSidebarSection] = useState<SidebarSection>("cuentas");
+  const [showPrevision, setShowPrevision] = useState(true);
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters());
@@ -1081,6 +1083,7 @@ export default function App() {
     setFilters({ ...sf.filters });
     setShowFilters(true);
     setView("transactions");
+    setSidebarSection("cuentas");
   }
   function removeSavedFilter(id: ID) {
     if (!window.confirm("¿Eliminar este filtro guardado?")) return;
@@ -1129,13 +1132,16 @@ export default function App() {
     setFilters(emptyFilters());
     setShowFilters(true);
     setView("transactions");
+    setSidebarSection("cuentas");
   }
   function handleNewAccountMenu() {
     setView("transactions");
+    setSidebarSection("cuentas");
     setNewAccountTrigger((n) => n + 1);
   }
   function handleNewCategoryMenu() {
     setView("categories");
+    setSidebarSection("categories");
     setNewCategoryTrigger((n) => n + 1);
   }
 
@@ -1210,12 +1216,10 @@ export default function App() {
                 clearAccountSelection();
                 setView("transactions");
               }}
-              activeDoc={activeDoc}
               createDocument={createDocument}
               removeDocument={handleRemoveDocumentClick}
               onSaveDocument={handleSaveDoc}
               onSaveAsDocument={handleSaveAs}
-              onOpenExistingDocument={handleOpenDocumentFile}
               accounts={accounts}
               balances={balances}
               totalBalance={totalBalance}
@@ -1229,6 +1233,10 @@ export default function App() {
               newAccountTrigger={newAccountTrigger}
               view={view}
               setView={setView}
+              sidebarSection={sidebarSection}
+              setSidebarSection={setSidebarSection}
+              showPrevision={showPrevision}
+              setShowPrevision={setShowPrevision}
               recurringCount={recurringList.length}
               categoriesCount={categories.length}
               savedFiltersCount={savedFilters.length}

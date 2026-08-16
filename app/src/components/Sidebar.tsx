@@ -1,20 +1,21 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, ChevronDown, ChevronRight, CircleDollarSign, CreditCard, FileText, FolderOpen, FolderPlus, GripVertical, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, Wallet, X } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FileText, FolderPlus, GripVertical, Landmark, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, TrendingUp, X } from "lucide-react";
 import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
 import type { AccountDraftFields } from "../lib/accounts";
 
 export type MainView = "transactions" | "recurring" | "categories" | "filters";
+export type SidebarSection = "documentos" | "cuentas" | "recurring" | "categories" | "filters" | "previsiones";
 
 interface AccountSection {
   key: AccountType;
   label: string;
-  icon: typeof Wallet;
+  icon: typeof Landmark;
 }
 
 export const ACCOUNT_SECTIONS: AccountSection[] = [
-  { key: "checking", label: "Cuentas", icon: Wallet },
+  { key: "checking", label: "Bancos", icon: Landmark },
   { key: "savings", label: "Ahorro", icon: PiggyBank },
   { key: "credit", label: "Tarjetas", icon: CreditCard },
   { key: "cash", label: "Efectivo", icon: Banknote },
@@ -52,12 +53,10 @@ export function Sidebar({
   documents,
   activeDocId,
   setActiveDocId,
-  activeDoc,
   createDocument,
   removeDocument,
   onSaveDocument,
   onSaveAsDocument,
-  onOpenExistingDocument,
   accounts,
   balances,
   totalBalance,
@@ -71,6 +70,10 @@ export function Sidebar({
   newAccountTrigger,
   view,
   setView,
+  sidebarSection,
+  setSidebarSection,
+  showPrevision,
+  setShowPrevision,
   recurringCount,
   categoriesCount,
   savedFiltersCount,
@@ -80,12 +83,10 @@ export function Sidebar({
   documents: LedgerDocument[];
   activeDocId: string;
   setActiveDocId: (id: string) => void;
-  activeDoc: LedgerDocument;
   createDocument: (name: string) => void;
   removeDocument: (id: string) => void;
   onSaveDocument: (doc: LedgerDocument) => Promise<void>;
   onSaveAsDocument: () => void;
-  onOpenExistingDocument: () => void;
   accounts: Account[];
   balances: Record<ID, number>;
   totalBalance: number;
@@ -100,6 +101,10 @@ export function Sidebar({
   newAccountTrigger: number;
   view: MainView;
   setView: (v: MainView) => void;
+  sidebarSection: SidebarSection;
+  setSidebarSection: (s: SidebarSection) => void;
+  showPrevision: boolean;
+  setShowPrevision: (fn: (s: boolean) => boolean) => void;
   recurringCount: number;
   categoriesCount: number;
   savedFiltersCount: number;
@@ -107,29 +112,11 @@ export function Sidebar({
   onToggleCollapsed: () => void;
 }) {
   const [showDocForm, setShowDocForm] = useState(false);
-  const [showDocMenu, setShowDocMenu] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
   const [showAccForm, setShowAccForm] = useState(false);
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
   const [draggedAccountId, setDraggedAccountId] = useState<ID | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<ID | null>(null);
-  const [collapsedSections, setCollapsedSections] = useState<Set<AccountType>>(new Set());
-
-  function toggleSectionCollapsed(key: AccountType) {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  /** Clic en el nombre del grupo: selecciona todas sus cuentas a la vez, mostrando sus movimientos conjuntos. */
-  function selectAccountGroup(ids: ID[]) {
-    clearAccountSelection();
-    ids.forEach((id, i) => onAccountClick(id, false, i > 0));
-    goToAccounts();
-  }
   const [savedDocFeedback, setSavedDocFeedback] = useState<string | null>(null);
 
   async function handleSaveDocumentClick(d: LedgerDocument) {
@@ -227,7 +214,10 @@ export function Sidebar({
     setShowAccForm(false);
   }
 
-  const goToAccounts = () => setView("transactions");
+  function goToAccounts() {
+    setSidebarSection("cuentas");
+    setView("transactions");
+  }
 
   return (
     <aside
@@ -250,98 +240,73 @@ export function Sidebar({
       </div>
 
       {collapsed ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 4 }}>
-          {(
-            [
-              [FileText, "Documentos", () => setShowDocForm((s) => !s)],
-              [CircleDollarSign, "Grupos de cuentas", () => { clearAccountSelection(); goToAccounts(); }],
-              [Repeat, "Programador", () => { clearAccountSelection(); setView("recurring"); }],
-              [Tag, "Categorias", () => { clearAccountSelection(); setView("categories"); }],
-              [SlidersHorizontal, "Filtros", () => { clearAccountSelection(); setView("filters"); }],
-            ] as const
-          ).map(([Icon, label, onClick]) => (
-            <button
-              key={label}
-              onClick={onClick}
-              title={label}
-              aria-label={label}
-              style={{ background: "none", border: "none", color: T.textMuted, padding: 6, display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              <Icon size={17} />
-            </button>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, color: T.textMuted }}>
+          <FileText size={17} onClick={() => setShowDocForm((s) => !s)} style={{ cursor: "pointer" }} aria-label="Documentos" />
+          <div style={{ width: 20, borderTop: "1px solid " + T.border }} />
+          <CircleDollarSign size={17} onClick={goToAccounts} style={{ cursor: "pointer" }} aria-label="Cuentas" />
+          <Landmark size={15} aria-label="Bancos" />
+          <PiggyBank size={15} aria-label="Ahorro" />
+          <CreditCard size={15} aria-label="Tarjetas" />
+          <Banknote size={15} aria-label="Efectivo" />
+          <div style={{ width: 20, borderTop: "1px solid " + T.border }} />
+          <Repeat size={17} onClick={() => { setSidebarSection("recurring"); setView("recurring"); }} style={{ cursor: "pointer" }} aria-label="Programador" />
+          <Tag size={15} onClick={() => { setSidebarSection("categories"); setView("categories"); }} style={{ cursor: "pointer" }} aria-label="Categorias" />
+          <SlidersHorizontal size={17} onClick={() => { setSidebarSection("filters"); setView("filters"); }} style={{ cursor: "pointer" }} aria-label="Filtros" />
+          <TrendingUp
+            size={17}
+            onClick={() => { setSidebarSection("previsiones"); setShowPrevision((s) => !s); }}
+            style={{ cursor: "pointer", color: sidebarSection === "previsiones" && showPrevision ? T.accent : T.textMuted }}
+            aria-label="Previsiones"
+          />
         </div>
       ) : (
       <>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "2px 10px 6px", position: "relative" }}>
-        <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600 }}>Documentos</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button onClick={onOpenExistingDocument} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Vincular documento existente" title="Vincular documento existente">
-            <Link2 size={13} />
-          </button>
-          <button onClick={() => setShowDocMenu((s) => !s)} style={{ background: "none", border: "none", color: T.textMuted, padding: 1 }} aria-label="Anadir documento" title="Anadir documento">
-            <Plus size={13} />
-          </button>
-        </div>
-        {showDocMenu && (
-          <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 30, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, padding: 4, boxShadow: "0 4px 14px rgba(0,0,0,0.1)", minWidth: 150 }}>
-            <button
-              onClick={() => { setShowDocMenu(false); onOpenExistingDocument(); }}
-              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "7px 8px", fontSize: 12.5, color: T.text, borderRadius: 6 }}
-            >
-              Abrir existente...
-            </button>
-            <button
-              onClick={() => { setShowDocMenu(false); setShowDocForm(true); }}
-              style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: "7px 8px", fontSize: 12.5, color: T.text, borderRadius: 6 }}
-            >
-              Crear nuevo...
-            </button>
-          </div>
-        )}
+      <div style={{ padding: "0 10px" }}>
+        <button
+          onClick={() => { setSidebarSection("documentos"); setShowDocForm((s) => !s); }}
+          className="navitem"
+          style={{ width: "100%", textAlign: "left", background: sidebarSection === "documentos" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "documentos" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}
+        >
+          <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <FileText size={13} style={{ color: sidebarSection === "documentos" ? T.accent : T.textMuted }} /> Documentos
+          </span>
+          <Plus size={13} style={{ color: T.textMuted }} />
+        </button>
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, marginBottom: 10 }}>
-        {documents.map((d, idx) => {
-          const isMother = idx === 0;
-          return (
-            <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              {!isMother && <Link2 size={10} style={{ color: T.textFaint, flexShrink: 0 }} aria-label="Vinculado al documento madre" />}
-              <div
-                style={{
-                  display: "flex", alignItems: "center", gap: 3,
-                  background: d.id === activeDocId ? "#FFFFFF" : "transparent",
-                  border: "1px solid " + (d.id === activeDocId ? T.border : "transparent"),
-                  borderRadius: 6, padding: "3px 3px 3px 8px",
-                }}
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, marginBottom: 14, padding: "0 6px 0 18px" }}>
+        {documents.map((d) => (
+          <div key={d.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, background: d.id === activeDocId ? "#FFFFFF" : "transparent", border: "1px solid " + (d.id === activeDocId ? T.border : "transparent"), borderRadius: 6, padding: "3px 8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <button
+                onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
+                style={{ background: "none", border: "none", padding: 0, fontSize: 10.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}
               >
-                <button
-                  onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
-                  style={{ background: "none", border: "none", padding: 0, fontSize: 11.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}
-                >
-                  {isMother ? <FileText size={11} /> : <FolderOpen size={11} />} {d.name}
+                <FileText size={10} /> {d.name}
+              </button>
+              {documents.length > 1 && (
+                <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
+                  <Trash2 size={10} />
                 </button>
-                {!isMother && (
-                  <button onClick={() => removeDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Eliminar archivo " + d.name}>
-                    <Trash2 size={10} />
-                  </button>
-                )}
-                <button
-                  onClick={() => handleSaveDocumentClick(d)}
-                  style={{ background: "none", border: "none", color: savedDocFeedback === d.id ? T.income : T.textFaint, padding: "0 3px 0 0" }}
-                  aria-label={"Guardar " + d.name}
-                  title="Guardar"
-                >
-                  {savedDocFeedback === d.id ? <CheckCircle2 size={10} /> : <Save size={10} />}
-                </button>
-                {isMother && (
-                  <button onClick={onSaveAsDocument} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px 0 0" }} aria-label="Guardar como" title="Guardar como">
-                    <FolderPlus size={10} />
-                  </button>
-                )}
-              </div>
+              )}
+              <button
+                onClick={() => handleSaveDocumentClick(d)}
+                style={{ background: "none", border: "none", color: savedDocFeedback === d.id ? T.income : T.textFaint, padding: "0 3px 0 0" }}
+                aria-label={"Guardar " + d.name}
+                title="Guardar"
+              >
+                {savedDocFeedback === d.id ? <CheckCircle2 size={10} /> : <Save size={10} />}
+              </button>
+              <button onClick={onSaveAsDocument} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 2px" }} aria-label={"Guardar como " + d.name} title="Guardar como">
+                <FolderPlus size={10} />
+              </button>
             </div>
-          );
-        })}
+            {d.id === activeDocId && (
+              <button onClick={() => setShowDocForm(true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 0, flexShrink: 0 }} aria-label="Vincular documento" title="Vincular documento">
+                <Link2 size={11} />
+              </button>
+            )}
+          </div>
+        ))}
       </div>
       {showDocForm && (
         <form onSubmit={submitDoc} style={{ display: "flex", gap: 6, marginBottom: 10 }}>
@@ -355,113 +320,99 @@ export function Sidebar({
             style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "0 8px", color: T.textMuted }}
             aria-label="Cancelar"
           >
-            <X size={12} />
+            <X size={13} />
           </button>
         </form>
       )}
 
-      <div style={{ padding: "2px 8px 14px", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>{activeDoc.name}</div>
-
-      <div
-        className="navitem"
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, background: activeAccounts.size === 0 && view === "transactions" ? "#FFFFFF" : "transparent", boxShadow: activeAccounts.size === 0 && view === "transactions" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", borderRadius: 7, padding: "7px 8px 7px 10px" }}
-      >
-        <button
-          onClick={() => { clearAccountSelection(); goToAccounts(); }}
-          style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, color: T.text, fontSize: 13, display: "flex", alignItems: "center", gap: 7 }}
+      <div style={{ padding: "0 10px", marginTop: 18 }}>
+        <div
+          className="navitem"
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: sidebarSection === "cuentas" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "cuentas" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", borderRadius: 7, padding: "7px 8px" }}
         >
-          <CircleDollarSign size={14} style={{ color: T.accent }} /> Grupos de cuentas
-        </button>
-        <button onClick={() => openAccountForm("checking", null, false)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1, marginLeft: 6 }} aria-label="Anadir cuenta">
-          <Plus size={13} />
-        </button>
+          <button onClick={goToAccounts} style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+              <CircleDollarSign size={13} style={{ color: sidebarSection === "cuentas" ? T.accent : T.textMuted }} /> Cuentas
+            </span>
+          </button>
+          <button onClick={() => openAccountForm("checking", null, false)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label="Anadir cuenta">
+            <Plus size={13} />
+          </button>
+        </div>
       </div>
 
-      {ACCOUNT_SECTIONS.map((section) => {
-        const SectionIcon = section.icon;
-        const group = accounts.filter((a) => (a.type || "checking") === section.key);
-        const isCollapsed = collapsedSections.has(section.key);
-        const groupTotal = group.reduce((s, a) => s + (balances[a.id] || 0), 0);
-        return (
-          <div key={section.key} style={{ marginBottom: 4 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 2px" }}>
-              <button
-                onClick={() => toggleSectionCollapsed(section.key)}
-                style={{ background: "none", border: "none", padding: 0, color: T.textFaint, display: "flex" }}
-                aria-label={isCollapsed ? "Expandir " + section.label : "Contraer " + section.label}
-              >
-                {isCollapsed ? <ChevronRight size={11} /> : <ChevronDown size={11} />}
-              </button>
-              <button
-                onClick={() => selectAccountGroup(group.map((a) => a.id))}
-                title={"Ver movimientos conjuntos de " + section.label}
-                style={{ flex: 1, display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600, background: "none", border: "none", padding: "0 4px", textAlign: "left", cursor: "pointer" }}
-              >
-                <SectionIcon size={10} /> {section.label}
-                {isCollapsed && group.length > 0 && (
-                  <span className="amount" style={{ marginLeft: "auto", fontWeight: 700, color: groupTotal < 0 ? T.expense : T.textMuted }}>
-                    {fmt(groupTotal)}
-                  </span>
-                )}
-              </button>
-              <button onClick={() => openAccountForm(section.key, null, true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
-                <Plus size={11} />
-              </button>
-            </div>
-            {!isCollapsed && group.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "2px 10px 4px" }}>Sin cuentas.</div>}
-            {!isCollapsed && group.map((a) => {
-              const bal = balances[a.id] || 0;
-              const low = (a.warning && bal < a.warning) || bal < 0;
-              const highlighted = activeAccounts.has(a.id);
-              const isDragging = draggedAccountId === a.id;
-              const isDragOver = dragOverAccountId === a.id && draggedAccountId !== a.id;
-              return (
-                <div
-                  key={a.id}
-                  className="accrow navitem"
-                  data-account-id={a.id}
-                  data-account-type={a.type || "checking"}
-                  style={{
-                    borderRadius: 7,
-                    background: highlighted ? "#FFFFFF" : "transparent",
-                    boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
-                    marginBottom: 2,
-                    padding: "7px 10px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 6,
-                    opacity: isDragging ? 0.4 : 1,
-                    borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
-                  }}
-                >
-                  <GripVertical
-                    size={11}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      setDraggedAccountId(a.id);
+      <div style={{ marginTop: 6 }}>
+        {ACCOUNT_SECTIONS.map((section) => {
+          const SectionIcon = section.icon;
+          const group = accounts.filter((a) => (a.type || "checking") === section.key);
+          return (
+            <div key={section.key} style={{ marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 2px 18px" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600 }}>
+                  <SectionIcon size={10} /> {section.label}
+                </span>
+                <button onClick={() => openAccountForm(section.key, null, true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
+                  <Plus size={11} />
+                </button>
+              </div>
+              {group.length === 0 && <div style={{ fontSize: 11, color: T.textFaint, padding: "2px 10px 4px 18px" }}>Sin cuentas.</div>}
+              {group.map((a) => {
+                const bal = balances[a.id] || 0;
+                const low = (a.warning && bal < a.warning) || bal < 0;
+                const highlighted = activeAccounts.has(a.id);
+                const isDragging = draggedAccountId === a.id;
+                const isDragOver = dragOverAccountId === a.id && draggedAccountId !== a.id;
+                return (
+                  <div
+                    key={a.id}
+                    className="accrow navitem"
+                    data-account-id={a.id}
+                    data-account-type={a.type || "checking"}
+                    style={{
+                      borderRadius: 7,
+                      background: highlighted ? "#FFFFFF" : "transparent",
+                      boxShadow: highlighted ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                      marginBottom: 2,
+                      padding: "7px 10px 7px 18px",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 6,
+                      opacity: isDragging ? 0.4 : 1,
+                      borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
                     }}
-                    style={{ color: T.textFaint, flexShrink: 0, cursor: "grab" }}
-                  />
-                  <button onClick={(e) => { onAccountClick(a.id, e.shiftKey, e.metaKey || e.ctrlKey); goToAccounts(); }} style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                    <SectionIcon size={12} style={{ color: T.textFaint, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
-                  </button>
-                  <span className="amount" style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA", flexShrink: 0 }}>
-                    {fmt(bal)}
-                  </span>
-                  <button onClick={() => openAccountForm(a.type, a, false)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Editar " + a.name}>
-                    <Pencil size={11} />
-                  </button>
-                  <button onClick={() => removeAccount(a.id)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Eliminar " + a.name}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+                  >
+                    <GripVertical
+                      size={11}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setDraggedAccountId(a.id);
+                      }}
+                      style={{ color: T.textFaint, flexShrink: 0, cursor: "grab" }}
+                    />
+                    <button
+                      onClick={(e) => { onAccountClick(a.id, e.shiftKey, e.metaKey || e.ctrlKey); setSidebarSection("cuentas"); setView("transactions"); }}
+                      style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}
+                    >
+                      <SectionIcon size={11} style={{ color: T.textFaint, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                    </button>
+                    <span className="amount" style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA", flexShrink: 0 }}>
+                      {fmt(bal)}
+                    </span>
+                    <button onClick={() => openAccountForm(a.type, a, false)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Editar " + a.name}>
+                      <Pencil size={11} />
+                    </button>
+                    <button onClick={() => removeAccount(a.id)} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, flexShrink: 0 }} aria-label={"Eliminar " + a.name}>
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
 
       {showAccForm && (
         <form onSubmit={submitAccount} style={{ marginTop: 8, padding: 10, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -545,40 +496,52 @@ export function Sidebar({
 
       <div style={{ marginTop: 22, padding: "0 10px" }}>
         <button
-          onClick={() => { clearAccountSelection(); setView("recurring"); }}
+          onClick={() => { setSidebarSection("recurring"); setView("recurring"); }}
           className="navitem"
-          style={{ width: "100%", textAlign: "left", background: view === "recurring" ? "#FFFFFF" : "transparent", boxShadow: view === "recurring" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+          style={{ width: "100%", textAlign: "left", background: sidebarSection === "recurring" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "recurring" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
-          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-            <Repeat size={12} /> Programador
+          <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <Repeat size={13} style={{ color: sidebarSection === "recurring" ? T.accent : T.textMuted }} /> Programador
           </span>
           {recurringCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{recurringCount}</span>}
         </button>
       </div>
 
-      <div style={{ marginTop: 10, padding: "0 10px" }}>
+      <div style={{ marginTop: 6, padding: "0 10px" }}>
         <button
-          onClick={() => { clearAccountSelection(); setView("categories"); }}
+          onClick={() => { setSidebarSection("categories"); setView("categories"); }}
           className="navitem"
-          style={{ width: "100%", textAlign: "left", background: view === "categories" ? "#FFFFFF" : "transparent", boxShadow: view === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+          style={{ width: "100%", textAlign: "left", background: sidebarSection === "categories" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
-          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-            <Tag size={12} /> Categorias
+          <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <Tag size={13} style={{ color: sidebarSection === "categories" ? T.accent : T.textMuted }} /> Categorias
           </span>
           {categoriesCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{categoriesCount}</span>}
         </button>
       </div>
 
-      <div style={{ marginTop: 10, padding: "0 10px" }}>
+      <div style={{ marginTop: 6, padding: "0 10px" }}>
         <button
-          onClick={() => { clearAccountSelection(); setView("filters"); }}
+          onClick={() => { setSidebarSection("filters"); setView("filters"); }}
           className="navitem"
-          style={{ width: "100%", textAlign: "left", background: view === "filters" ? "#FFFFFF" : "transparent", boxShadow: view === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+          style={{ width: "100%", textAlign: "left", background: sidebarSection === "filters" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
-          <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-            <SlidersHorizontal size={12} /> Filtros
+          <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <SlidersHorizontal size={13} style={{ color: sidebarSection === "filters" ? T.accent : T.textMuted }} /> Filtros
           </span>
           {savedFiltersCount > 0 && <span className="amount" style={{ fontSize: 10.5, color: T.textFaint }}>{savedFiltersCount}</span>}
+        </button>
+      </div>
+
+      <div style={{ marginTop: 6, padding: "0 10px" }}>
+        <button
+          onClick={() => { setSidebarSection("previsiones"); setShowPrevision((s) => !s); }}
+          className="navitem"
+          style={{ width: "100%", textAlign: "left", background: sidebarSection === "previsiones" && showPrevision ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "previsiones" && showPrevision ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <TrendingUp size={13} style={{ color: sidebarSection === "previsiones" && showPrevision ? T.accent : T.textMuted }} /> Previsiones
+          </span>
         </button>
       </div>
 
