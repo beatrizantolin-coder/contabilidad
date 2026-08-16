@@ -753,7 +753,7 @@ export default function LedgerApp() {
     transactions.forEach((t) => {
       if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
       if (!scopeIds.has(t.accountId)) return;
-      const key = seriesKeyOf(t);
+      const key = [t.accountId, t.name, t.categoryId || null, t.subcategoryId || null, t.type, Number(t.amount), t.recurring.interval, t.recurring.unit].join("|");
       if (!seriesLatest[key] || t.date > seriesLatest[key].date) seriesLatest[key] = t;
     });
     const projected = [];
@@ -798,7 +798,7 @@ export default function LedgerApp() {
     transactions.forEach((t) => {
       if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
       if (!scopeIds.has(t.accountId)) return;
-      const key = seriesKeyOf(t);
+      const key = [t.accountId, t.name, t.categoryId || null, t.subcategoryId || null, t.type, Number(t.amount), t.recurring.interval, t.recurring.unit].join("|");
       if (!seriesLatest[key] || t.date > seriesLatest[key].date) seriesLatest[key] = t;
     });
     const projected = [];
@@ -858,7 +858,7 @@ export default function LedgerApp() {
     const latestBySeries = {};
     transactions.forEach((t) => {
       if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
-      const key = seriesKeyOf(t);
+      const key = [t.accountId, t.name, t.categoryId || null, t.subcategoryId || null, t.type, Number(t.amount), t.recurring.interval, t.recurring.unit].join("|");
       if (!latestBySeries[key] || t.date > latestBySeries[key].date) latestBySeries[key] = t;
     });
     let income = 0;
@@ -890,7 +890,7 @@ export default function LedgerApp() {
     const latestBySeries = {};
     transactions.forEach((t) => {
       if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
-      const key = seriesKeyOf(t);
+      const key = [t.accountId, t.name, t.categoryId || null, t.subcategoryId || null, t.type, Number(t.amount), t.recurring.interval, t.recurring.unit].join("|");
       if (!latestBySeries[key] || t.date > latestBySeries[key].date) latestBySeries[key] = t;
     });
     return Object.values(latestBySeries)
@@ -994,7 +994,7 @@ export default function LedgerApp() {
         const seriesMax = {};
         txs.forEach((t) => {
           if (!t.recurring || t.type === "transfer" || t.type === "transfer_in") return;
-          const key = seriesKeyOf(t);
+          const key = [t.accountId, t.name, t.categoryId || null, t.subcategoryId || null, t.type, Number(t.amount), t.recurring.interval, t.recurring.unit].join("|");
           if (!seriesMax[key] || t.date > seriesMax[key].date) seriesMax[key] = t;
         });
         const additions = [];
@@ -1564,53 +1564,6 @@ export default function LedgerApp() {
             const unit = ["days", "months", "years"].indexOf(parts[1]) >= 0 ? parts[1] : "months";
             return { interval: Number(parts[0]) || 1, unit: unit };
           })() : null,
-        });
-      });
-      setAccounts(nextAccounts);
-      setCategories(nextCategories);
-      setTransactions((prev) => prev.concat(imported));
-    };
-    reader.readAsText(file);
-    e.target.value = "";
-  }
-
-  function importProgramadorCSV(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const parsed = Papa.parse(String(reader.result), { header: true, skipEmptyLines: true });
-      const data = parsed.data;
-      const byName = {};
-      accounts.forEach((a) => (byName[a.name] = a.id));
-      let nextAccounts = accounts.slice();
-      let nextCategories = categories.slice();
-      const imported = [];
-      data.forEach((row) => {
-        const accNameField = row.Cuenta && row.Cuenta.trim();
-        if (!accNameField) return;
-        let accId = byName[accNameField];
-        if (!accId) {
-          accId = nextId();
-          nextAccounts.push({ id: accId, name: accNameField, opening: 0, warning: 0, type: "checking" });
-          byName[accNameField] = accId;
-        }
-        const tipo = (row.Tipo || "").toLowerCase();
-        const type = tipo.indexOf("ingreso") === 0 ? "income" : "expense";
-        const catName = (row.Categoria || "Otros").trim();
-        let cat = nextCategories.find((c) => c.name.toLowerCase() === catName.toLowerCase() && (c.kind || "expense") === type);
-        if (!cat) {
-          cat = { id: nextId(), name: catName, color: PALETTE[nextCategories.length % PALETTE.length], kind: type, subcategories: [] };
-          nextCategories.push(cat);
-        }
-        const freqMatch = String(row.Periodicidad || "").match(/(\d+)\s+(\S+)/);
-        const interval = freqMatch ? Number(freqMatch[1]) || 1 : 1;
-        const unitWord = freqMatch ? freqMatch[2].toLowerCase() : "";
-        const unit = unitWord.indexOf("dia") === 0 ? "days" : unitWord.indexOf("ano") === 0 ? "years" : "months";
-        imported.push({
-          id: nextId(), accountId: accId, date: row.Fecha || todayISO(), name: row.Descripcion || "Importado",
-          categoryId: cat.id, subcategoryId: null, amount: Number(row.Importe) || 0, type: type, status: "programado",
-          recurring: { interval: interval, unit: unit },
         });
       });
       setAccounts(nextAccounts);
@@ -2465,7 +2418,7 @@ export default function LedgerApp() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                     <button onClick={exportProgramador} style={smallBtn(false)}><Download size={13} />Exportar</button>
                     <button onClick={() => progImportRef.current && progImportRef.current.click()} style={smallBtn(false)}><Upload size={13} />Importar</button>
-                    <input ref={progImportRef} type="file" accept=".csv" onChange={importProgramadorCSV} style={{ display: "none" }} />
+                    <input ref={progImportRef} type="file" accept=".csv" style={{ display: "none" }} />
                     <button onClick={openScheduledForm} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600 }}>
                       <Plus size={14} /> Nueva operacion
                     </button>
