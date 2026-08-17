@@ -27,6 +27,7 @@ import { FiltersView } from "./components/FiltersView";
 import { PrevisionPanel } from "./components/PrevisionPanel";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { RenameDocumentModal } from "./components/RenameDocumentModal";
+import { CloseDocumentModal } from "./components/CloseDocumentModal";
 import { buildAppMenu, type AppMenuHandlers } from "./lib/appMenu";
 
 const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "", matchMode: "all" });
@@ -43,7 +44,9 @@ export default function App() {
     createDocument,
     createDocumentReplacing,
     addDocument,
-    removeDocument,
+    closeDocument,
+    markSaved,
+    isDocDirty,
     getSavedPath,
     setSavedPath,
     recentPaths,
@@ -87,6 +90,7 @@ export default function App() {
   // de columna para ordenar, y se puede desactivar de nuevo con "Limpiar".
   const [groupingActive, setGroupingActive] = useState(false);
   const [showRenameDoc, setShowRenameDoc] = useState(false);
+  const [closeDocConfirmId, setCloseDocConfirmId] = useState<ID | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [newAccountTrigger, setNewAccountTrigger] = useState(0);
   const [newCategoryTrigger, setNewCategoryTrigger] = useState(0);
@@ -443,6 +447,7 @@ export default function App() {
         addRecentPath(path);
       }
       await writeDocumentToPath(doc, path);
+      markSaved(doc.id);
     } catch (err) {
       console.error("Error guardando el documento", err);
     }
@@ -461,6 +466,7 @@ export default function App() {
       setSavedPath(activeDoc.id, picked);
       addRecentPath(picked);
       await writeDocumentToPath(activeDoc, picked);
+      markSaved(activeDoc.id);
     } catch (err) {
       console.error("Error guardando el documento", err);
     }
@@ -1062,13 +1068,14 @@ export default function App() {
   // (que deja el documento activo tal cual y anade el nuevo al lado), estas
   // dos acciones sustituyen el documento activo por el que se abre. Primero
   // se cierra el anterior y luego se anade el nuevo: si se hiciera al reves,
-  // removeDocument leeria un `activeDocId` todavia no actualizado (closure
+  // closeDocument leeria un `activeDocId` todavia no actualizado (closure
   // obsoleta dentro del mismo lote de renders) y podria dejar activo un
-  // documento equivocado.
+  // documento equivocado. El anterior nunca se borra del disco, solo deja
+  // de estar abierto en esta sesion.
   async function openDocumentFromPathReplacing(path: string) {
     const doc = await readDocumentFromPath(path);
     const prevActiveId = activeDocId;
-    if (prevActiveId) removeDocument(prevActiveId);
+    if (prevActiveId) closeDocument(prevActiveId);
     addDocument(doc);
     addRecentPath(path);
   }
@@ -1189,15 +1196,29 @@ export default function App() {
     createDocumentReplacing(name);
   }
   function handleCloseDocumentMenu() {
-    if (activeDocId) removeDocument(activeDocId);
+    if (activeDocId) requestCloseDocument(activeDocId);
   }
-  // Icono de papelera de un documento vinculado en la barra lateral: a
-  // diferencia de "Cerrar documento" del menu (que no borra nada, solo deja
-  // de tenerlo abierto), este es el gesto explicito de eliminarlo de la
-  // lista y por tanto pide confirmacion, igual que el resto de borrados.
-  function handleRemoveDocumentClick(id: ID) {
-    if (!window.confirm("¿Eliminar este documento de la lista?")) return;
-    removeDocument(id);
+  // Papelera de una pastilla de documento (barra lateral): cierra el
+  // documento (nunca borra el archivo del disco). Si tiene cambios sin
+  // guardar, primero pregunta con el dialogo de 3 opciones; si esta limpio,
+  // cierra directamente sin preguntar.
+  function requestCloseDocument(id: ID) {
+    if (documents.length <= 1) return;
+    const doc = documents.find((d) => d.id === id);
+    if (doc && isDocDirty(doc)) {
+      setCloseDocConfirmId(id);
+      return;
+    }
+    closeDocument(id);
+  }
+  function closeDocumentNow(id: ID) {
+    closeDocument(id);
+    setCloseDocConfirmId(null);
+  }
+  async function saveAndCloseDocument(id: ID) {
+    const doc = documents.find((d) => d.id === id);
+    if (doc) await handleSaveDoc(doc);
+    closeDocumentNow(id);
   }
   function handleNewFilterMenu() {
     setFilters(emptyFilters());
@@ -1289,7 +1310,7 @@ export default function App() {
                 setView("transactions");
               }}
               createDocument={createDocument}
-              removeDocument={handleRemoveDocumentClick}
+              onCloseDocument={requestCloseDocument}
               onSaveDocument={handleSaveDoc}
               onSaveAsDocument={handleSaveAs}
               accounts={accounts}
@@ -1548,6 +1569,19 @@ export default function App() {
         )}
       </div>
       {showRenameDoc && <RenameDocumentModal value={renameValue} onChange={setRenameValue} onSubmit={submitRenameDocument} onCancel={() => setShowRenameDoc(false)} />}
+      {closeDocConfirmId &&
+        (() => {
+          const d = documents.find((x) => x.id === closeDocConfirmId);
+          if (!d) return null;
+          return (
+            <CloseDocumentModal
+              docName={d.name}
+              onSaveAndClose={() => saveAndCloseDocument(d.id)}
+              onCloseWithoutSaving={() => closeDocumentNow(d.id)}
+              onCancel={() => setCloseDocConfirmId(null)}
+            />
+          );
+        })()}
     </div>
   );
 }

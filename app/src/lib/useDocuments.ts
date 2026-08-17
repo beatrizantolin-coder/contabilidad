@@ -3,7 +3,7 @@ import type { LedgerDocument } from "../types";
 import { genId } from "./id";
 import { todayISO } from "./format";
 import { applyRecurringDueLogic } from "./recurring";
-import { createDebouncer, deleteDocumentFile, loadDocument, loadManifest, saveDocument, saveManifest } from "./storage";
+import { createDebouncer, loadDocument, loadManifest, saveDocument, saveManifest } from "./storage";
 
 const debounceSave = createDebouncer(400);
 
@@ -16,6 +16,10 @@ export function useDocuments() {
   const [documents, setDocuments] = useState<LedgerDocument[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [savedPaths, setSavedPaths] = useState<Record<string, string>>({});
+  // Instantanea (JSON) del contenido del documento en el momento del ultimo
+  // guardado manual (Guardar/Guardar como). Se usa para decidir si hay
+  // cambios sin guardar al cerrar un documento (ver isDocDirty).
+  const [savedSnapshots, setSavedSnapshots] = useState<Record<string, string>>({});
   const [recentPaths, setRecentPaths] = useState<string[]>([]);
   const [skipWelcomeOnStart, setSkipWelcomeOnStartState] = useState(false);
   const prevDocsRef = useRef<LedgerDocument[]>([]);
@@ -138,7 +142,34 @@ export function useDocuments() {
     return doc.id;
   }, []);
 
-  const removeDocument = useCallback(
+  /** Marca el documento como "guardado" ahora mismo (tras un Guardar/Guardar como con exito): su contenido actual pasa a ser la referencia para isDocDirty. */
+  const markSaved = useCallback(
+    (id: string) => {
+      const doc = documents.find((d) => d.id === id);
+      if (!doc) return;
+      setSavedSnapshots((prev) => ({ ...prev, [id]: JSON.stringify(doc) }));
+    },
+    [documents],
+  );
+
+  /** Sin guardado manual previo: "sucio" si tiene contenido real. Con guardado previo: "sucio" si el contenido actual difiere de esa instantanea. */
+  const isDocDirty = useCallback(
+    (doc: LedgerDocument): boolean => {
+      const snapshot = savedSnapshots[doc.id];
+      if (snapshot === undefined) {
+        return doc.accounts.length > 0 || doc.transactions.length > 0 || doc.categories.length > 0 || Object.keys(doc.budgets).length > 0 || doc.savedFilters.length > 0;
+      }
+      return JSON.stringify(doc) !== snapshot;
+    },
+    [savedSnapshots],
+  );
+
+  /**
+   * Cierra un documento: lo quita de la lista de documentos abiertos en esta
+   * sesion. Nunca borra el archivo del disco (ver instrucciones: la papelera
+   * de cada pastilla de documento cierra, no elimina).
+   */
+  const closeDocument = useCallback(
     (id: string) => {
       setDocuments((prev) => prev.filter((d) => d.id !== id));
       if (activeDocId === id) {
@@ -150,7 +181,12 @@ export function useDocuments() {
         delete next[id];
         return next;
       });
-      deleteDocumentFile(id).catch((err) => console.error("Error eliminando documento", err));
+      setSavedSnapshots((prev) => {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     },
     [activeDocId, documents],
   );
@@ -187,7 +223,9 @@ export function useDocuments() {
     createDocument,
     createDocumentReplacing,
     addDocument,
-    removeDocument,
+    closeDocument,
+    markSaved,
+    isDocDirty,
     getSavedPath,
     setSavedPath,
     recentPaths,
