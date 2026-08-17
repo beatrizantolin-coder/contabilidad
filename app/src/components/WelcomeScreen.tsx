@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AlertTriangle, FilePlus2, FlaskConical, FolderClock, FolderOpen } from "lucide-react";
 import { T } from "../theme";
+import { APP_VERSION } from "../lib/version";
 
 export function WelcomeScreen({
   onCreate,
@@ -28,7 +29,7 @@ export function WelcomeScreen({
       <div style={{ textAlign: "center", maxWidth: 440, width: "100%" }}>
         <img src="/app-icon.png" alt="" width={64} height={64} style={{ marginBottom: 12 }} />
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Bienvenido a Conta-Nice</div>
-        <p style={{ fontSize: 11.5, color: T.textFaint, margin: "0 0 10px" }}>© B-Nice design 2026 · Version 1.01.1708</p>
+        <p style={{ fontSize: 11.5, color: T.textFaint, margin: "0 0 10px" }}>© B-Nice design 2026 · Version {APP_VERSION}</p>
         <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 26px" }}>Elige cómo quieres empezar.</p>
 
         {error && (

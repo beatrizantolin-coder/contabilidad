@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, Eraser, FolderPlus, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload } from "lucide-react";
+import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, Eraser, FolderPlus, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload, type LucideIcon } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate, todayISO } from "../lib/format";
@@ -15,6 +15,7 @@ const GRID_MIN_WIDTH = 760;
 
 export function TransactionsView({
   title,
+  titleIcon: TitleIcon,
   monthIncome,
   monthExpense,
   onClearAll,
@@ -62,6 +63,8 @@ export function TransactionsView({
   onTogglePrevision,
 }: {
   title: string;
+  /** Icono del tipo de cuenta, mostrado junto al titulo cuando hay un grupo de cuentas seleccionado (Bancos/Ahorro/Tarjetas/Efectivo). */
+  titleIcon?: LucideIcon;
   monthIncome: number;
   monthExpense: number;
   onClearAll: () => void;
@@ -159,7 +162,10 @@ export function TransactionsView({
     <>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid " + T.border, gap: 10, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+            {TitleIcon && <TitleIcon size={17} style={{ color: T.accent }} />}
+            {title}
+          </div>
           <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center" }}>
             <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
               <TrendingUp size={12} /> <span className="amount">{fmt(monthIncome)}</span>

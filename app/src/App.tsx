@@ -15,7 +15,7 @@ import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv,
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, saveNewDocumentToDesktop, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type CustomAmountEntry, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
-import { ACCOUNT_SECTIONS, Sidebar, type MainView, type SidebarSection } from "./components/Sidebar";
+import { ACCOUNT_GROUP_LABELS, ACCOUNT_SECTIONS, Sidebar, type MainView, type SidebarSection } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
 import { SidePanel } from "./components/SidePanel";
@@ -56,6 +56,7 @@ export default function App() {
   } = useDocuments();
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
+  const [activeAccountTypeGroup, setActiveAccountTypeGroup] = useState<AccountType | null>(null);
   const [lastClickedAccountId, setLastClickedAccountId] = useState<ID | null>(null);
   const [view, setView] = useState<MainView>("transactions");
   const [sidebarWidth, setSidebarWidth] = useState(270);
@@ -570,6 +571,7 @@ export default function App() {
   }
   function handleAccountClick(id: ID, shiftKey: boolean, toggleKey: boolean) {
     closeEditPanels();
+    setActiveAccountTypeGroup(null);
     if (toggleKey) {
       setActiveAccounts((prev) => {
         const next = new Set(prev);
@@ -598,7 +600,26 @@ export default function App() {
   }
   function clearAccountSelection() {
     setActiveAccounts(new Set());
+    setActiveAccountTypeGroup(null);
     setLastClickedAccountId(null);
+  }
+
+  /** Selecciona en bloque todas las cuentas de un tipo (Bancos/Ahorro/Tarjetas/Efectivo) desde la barra lateral. */
+  function handleAccountTypeGroupClick(type: AccountType) {
+    closeEditPanels();
+    const ids = accounts.filter((a) => (a.type || "checking") === type).map((a) => a.id);
+    setActiveAccountTypeGroup(type);
+    setActiveAccounts(new Set(ids));
+    setLastClickedAccountId(null);
+    setView("transactions");
+    setSidebarSection("cuentas");
+  }
+
+  /** Pulsar la cabecera "Cuentas" en general: vuelve al comportamiento normal (todas las cuentas), quitando cualquier seleccion de grupo o de cuenta individual. */
+  function handleAccountsHeaderClick() {
+    clearAccountSelection();
+    setView("transactions");
+    setSidebarSection("cuentas");
   }
 
   function findLastCategoryForName(name: string): Transaction | null {
@@ -1341,8 +1362,14 @@ export default function App() {
     );
   }
 
-  const accountsTitle =
-    activeAccounts.size === 0 ? "Todas las cuentas" : activeAccounts.size === 1 ? accounts.find((a) => a.id === [...activeAccounts][0])?.name ?? "-" : activeAccounts.size + " cuentas seleccionadas";
+  const accountsTitle = activeAccountTypeGroup
+    ? ACCOUNT_GROUP_LABELS[activeAccountTypeGroup]
+    : activeAccounts.size === 0
+    ? "Todas las cuentas"
+    : activeAccounts.size === 1
+    ? accounts.find((a) => a.id === [...activeAccounts][0])?.name ?? "-"
+    : activeAccounts.size + " cuentas seleccionadas";
+  const accountsTitleIcon = activeAccountTypeGroup ? ACCOUNT_SECTIONS.find((s) => s.key === activeAccountTypeGroup)?.icon : undefined;
 
   return (
     <div style={{ height: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif", overflow: "hidden" }}>
@@ -1360,6 +1387,7 @@ export default function App() {
                 setView("transactions");
               }}
               createDocument={createDocument}
+              onLinkDocument={handleOpenDocumentFile}
               onCloseDocument={requestCloseDocument}
               onSaveDocument={handleSaveDoc}
               onSaveAsDocument={handleSaveAs}
@@ -1367,7 +1395,10 @@ export default function App() {
               balances={balances}
               totalBalance={totalBalance}
               activeAccounts={activeAccounts}
+              activeAccountTypeGroup={activeAccountTypeGroup}
               onAccountClick={handleAccountClick}
+              onAccountTypeGroupClick={handleAccountTypeGroupClick}
+              onAccountsHeaderClick={handleAccountsHeaderClick}
               clearAccountSelection={clearAccountSelection}
               addAccount={addAccount}
               updateAccount={updateAccount}
@@ -1462,6 +1493,7 @@ export default function App() {
                 {view === "transactions" && (
                   <TransactionsView
                     title={accountsTitle}
+                    titleIcon={accountsTitleIcon}
                     monthIncome={monthIncome}
                     monthExpense={monthExpense}
                     onClearAll={clearTransactionsView}

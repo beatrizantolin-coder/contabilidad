@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FileText, Folder, FolderPlus, GripVertical, Landmark, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, TrendingUp, X } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FilePlus, FileText, Folder, FolderPlus, GripVertical, Landmark, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, TrendingUp, X } from "lucide-react";
 import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -20,6 +20,14 @@ export const ACCOUNT_SECTIONS: AccountSection[] = [
   { key: "credit", label: "Tarjetas", icon: CreditCard },
   { key: "cash", label: "Efectivo", icon: Banknote },
 ];
+
+/** Titulo de cabecera de Movimientos cuando se selecciona un grupo entero de cuentas (Bancos/Ahorro/Tarjetas/Efectivo) desde la barra lateral. */
+export const ACCOUNT_GROUP_LABELS: Record<AccountType, string> = {
+  checking: "Todos los Bancos",
+  savings: "Todos los Ahorros",
+  credit: "Todas las Tarjetas",
+  cash: "Todo el Efectivo",
+};
 
 interface AccDraft {
   id: ID | null;
@@ -54,6 +62,7 @@ export function Sidebar({
   activeDocId,
   setActiveDocId,
   createDocument,
+  onLinkDocument,
   onCloseDocument,
   onSaveDocument,
   onSaveAsDocument,
@@ -61,7 +70,10 @@ export function Sidebar({
   balances,
   totalBalance,
   activeAccounts,
+  activeAccountTypeGroup,
   onAccountClick,
+  onAccountTypeGroupClick,
+  onAccountsHeaderClick,
   clearAccountSelection,
   addAccount,
   updateAccount,
@@ -84,6 +96,8 @@ export function Sidebar({
   activeDocId: string;
   setActiveDocId: (id: string) => void;
   createDocument: (name: string) => void;
+  /** "Vincular documento": abre el selector nativo de archivos y añade el documento elegido a la sesión (a diferencia de "Nuevo documento", que crea uno en blanco). */
+  onLinkDocument: () => void;
   onCloseDocument: (id: string) => void;
   onSaveDocument: (doc: LedgerDocument) => Promise<void>;
   onSaveAsDocument: () => void;
@@ -91,7 +105,11 @@ export function Sidebar({
   balances: Record<ID, number>;
   totalBalance: number;
   activeAccounts: Set<ID>;
+  /** Tipo de cuenta cuyo grupo (Bancos/Ahorro/Tarjetas/Efectivo) está seleccionado en bloque, o null si no hay ninguno. */
+  activeAccountTypeGroup: AccountType | null;
   onAccountClick: (id: ID, shiftKey: boolean, toggleKey: boolean) => void;
+  onAccountTypeGroupClick: (type: AccountType) => void;
+  onAccountsHeaderClick: () => void;
   clearAccountSelection: () => void;
   addAccount: (fields: AccountDraftFields) => void;
   updateAccount: (id: ID, fields: AccountDraftFields) => void;
@@ -112,6 +130,7 @@ export function Sidebar({
   onToggleCollapsed: () => void;
 }) {
   const [showDocForm, setShowDocForm] = useState(false);
+  const [docMenuOpen, setDocMenuOpen] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
   const [showAccForm, setShowAccForm] = useState(false);
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
@@ -164,6 +183,7 @@ export function Sidebar({
   useEffect(() => {
     setShowDocForm(false);
     setShowAccForm(false);
+    setDocMenuOpen(false);
   }, [view, activeDocId]);
 
   function submitDoc(e: React.FormEvent) {
@@ -214,11 +234,6 @@ export function Sidebar({
     setShowAccForm(false);
   }
 
-  function goToAccounts() {
-    setSidebarSection("cuentas");
-    setView("transactions");
-  }
-
   return (
     <aside
       className="no-print"
@@ -249,19 +264,19 @@ export function Sidebar({
             <Plus size={14} />
           </button>
           <div style={{ width: 20, borderTop: "1px solid " + T.border }} />
-          <button onClick={goToAccounts} style={{ background: "none", border: "none", color: sidebarSection === "cuentas" ? T.accent : T.textMuted, padding: 4 }} aria-label="Cuentas" title="Cuentas">
+          <button onClick={onAccountsHeaderClick} style={{ background: "none", border: "none", color: sidebarSection === "cuentas" ? T.accent : T.textMuted, padding: 4 }} aria-label="Cuentas" title="Cuentas">
             <CircleDollarSign size={17} />
           </button>
-          <button onClick={goToAccounts} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label="Bancos" title="Bancos">
+          <button onClick={() => onAccountTypeGroupClick("checking")} style={{ background: "none", border: "none", color: activeAccountTypeGroup === "checking" ? T.accent : T.textMuted, padding: 2 }} aria-label="Bancos" title="Bancos">
             <Landmark size={15} />
           </button>
-          <button onClick={goToAccounts} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label="Ahorro" title="Ahorro">
+          <button onClick={() => onAccountTypeGroupClick("savings")} style={{ background: "none", border: "none", color: activeAccountTypeGroup === "savings" ? T.accent : T.textMuted, padding: 2 }} aria-label="Ahorro" title="Ahorro">
             <PiggyBank size={15} />
           </button>
-          <button onClick={goToAccounts} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label="Tarjetas" title="Tarjetas">
+          <button onClick={() => onAccountTypeGroupClick("credit")} style={{ background: "none", border: "none", color: activeAccountTypeGroup === "credit" ? T.accent : T.textMuted, padding: 2 }} aria-label="Tarjetas" title="Tarjetas">
             <CreditCard size={15} />
           </button>
-          <button onClick={goToAccounts} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label="Efectivo" title="Efectivo">
+          <button onClick={() => onAccountTypeGroupClick("cash")} style={{ background: "none", border: "none", color: activeAccountTypeGroup === "cash" ? T.accent : T.textMuted, padding: 2 }} aria-label="Efectivo" title="Efectivo">
             <Banknote size={15} />
           </button>
           <button onClick={() => openAccountForm("checking", null, false)} style={{ background: "none", border: "none", color: T.textMuted, padding: 4 }} aria-label="Añadir cuenta" title="Añadir cuenta">
@@ -288,46 +303,68 @@ export function Sidebar({
         </div>
       ) : (
       <>
-      <div style={{ padding: "0 10px" }}>
+      <div style={{ padding: "0 2px", position: "relative" }}>
         <button
-          onClick={() => { setSidebarSection("documentos"); setShowDocForm((s) => !s); }}
+          onClick={() => setSidebarSection("documentos")}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: sidebarSection === "documentos" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "documentos" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}
         >
           <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
             <Folder size={13} style={{ color: sidebarSection === "documentos" ? T.accent : T.textMuted }} /> Documentos
           </span>
-          <Plus size={13} style={{ color: T.textMuted }} />
+          <span onClick={(e) => { e.stopPropagation(); setDocMenuOpen((s) => !s); }} style={{ color: T.textMuted, display: "flex" }}>
+            <Plus size={13} />
+          </span>
         </button>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, marginBottom: 14, padding: "0 6px 0 18px" }}>
-        {documents.map((d, docIndex) => (
-          <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            {docIndex > 0 && <Link2 size={11} style={{ color: T.textFaint, flexShrink: 0 }} />}
-            <div style={{ display: "flex", alignItems: "center", gap: 3, background: d.id === activeDocId ? "#FFFFFF" : "transparent", border: "1px solid " + (d.id === activeDocId ? T.border : "transparent"), borderRadius: 6, padding: "3px 8px" }}>
+        {docMenuOpen && (
+          <>
+            <div onClick={() => setDocMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+            <div style={{ position: "absolute", top: "100%", right: 10, marginTop: 2, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, boxShadow: "0 4px 14px rgba(0,0,0,0.1)", zIndex: 41, minWidth: 190, overflow: "hidden" }}>
               <button
-                onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
-                style={{ background: "none", border: "none", padding: 0, fontSize: 10.5, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 4 }}
+                onClick={() => { setDocMenuOpen(false); onLinkDocument(); }}
+                style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "9px 12px", fontSize: 12.5, color: T.text, display: "flex", alignItems: "center", gap: 7 }}
               >
-                <FileText size={10} /> {d.name}
+                <Link2 size={13} style={{ color: T.textMuted }} /> Vincular documento
               </button>
-              {documents.length > 1 && (
-                <button onClick={() => onCloseDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 3px" }} aria-label={"Cerrar archivo " + d.name}>
-                  <Trash2 size={10} />
-                </button>
-              )}
               <button
-                onClick={() => handleSaveDocumentClick(d)}
-                style={{ background: "none", border: "none", color: savedDocFeedback === d.id ? T.income : T.textFaint, padding: "0 3px 0 0" }}
-                aria-label={"Guardar " + d.name}
-                title="Guardar"
+                onClick={() => { setDocMenuOpen(false); setShowDocForm(true); }}
+                style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "9px 12px", fontSize: 12.5, color: T.text, display: "flex", alignItems: "center", gap: 7, borderTop: "1px solid " + T.borderSoft }}
               >
-                {savedDocFeedback === d.id ? <CheckCircle2 size={10} /> : <Save size={10} />}
-              </button>
-              <button onClick={onSaveAsDocument} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 2px" }} aria-label={"Guardar como " + d.name} title="Guardar como">
-                <FolderPlus size={10} />
+                <FilePlus size={13} style={{ color: T.textMuted }} /> Nuevo documento
               </button>
             </div>
+          </>
+        )}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 14, padding: "0 6px 0 12px" }}>
+        {documents.map((d, docIndex) => (
+          <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, background: d.id === activeDocId ? "#FFFFFF" : "transparent", border: "1px solid " + (d.id === activeDocId ? T.border : T.borderSoft), borderRadius: 7, padding: "5px 8px" }}>
+              <button
+                onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
+                style={{ background: "none", border: "none", padding: 0, fontSize: 12, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 5, overflow: "hidden", minWidth: 0 }}
+              >
+                <FileText size={12} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>{d.name}</span>
+              </button>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                <button onClick={() => onCloseDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 2px" }} aria-label={"Cerrar archivo " + d.name}>
+                  <Trash2 size={11} />
+                </button>
+                <button
+                  onClick={() => handleSaveDocumentClick(d)}
+                  style={{ background: "none", border: "none", color: savedDocFeedback === d.id ? T.income : T.textFaint, padding: "0 2px" }}
+                  aria-label={"Guardar " + d.name}
+                  title="Guardar"
+                >
+                  {savedDocFeedback === d.id ? <CheckCircle2 size={11} /> : <Save size={11} />}
+                </button>
+                <button onClick={onSaveAsDocument} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 2px" }} aria-label={"Guardar como " + d.name} title="Guardar como">
+                  <FolderPlus size={11} />
+                </button>
+              </span>
+            </div>
+            {docIndex === documents.length - 2 && <Link2 size={13} style={{ color: T.text, flexShrink: 0 }} />}
           </div>
         ))}
       </div>
@@ -349,12 +386,12 @@ export function Sidebar({
       )}
 
       <div style={{ borderTop: "1px solid " + T.border, margin: "14px 10px 4px" }} />
-      <div style={{ padding: "0 10px", marginTop: 18 }}>
+      <div style={{ padding: "0 2px", marginTop: 6 }}>
         <div
           className="navitem"
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: sidebarSection === "cuentas" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "cuentas" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", borderRadius: 7, padding: "7px 8px" }}
         >
-          <button onClick={goToAccounts} style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={onAccountsHeaderClick} style={{ flex: 1, textAlign: "left", background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
               <CircleDollarSign size={13} style={{ color: sidebarSection === "cuentas" ? T.accent : T.textMuted }} /> Cuentas
             </span>
@@ -369,12 +406,21 @@ export function Sidebar({
         {ACCOUNT_SECTIONS.map((section) => {
           const SectionIcon = section.icon;
           const group = accounts.filter((a) => (a.type || "checking") === section.key);
+          const groupActive = activeAccountTypeGroup === section.key;
           return (
             <div key={section.key} style={{ marginBottom: 4 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 2px 18px" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textFaint, fontWeight: 600 }}>
-                  <SectionIcon size={10} /> {section.label}
-                </span>
+              <div
+                className="navitem"
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px 2px 16px", borderRadius: 6, background: groupActive ? "#FFFFFF" : "transparent", boxShadow: groupActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none" }}
+              >
+                <button
+                  onClick={() => onAccountTypeGroupClick(section.key)}
+                  style={{ background: "none", border: "none", padding: "4px 0", display: "flex", alignItems: "center", gap: 5, flex: 1, textAlign: "left" }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: groupActive ? T.accent : T.textFaint, fontWeight: 600 }}>
+                    <SectionIcon size={10} /> {section.label}
+                  </span>
+                </button>
                 <button onClick={() => openAccountForm(section.key, null, true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
                   <Plus size={11} />
                 </button>
@@ -519,7 +565,7 @@ export function Sidebar({
       )}
 
       <div style={{ borderTop: "1px solid " + T.border, margin: "14px 10px 10px" }} />
-      <div style={{ marginTop: 12, padding: "0 10px" }}>
+      <div style={{ marginTop: 12, padding: "0 2px" }}>
         <button
           onClick={() => { setSidebarSection("recurring"); setView("recurring"); }}
           className="navitem"
@@ -532,7 +578,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <div style={{ marginTop: 6, padding: "0 10px" }}>
+      <div style={{ marginTop: 6, padding: "0 2px" }}>
         <button
           onClick={() => { setSidebarSection("categories"); setView("categories"); }}
           className="navitem"
@@ -545,7 +591,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <div style={{ marginTop: 6, padding: "0 10px" }}>
+      <div style={{ marginTop: 6, padding: "0 2px" }}>
         <button
           onClick={() => { setSidebarSection("filters"); setView("filters"); }}
           className="navitem"
@@ -558,7 +604,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <div style={{ marginTop: 6, padding: "0 10px" }}>
+      <div style={{ marginTop: 6, padding: "0 2px" }}>
         <button
           onClick={() => { setSidebarSection("previsiones"); setShowPrevision((s) => !s); }}
           className="navitem"
