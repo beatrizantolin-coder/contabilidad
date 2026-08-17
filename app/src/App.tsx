@@ -29,7 +29,7 @@ import { WelcomeScreen } from "./components/WelcomeScreen";
 import { RenameDocumentModal } from "./components/RenameDocumentModal";
 import { buildAppMenu, type AppMenuHandlers } from "./lib/appMenu";
 
-const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
+const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "", matchMode: "all" });
 
 export default function App() {
   const {
@@ -240,12 +240,19 @@ export default function App() {
     const base = scoped
       .filter((t) => t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds))
       .filter((t) => filtersHaveDateRange || !viewRange || (t.date >= viewRange.from && t.date <= viewRange.to))
-      .filter((t) => filters.categories.length === 0 || (t.categoryId && filters.categories.includes(t.categoryId)))
-      .filter((t) => filters.subcategories.length === 0 || (t.subcategoryId && filters.subcategories.includes(t.subcategoryId)))
-      .filter((t) => filters.type === "all" || (filters.type === "transfer" ? t.type === "transfer" || t.type === "transfer_in" : t.type === filters.type))
-      .filter((t) => !filters.from || t.date >= filters.from)
-      .filter((t) => !filters.to || t.date <= filters.to)
-      .filter((t) => !filters.search || t.name.toLowerCase().includes(filters.search.toLowerCase()))
+      .filter((t) => {
+        const conds: boolean[] = [];
+        if (filters.categories.length > 0) conds.push(!!t.categoryId && filters.categories.includes(t.categoryId));
+        if (filters.subcategories.length > 0) conds.push(!!t.subcategoryId && filters.subcategories.includes(t.subcategoryId));
+        if (filters.type !== "all") conds.push(filters.type === "transfer" ? t.type === "transfer" || t.type === "transfer_in" : t.type === filters.type);
+        if (filters.from) conds.push(t.date >= filters.from);
+        if (filters.to) conds.push(t.date <= filters.to);
+        if (filters.search) conds.push(t.name.toLowerCase().includes(filters.search.toLowerCase()));
+        if (conds.length === 0) return true;
+        if (filters.matchMode === "any") return conds.some(Boolean);
+        if (filters.matchMode === "none") return conds.every((c) => !c);
+        return conds.every(Boolean);
+      })
       .slice();
     const dir = sortBy && sortBy.dir === "asc" ? 1 : -1;
     return base.sort((a, b) => {

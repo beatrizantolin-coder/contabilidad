@@ -1,20 +1,11 @@
 import { useState } from "react";
-import { Eraser, Search } from "lucide-react";
-import type { Category, Filters, ID } from "../types";
+import { Eraser, Save, Search } from "lucide-react";
+import type { Filters, Category, ID } from "../types";
 import { T, dot, inputStyle, smallBtn } from "../theme";
 import { Field } from "./Field";
 import { DateField } from "./DateField";
-import { quickRange, type QuickRangeKey } from "../lib/format";
 
-const QUICK_KEYS: readonly [QuickRangeKey, string][] = [
-  ["1M", "1M"],
-  ["3M", "3M"],
-  ["6M", "6M"],
-  ["1A", "1A"],
-  ["finDeAno", "Fin de año"],
-];
-
-const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "" });
+const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "", matchMode: "all" });
 
 export function FiltersBar({
   filters,
@@ -31,14 +22,8 @@ export function FiltersBar({
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [dateDraft, setDateDraft] = useState({ from: filters.from, to: filters.to });
-  const [preset, setPreset] = useState<QuickRangeKey | null>(null);
 
-  function applyPreset(key: QuickRangeKey) {
-    setPreset(key);
-    setDateDraft(quickRange(key));
-  }
   function resetAll() {
-    setPreset(null);
     setDateDraft({ from: "", to: "" });
     setFilters(() => emptyFilters());
   }
@@ -87,7 +72,7 @@ export function FiltersBar({
 
   return (
     <div style={{ padding: 14, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 10 }}>
         <Field label="Descripcion">
           <div style={{ position: "relative" }}>
             <Search size={13} style={{ position: "absolute", left: 9, top: 10, color: T.textFaint }} />
@@ -157,43 +142,41 @@ export function FiltersBar({
           </div>
         </Field>
 
-        <button type="button" title="Limpiar filtros" aria-label="Limpiar filtros" onClick={resetAll} style={{ ...smallBtn(false), padding: "8px 9px" }}>
+        <Field label="Coincidencia">
+          <select value={filters.matchMode} onChange={(e) => setFilters((f) => ({ ...f, matchMode: e.target.value as Filters["matchMode"] }))} style={{ ...inputStyle, width: 150 }}>
+            <option value="all">Todas</option>
+            <option value="any">Cualquiera</option>
+            <option value="none">Ninguna</option>
+          </select>
+        </Field>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <button type="button" title="Limpiar filtros" aria-label="Limpiar filtros" onClick={resetAll} style={smallBtn(false)}>
           <Eraser size={13} />
         </button>
 
-        {QUICK_KEYS.map(([key, label]) => (
-          <button key={key} type="button" onClick={() => applyPreset(key)} style={smallBtn(preset === key)}>
-            {label}
-          </button>
-        ))}
+        <button type="button" onClick={() => setShowSaveForm((s) => !s)} style={smallBtn(showSaveForm)}>
+          <Save size={13} />Guardar
+        </button>
 
         <DateField
           label="Desde"
           value={dateDraft.from}
-          onChange={(v) => {
-            setPreset(null);
-            setDateDraft((r) => ({ ...r, from: v }));
-          }}
+          onChange={(v) => setDateDraft((r) => ({ ...r, from: v }))}
         />
         <DateField
           label="Hasta"
           value={dateDraft.to}
-          onChange={(v) => {
-            setPreset(null);
-            setDateDraft((r) => ({ ...r, to: v }));
-          }}
+          onChange={(v) => setDateDraft((r) => ({ ...r, to: v }))}
         />
 
         <button
           type="button"
           onClick={showDateRange}
-          style={{ background: T.accent, border: "none", borderRadius: 6, padding: "0 14px", height: 34, color: "#fff", fontSize: 12.5, fontWeight: 600 }}
+          style={{ background: T.accent, border: "none", borderRadius: 6, padding: "0 24px", height: 30, color: "#fff", fontSize: 12, fontWeight: 600 }}
         >
           Mostrar
-        </button>
-
-        <button onClick={() => setShowSaveForm((s) => !s)} style={smallBtn(showSaveForm)}>
-          Guardar
         </button>
       </div>
 

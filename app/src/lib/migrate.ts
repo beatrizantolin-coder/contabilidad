@@ -93,6 +93,7 @@ function migrateFilters(raw: any): Filters {
     type: raw?.type === "income" || raw?.type === "expense" || raw?.type === "transfer" ? raw.type : "all",
     from: typeof raw?.from === "string" ? raw.from : "",
     to: typeof raw?.to === "string" ? raw.to : "",
+    matchMode: raw?.matchMode === "any" || raw?.matchMode === "none" ? raw.matchMode : "all",
   };
 }
 

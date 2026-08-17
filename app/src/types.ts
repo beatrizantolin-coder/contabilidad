@@ -117,6 +117,8 @@ export interface Budgets {
   [categoryId: string]: number;
 }
 
+export type FilterMatchMode = "all" | "any" | "none";
+
 export interface Filters {
   search: string;
   categories: ID[];
@@ -124,6 +126,8 @@ export interface Filters {
   type: "all" | "income" | "expense" | "transfer";
   from: string;
   to: string;
+  /** Como se combinan los criterios activos (categoria/subcategoria/tipo/fechas/busqueda): "all" = deben cumplirse todos, "any" = basta uno, "none" = excluye los que cumplan cualquiera. */
+  matchMode: FilterMatchMode;
 }
 
 /** Saldo no se incluye: no es ordenable (depende del orden cronologico real). */
