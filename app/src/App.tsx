@@ -11,7 +11,7 @@ import { computeBulkEditDraft, emptyBulkEditState, type BulkEditField, type Bulk
 import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, todayISO } from "./lib/format";
 import { computeProgramadorMonthStats, computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
-import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv } from "./lib/csv";
+import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv, pickAndImportProgramadorCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type CustomAmountEntry, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
@@ -509,6 +509,17 @@ export default function App() {
       setBudgets((b) => ({ ...b, ...result.budgetPatch }));
     } catch (err) {
       console.error("Error importando categorias CSV", err);
+    }
+  }
+  async function handleImportProgramador() {
+    if (!activeDoc) return;
+    try {
+      const result = await pickAndImportProgramadorCsv(accounts);
+      if (!result) return;
+      setAccounts(() => result.accounts);
+      setTransactions((prev) => prev.concat(result.transactions));
+    } catch (err) {
+      console.error("Error importando programador CSV", err);
     }
   }
 
@@ -1336,6 +1347,7 @@ export default function App() {
                     onNewScheduled={openScheduledForm}
                     onOpenRow={openProgramadorRow}
                     onRemove={removeTx}
+                    onImport={handleImportProgramador}
                     showPrevision={showPrevision}
                     onTogglePrevision={toggleShowPrevisionFromToolbar}
                   />

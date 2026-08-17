@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Repeat, Search, Trash2, TrendingUp } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Repeat, Search, Trash2, TrendingUp, Upload } from "lucide-react";
 import type { Account, Category, ID, Transaction } from "../types";
 import { isVariableSeries, occurrenceAmount, type ProgramadorRow } from "../lib/recurring";
 import { T, dot, inputStyle, smallBtn } from "../theme";
@@ -43,6 +43,7 @@ export function RecurringView({
   onNewScheduled,
   onOpenRow,
   onRemove,
+  onImport,
   showPrevision,
   onTogglePrevision,
 }: {
@@ -57,6 +58,7 @@ export function RecurringView({
   onNewScheduled: () => void;
   onOpenRow: (row: ProgramadorRow) => void;
   onRemove: (t: Transaction) => void;
+  onImport: () => void;
   showPrevision: boolean;
   onTogglePrevision: () => void;
 }) {
@@ -155,6 +157,9 @@ export function RecurringView({
           </button>
           <button onClick={handleExport} style={smallBtn(false)}>
             <Download size={13} />Exportar
+          </button>
+          <button onClick={onImport} style={smallBtn(false)}>
+            <Upload size={13} />Importar
           </button>
           <button onClick={onNewScheduled} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600 }}>
             <Plus size={14} /> Nueva operacion

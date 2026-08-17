@@ -1,6 +1,6 @@
 import Papa from "papaparse";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Account, AccountType, Budgets, Category, CategoryKind, ID, LedgerDocument, Subcategory, Transaction, TransactionStatus } from "../types";
+import type { Account, AccountType, Budgets, Category, CategoryKind, ID, LedgerDocument, RecurUnit, Subcategory, Transaction, TransactionStatus } from "../types";
 import { catInfo } from "./categories";
 import { genId, genSeq } from "./id";
 import { freqLabel, todayISO } from "./format";
@@ -143,6 +143,82 @@ export async function exportProgramadorCsv(docName: string, rows: ProgramadorRow
   if (!path) return false;
   await writeTextFile(path, csv);
   return true;
+}
+
+/** "Cada N dias/meses/anos" (ver freqLabel) -> {interval, unit}. Por defecto 1 mes si no reconoce el texto. */
+function parsePeriodicidad(raw: string | undefined): { interval: number; unit: RecurUnit } {
+  const m = (raw || "").trim().match(/^Cada\s+(\d+)\s+(\S+)/i);
+  if (!m) return { interval: 1, unit: "months" };
+  const interval = Number(m[1]) || 1;
+  const word = m[2].toLowerCase();
+  if (word.startsWith("dia")) return { interval, unit: "days" };
+  if (word.startsWith("ano") || word.startsWith("año")) return { interval, unit: "years" };
+  return { interval, unit: "months" };
+}
+
+export interface ProgramadorImportResult {
+  accounts: Account[];
+  transactions: Transaction[];
+}
+
+/**
+ * Importa el mismo formato que exportProgramadorCsv (Fecha, Cuenta, Tipo,
+ * Periodicidad, Descripcion, Recurrencia, Importe). Crea, para cada fila, un
+ * movimiento recurrente ancla con esa fecha y periodicidad (siempre "Fija":
+ * una unica fila de export no trae informacion suficiente para reconstruir
+ * los importes personalizados por fecha de una serie "Variable"). Las
+ * cuentas que no existan se crean con tipo "checking" por defecto.
+ */
+export function parseProgramadorCsv(csvText: string, accounts: Account[]): ProgramadorImportResult {
+  const parsed = Papa.parse<Record<string, string>>(csvText, { header: true, skipEmptyLines: true });
+  let nextAccounts = accounts.slice();
+  const accByName = new Map<string, ID>();
+  nextAccounts.forEach((a) => accByName.set(normalizeKey(a.name), a.id));
+
+  const imported: Transaction[] = [];
+
+  parsed.data.forEach((row) => {
+    const accName = (row.Cuenta || "").trim();
+    const name = (row.Descripcion || "").trim();
+    if (!accName || !name) return;
+
+    let accId = accByName.get(normalizeKey(accName));
+    if (!accId) {
+      accId = genId();
+      nextAccounts.push({ id: accId, name: accName, opening: 0, warning: 0, type: "checking", linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null });
+      accByName.set(normalizeKey(accName), accId);
+    }
+
+    const typeLabel = normalizeKey(row.Tipo || "");
+    const type: "income" | "expense" = typeLabel.startsWith("ingreso") ? "income" : "expense";
+    const { interval, unit } = parsePeriodicidad(row.Periodicidad);
+    const dateIso = row.Fecha && /^\d{4}-\d{2}-\d{2}$/.test(row.Fecha.trim()) ? row.Fecha.trim() : todayISO();
+
+    imported.push({
+      id: genId(),
+      seq: genSeq(),
+      accountId: accId,
+      date: dateIso,
+      name,
+      comment: "",
+      categoryId: null,
+      subcategoryId: null,
+      subsubcategoryId: null,
+      amount: Math.abs(parseAmount(row.Importe)),
+      type,
+      recurring: { interval, unit, endDate: null, customAmounts: [] },
+      status: "programado",
+    } as Transaction);
+  });
+
+  return { accounts: nextAccounts, transactions: imported };
+}
+
+export async function pickAndImportProgramadorCsv(accounts: Account[]): Promise<ProgramadorImportResult | null> {
+  const path = await open({ multiple: false, filters: [{ name: "CSV", extensions: ["csv"] }] });
+  if (!path || Array.isArray(path)) return null;
+  const text = await readTextFile(path);
+  return parseProgramadorCsv(text, accounts);
 }
 
 function normalizeKey(s: string): string {
