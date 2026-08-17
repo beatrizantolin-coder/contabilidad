@@ -1,6 +1,6 @@
-import { Plus, Trash2, TrendingUp } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import type { SavedFilter } from "../types";
-import { T, smallBtn } from "../theme";
+import { T } from "../theme";
 import { shortDate } from "../lib/format";
 
 export function FiltersView({
@@ -9,16 +9,12 @@ export function FiltersView({
   onApply,
   onRemove,
   onNewFilter,
-  showPrevision,
-  onTogglePrevision,
 }: {
   docName: string;
   savedFilters: SavedFilter[];
   onApply: (sf: SavedFilter) => void;
   onRemove: (id: string) => void;
   onNewFilter: () => void;
-  showPrevision: boolean;
-  onTogglePrevision: () => void;
 }) {
   return (
     <div style={{ padding: "20px 24px", overflow: "auto", flex: 1, minHeight: 0 }}>
@@ -28,9 +24,6 @@ export function FiltersView({
           <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 18px" }}>Filtros guardados en {docName}. Haz clic en uno para aplicarlo.</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button onClick={onTogglePrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(showPrevision)}>
-            <TrendingUp size={12} />
-          </button>
           <button onClick={onNewFilter} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "7px 13px", fontSize: 13, fontWeight: 600 }}>
             <Plus size={14} /> Nuevo filtro
           </button>

@@ -58,8 +58,6 @@ export function CategoriesView({
   newCategoryTrigger,
   onExport,
   onImport,
-  showPrevision,
-  onTogglePrevision,
 }: {
   docName: string;
   categories: Category[];
@@ -77,8 +75,6 @@ export function CategoriesView({
   newCategoryTrigger: number;
   onExport: () => void;
   onImport: () => void;
-  showPrevision: boolean;
-  onTogglePrevision: () => void;
 }) {
   const [catSearch, setCatSearch] = useState("");
   const [catTypeFilter, setCatTypeFilter] = useState<CatTypeFilter>("all");
@@ -290,9 +286,6 @@ export function CategoriesView({
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={onTogglePrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(showPrevision)}>
-            <TrendingUp size={12} />
-          </button>
           <button onClick={onExport} style={smallBtn(false)}>
             <Download size={13} />Exportar
           </button>

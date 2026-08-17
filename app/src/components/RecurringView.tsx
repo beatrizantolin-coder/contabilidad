@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Repeat, Search, Trash2, TrendingUp, Upload } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Repeat, Search, Trash2, Upload } from "lucide-react";
 import type { Account, Category, ID, Transaction } from "../types";
 import { isVariableSeries, occurrenceAmount, type ProgramadorRow } from "../lib/recurring";
 import { T, dot, inputStyle, smallBtn } from "../theme";
@@ -44,8 +44,6 @@ export function RecurringView({
   onOpenRow,
   onRemove,
   onImport,
-  showPrevision,
-  onTogglePrevision,
 }: {
   docName: string;
   programadorRows: ProgramadorRow[];
@@ -59,8 +57,6 @@ export function RecurringView({
   onOpenRow: (row: ProgramadorRow) => void;
   onRemove: (t: Transaction) => void;
   onImport: () => void;
-  showPrevision: boolean;
-  onTogglePrevision: () => void;
 }) {
   const [progSearch, setProgSearch] = useState("");
   const [progAccountFilter, setProgAccountFilter] = useState<Set<ID>>(new Set());
@@ -152,9 +148,6 @@ export function RecurringView({
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={onTogglePrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(showPrevision)}>
-            <TrendingUp size={12} />
-          </button>
           <button onClick={handleExport} style={smallBtn(false)}>
             <Download size={13} />Exportar
           </button>

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FilePlus, FileText, Folder, FolderPlus, GripVertical, Landmark, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, TrendingUp, X } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FilePlus, FileText, Folder, FolderPlus, GripVertical, Landmark, LineChart, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, X } from "lucide-react";
 import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
 import type { AccountDraftFields } from "../lib/accounts";
 
-export type MainView = "transactions" | "recurring" | "categories" | "filters";
+export type MainView = "transactions" | "recurring" | "categories" | "filters" | "previsiones";
 export type SidebarSection = "documentos" | "cuentas" | "recurring" | "categories" | "filters" | "previsiones";
 
 interface AccountSection {
@@ -85,8 +85,6 @@ export function Sidebar({
   setView,
   sidebarSection,
   setSidebarSection,
-  showPrevision,
-  setShowPrevision,
   recurringCount,
   categoriesCount,
   savedFiltersCount,
@@ -124,8 +122,6 @@ export function Sidebar({
   setView: (v: MainView) => void;
   sidebarSection: SidebarSection;
   setSidebarSection: (s: SidebarSection) => void;
-  showPrevision: boolean;
-  setShowPrevision: (fn: (s: boolean) => boolean) => void;
   recurringCount: number;
   categoriesCount: number;
   savedFiltersCount: number;
@@ -305,12 +301,12 @@ export function Sidebar({
             <SlidersHorizontal size={17} />
           </button>
           <button
-            onClick={() => { setSidebarSection("previsiones"); setShowPrevision((s) => !s); }}
-            style={{ background: "none", border: "none", color: sidebarSection === "previsiones" && showPrevision ? T.accent : T.textMuted, padding: 4 }}
+            onClick={() => { setSidebarSection("previsiones"); setView("previsiones"); }}
+            style={{ background: "none", border: "none", color: sidebarSection === "previsiones" ? T.accent : T.textMuted, padding: 4 }}
             aria-label="Previsiones"
             title="Previsiones"
           >
-            <TrendingUp size={17} />
+            <LineChart size={17} />
           </button>
         </div>
       ) : (
@@ -633,12 +629,12 @@ export function Sidebar({
 
       <div style={{ marginTop: 6, padding: "0 2px" }}>
         <button
-          onClick={() => { setSidebarSection("previsiones"); setShowPrevision((s) => !s); }}
+          onClick={() => { setSidebarSection("previsiones"); setView("previsiones"); }}
           className="navitem"
-          style={{ width: "100%", textAlign: "left", background: sidebarSection === "previsiones" && showPrevision ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "previsiones" && showPrevision ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+          style={{ width: "100%", textAlign: "left", background: sidebarSection === "previsiones" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "previsiones" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
           <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
-            <TrendingUp size={13} style={{ color: sidebarSection === "previsiones" && showPrevision ? T.accent : T.textMuted }} /> Previsiones
+            <LineChart size={13} style={{ color: sidebarSection === "previsiones" ? T.accent : T.textMuted }} /> Previsiones
           </span>
         </button>
       </div>

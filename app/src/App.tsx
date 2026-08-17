@@ -61,12 +61,11 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(270);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("cuentas");
-  const [showPrevision, setShowPrevision] = useState(true);
-  // El icono de la barra de herramientas (en cualquier pantalla) y el de la
-  // barra lateral controlan el mismo estado; alternar desde la toolbar
-  // tambien marca "previsiones" como seccion activa del sidebar.
-  function toggleShowPrevisionFromToolbar() {
-    setShowPrevision((s) => !s);
+  // Previsiones es una pantalla central mas (como Programador o Categorias):
+  // el boton de la barra de herramientas de Movimientos navega a ella igual
+  // que el icono de la barra lateral.
+  function goToPrevisiones() {
+    setView("previsiones");
     setSidebarSection("previsiones");
   }
   const [showTxForm, setShowTxForm] = useState(false);
@@ -1408,8 +1407,6 @@ export default function App() {
               setView={setView}
               sidebarSection={sidebarSection}
               setSidebarSection={setSidebarSection}
-              showPrevision={showPrevision}
-              setShowPrevision={setShowPrevision}
               recurringCount={programadorRows.length}
               categoriesCount={categories.length}
               savedFiltersCount={savedFilters.length}
@@ -1450,8 +1447,6 @@ export default function App() {
                     onOpenRow={openProgramadorRow}
                     onRemove={removeTx}
                     onImport={handleImportProgramador}
-                    showPrevision={showPrevision}
-                    onTogglePrevision={toggleShowPrevisionFromToolbar}
                   />
                 )}
 
@@ -1472,8 +1467,6 @@ export default function App() {
                     newCategoryTrigger={newCategoryTrigger}
                     onExport={handleExportCategories}
                     onImport={handleImportCategories}
-                    showPrevision={showPrevision}
-                    onTogglePrevision={toggleShowPrevisionFromToolbar}
                   />
                 )}
 
@@ -1484,8 +1477,6 @@ export default function App() {
                     onApply={applySavedFilter}
                     onRemove={removeSavedFilter}
                     onNewFilter={handleNewFilterMenu}
-                    showPrevision={showPrevision}
-                    onTogglePrevision={toggleShowPrevisionFromToolbar}
                   />
                 )}
 
@@ -1536,12 +1527,11 @@ export default function App() {
                     onDeleteSelected={deleteSelected}
                     footerLabel="Total seleccionado"
                     footerAmount={scopedTotal}
-                    showPrevision={showPrevision}
-                    onTogglePrevision={toggleShowPrevisionFromToolbar}
+                    onOpenPrevision={goToPrevisiones}
                   />
                 )}
 
-                {showPrevision && (
+                {view === "previsiones" && (
                   <PrevisionPanel
                     points={evoPoints}
                     ticks={evoTicks}
@@ -1550,7 +1540,6 @@ export default function App() {
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                     evoRange={evoRange}
                     setEvoRange={setEvoRange}
-                    onClose={() => setShowPrevision(() => false)}
                   />
                 )}
               </div>

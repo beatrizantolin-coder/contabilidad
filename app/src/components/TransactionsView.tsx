@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, Eraser, FolderPlus, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload, type LucideIcon } from "lucide-react";
+import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, Eraser, FolderPlus, GripVertical, LineChart, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload, type LucideIcon } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
 import { fmt, shortDate, todayISO } from "../lib/format";
@@ -59,8 +59,7 @@ export function TransactionsView({
   onDeleteSelected,
   footerLabel,
   footerAmount,
-  showPrevision,
-  onTogglePrevision,
+  onOpenPrevision,
 }: {
   title: string;
   /** Icono del tipo de cuenta, mostrado junto al titulo cuando hay un grupo de cuentas seleccionado (Bancos/Ahorro/Tarjetas/Efectivo). */
@@ -109,8 +108,7 @@ export function TransactionsView({
   onDeleteSelected: () => void;
   footerLabel: string;
   footerAmount: number;
-  showPrevision: boolean;
-  onTogglePrevision: () => void;
+  onOpenPrevision: () => void;
 }) {
   const [draggedTxId, setDraggedTxId] = useState<ID | null>(null);
   const [dragOverTxId, setDragOverTxId] = useState<ID | null>(null);
@@ -227,8 +225,8 @@ export function TransactionsView({
           <button onClick={onImport} style={smallBtn(false)}>
             <Upload size={12} />Importar
           </button>
-          <button onClick={onTogglePrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(showPrevision)}>
-            <TrendingUp size={12} />
+          <button onClick={onOpenPrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(false)}>
+            <LineChart size={12} />
           </button>
           <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, boxSizing: "border-box", fontSize: 13, fontWeight: 600 }}>
             <Plus size={14} /> Movimiento

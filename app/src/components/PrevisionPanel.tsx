@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { TrendingUp, X } from "lucide-react";
+import { LineChart } from "lucide-react";
 import { T, dot, tinyBtn } from "../theme";
 import { fmt, quickRange, shortDate, type QuickRangeKey } from "../lib/format";
 import type { EvoPoint, EvoRange, EvoTick, PrevisionMovement } from "../lib/evolution";
@@ -29,7 +29,6 @@ export function PrevisionPanel({
   accountName,
   evoRange,
   setEvoRange,
-  onClose,
 }: {
   points: EvoPoint[];
   ticks: EvoTick[];
@@ -38,7 +37,6 @@ export function PrevisionPanel({
   accountName: (id: string) => string;
   evoRange: EvoRange;
   setEvoRange: (fn: (r: EvoRange) => EvoRange) => void;
-  onClose: () => void;
 }) {
   const [draft, setDraft] = useState<EvoRange>({ from: evoRange.from, to: evoRange.to });
   const [preset, setPreset] = useState<QuickRangeKey | null>(null);
@@ -73,14 +71,12 @@ export function PrevisionPanel({
   }
 
   return (
-    <div style={{ borderTop: "1px solid " + T.border, display: "flex", flexDirection: "column", height: 440, flexShrink: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px", flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <div style={{ padding: "20px 24px 4px", flexShrink: 0 }}>
         <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-          <TrendingUp size={17} style={{ color: T.accent }} /> Prevision de balance
+          <LineChart size={17} style={{ color: T.accent }} /> Previsiones
         </h2>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: T.textMuted, padding: 2 }} aria-label="Cerrar previsión">
-          <X size={17} />
-        </button>
+        <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 0" }}>Movimientos futuros previstos a partir de las operaciones programadas.</p>
       </div>
 
       <div style={{ padding: "10px 24px 14px", flexShrink: 0 }}>
