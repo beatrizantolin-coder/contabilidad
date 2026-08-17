@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Repeat, Search, Trash2, Upload } from "lucide-react";
-import type { Account, Category, ID, Transaction } from "../types";
+import type { Account, Category, ID } from "../types";
 import { isVariableSeries, occurrenceAmount, type ProgramadorRow } from "../lib/recurring";
 import { T, dot, inputStyle, smallBtn } from "../theme";
 import { fmt, freqLabel, freqPerMonth, monthYearLabel, shortDate } from "../lib/format";
@@ -55,7 +55,8 @@ export function RecurringView({
   accountName: (id: ID) => string;
   onNewScheduled: () => void;
   onOpenRow: (row: ProgramadorRow) => void;
-  onRemove: (t: Transaction) => void;
+  /** Detiene la serie recurrente completa de esta fila (no solo el movimiento de la fecha ancla). */
+  onRemove: (row: ProgramadorRow) => void;
   onImport: () => void;
 }) {
   const [progSearch, setProgSearch] = useState("");
@@ -295,11 +296,11 @@ export function RecurringView({
                             <Pencil size={12} />
                           </button>
                           <button
-                            onClick={(e) => { e.stopPropagation(); if (row.real) onRemove(t); }}
+                            onClick={(e) => { e.stopPropagation(); onRemove(row); }}
                             className="rowbtn"
-                            style={{ background: "none", border: "none", color: row.real ? T.textFaint : T.borderSoft, padding: 2, cursor: row.real ? "pointer" : "default" }}
-                            aria-label="Eliminar"
-                            disabled={!row.real}
+                            style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }}
+                            aria-label="Detener operacion recurrente"
+                            title="Detener operacion recurrente"
                           >
                             <Trash2 size={12} />
                           </button>

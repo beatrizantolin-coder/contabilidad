@@ -9,7 +9,7 @@ import { normalizeAccountFields, type AccountDraftFields } from "./lib/accounts"
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { computeBulkEditDraft, emptyBulkEditState, type BulkEditField, type BulkEditState } from "./lib/bulkEdit";
 import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, todayISO } from "./lib/format";
-import { computeProgramadorMonthStats, computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
+import { computeProgramadorMonthStats, computeProgramadorRows, seriesKey, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
 import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv, pickAndImportProgramadorCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, saveNewDocumentToDesktop, writeDocumentToPath } from "./lib/docFile";
@@ -857,6 +857,25 @@ export default function App() {
     }
   }
 
+  /**
+   * Detiene una serie recurrente completa desde el Programador: a diferencia
+   * de `removeTx` (que solo borra un movimiento suelto), aqui hay que quitar
+   * el campo `recurring` de TODAS las transacciones pasadas de esa misma
+   * serie (no solo la ancla mas reciente) — si no, `generateDueOccurrences`
+   * la sigue encontrando como serie activa y vuelve a generar la ocurrencia
+   * que se acaba de eliminar. El calculo de la serie usa `seriesKey`, la
+   * misma clave que usan `computeProgramadorRows`/`computeProgramadorMonthStats`.
+   */
+  function removeProgramadorSeries(row: ProgramadorRow) {
+    if (!window.confirm("¿Detener esta operacion recurrente? Se eliminara la ocurrencia y no se generaran mas en el futuro.")) return;
+    const key = seriesKey(row.tx);
+    setTransactions((prev) =>
+      prev
+        .filter((x) => !x.recurring || seriesKey(x) !== key || !(row.real && x.id === row.tx.id))
+        .map((x) => (!x.recurring || seriesKey(x) !== key ? x : { ...x, recurring: null })),
+    );
+  }
+
   // Icono de cadena de una transferencia: desvincula si esta vinculada, o
   // revincula automaticamente (sin seleccion manual) con la transferencia
   // con la que estaba emparejada si esta desvinculada. En ambos casos la
@@ -1445,7 +1464,7 @@ export default function App() {
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                     onNewScheduled={openScheduledForm}
                     onOpenRow={openProgramadorRow}
-                    onRemove={removeTx}
+                    onRemove={removeProgramadorSeries}
                     onImport={handleImportProgramador}
                   />
                 )}

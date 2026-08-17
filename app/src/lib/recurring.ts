@@ -27,7 +27,8 @@ export function upcomingOccurrenceDates(fromDate: string, recurring: Recurring, 
   return dates;
 }
 
-function seriesKey(t: Transaction): string {
+/** Clave de agrupacion de una serie recurrente (cuenta+nombre+categoria+importe+frecuencia). Usada de forma consistente en todos los calculos relacionados con el Programador: generacion automatica, contadores y al detener una serie. */
+export function seriesKey(t: Transaction): string {
   return [t.accountId, t.name, t.categoryId, t.subcategoryId, t.type, t.amount, t.recurring?.interval, t.recurring?.unit].join("|");
 }
 
