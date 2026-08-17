@@ -116,20 +116,11 @@ export function useDocuments() {
     );
   }, []);
 
-  const createDocument = useCallback((name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const doc = emptyDocument(trimmed);
-    setDocuments((prev) => prev.concat([doc]));
-    setActiveDocId(doc.id);
-    return doc.id;
-  }, []);
-
   /**
-   * "Nuevo documento" desde el menu o la ventana de bienvenida: a diferencia
-   * de `createDocument` (que anade el documento a la sesion actual, usado
-   * para "Vincular" y el "+" de la barra lateral), este arranca una sesion
-   * limpia — ningun documento previamente abierto se arrastra a la vista.
+   * "Nuevo documento" desde el menu, la barra lateral o la ventana de
+   * bienvenida: arranca una sesion limpia — ningun documento previamente
+   * abierto se arrastra a la vista (a diferencia de "Vincular documento",
+   * que anade el elegido a los que ya estaban abiertos via `addDocument`).
    * Los documentos anteriores no se borran de disco, solo dejan de estar
    * abiertos en esta sesion (se pueden reabrir con "Abrir..." o "Abrir Reciente").
    */
@@ -220,7 +211,6 @@ export function useDocuments() {
     activeDoc,
     updateDoc,
     applyToDocs,
-    createDocument,
     createDocumentReplacing,
     addDocument,
     closeDocument,

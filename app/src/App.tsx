@@ -41,7 +41,6 @@ export default function App() {
     activeDoc,
     updateDoc,
     applyToDocs,
-    createDocument,
     createDocumentReplacing,
     addDocument,
     closeDocument,
@@ -354,7 +353,6 @@ export default function App() {
     return Array.from(map.entries()).map(([id, val]) => ({ id, val }));
   }, [reconciledMonthTx]);
 
-  const recurringList = useMemo(() => transactions.filter((t) => t.recurring && t.type !== "transfer_in"), [transactions]);
   const programadorRows = useMemo(() => computeProgramadorRows(transactions), [transactions]);
   const programadorMonthStats = useMemo(() => computeProgramadorMonthStats(transactions), [transactions]);
 
@@ -1386,7 +1384,8 @@ export default function App() {
                 clearAccountSelection();
                 setView("transactions");
               }}
-              createDocument={createDocument}
+              onCreateDocument={createDocumentReplacing}
+              onRenameDocument={(id, newName) => updateDoc(id, (d) => ({ ...d, name: newName }))}
               onLinkDocument={handleOpenDocumentFile}
               onCloseDocument={requestCloseDocument}
               onSaveDocument={handleSaveDoc}
@@ -1411,7 +1410,7 @@ export default function App() {
               setSidebarSection={setSidebarSection}
               showPrevision={showPrevision}
               setShowPrevision={setShowPrevision}
-              recurringCount={recurringList.length}
+              recurringCount={programadorRows.length}
               categoriesCount={categories.length}
               savedFiltersCount={savedFilters.length}
             />

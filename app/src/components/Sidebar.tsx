@@ -61,7 +61,8 @@ export function Sidebar({
   documents,
   activeDocId,
   setActiveDocId,
-  createDocument,
+  onCreateDocument,
+  onRenameDocument,
   onLinkDocument,
   onCloseDocument,
   onSaveDocument,
@@ -95,7 +96,9 @@ export function Sidebar({
   documents: LedgerDocument[];
   activeDocId: string;
   setActiveDocId: (id: string) => void;
-  createDocument: (name: string) => void;
+  /** "Nuevo documento": arranca una sesión limpia, sustituyendo la lista de documentos abiertos (a diferencia de "Vincular documento", que añade el elegido a los que ya estaban abiertos). */
+  onCreateDocument: (name: string) => void;
+  onRenameDocument: (id: string, newName: string) => void;
   /** "Vincular documento": abre el selector nativo de archivos y añade el documento elegido a la sesión (a diferencia de "Nuevo documento", que crea uno en blanco). */
   onLinkDocument: () => void;
   onCloseDocument: (id: string) => void;
@@ -132,6 +135,8 @@ export function Sidebar({
   const [showDocForm, setShowDocForm] = useState(false);
   const [docMenuOpen, setDocMenuOpen] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
+  const [renamingDocId, setRenamingDocId] = useState<ID | null>(null);
+  const [docRenameDraft, setDocRenameDraft] = useState("");
   const [showAccForm, setShowAccForm] = useState(false);
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
   const [draggedAccountId, setDraggedAccountId] = useState<ID | null>(null);
@@ -184,12 +189,19 @@ export function Sidebar({
     setShowDocForm(false);
     setShowAccForm(false);
     setDocMenuOpen(false);
+    setRenamingDocId(null);
   }, [view, activeDocId]);
+
+  function commitDocRename(id: ID) {
+    const trimmed = docRenameDraft.trim();
+    if (trimmed) onRenameDocument(id, trimmed);
+    setRenamingDocId(null);
+  }
 
   function submitDoc(e: React.FormEvent) {
     e.preventDefault();
     if (!docNameDraft.trim()) return;
-    createDocument(docNameDraft);
+    onCreateDocument(docNameDraft);
     setDocNameDraft("");
     setShowDocForm(false);
   }
@@ -339,14 +351,29 @@ export function Sidebar({
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 14, padding: "0 6px 0 12px" }}>
         {documents.map((d, docIndex) => (
           <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, background: d.id === activeDocId ? "#FFFFFF" : "transparent", border: "1px solid " + (d.id === activeDocId ? T.border : T.borderSoft), borderRadius: 7, padding: "5px 8px" }}>
-              <button
-                onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
-                style={{ background: "none", border: "none", padding: 0, fontSize: 12, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 5, overflow: "hidden", minWidth: 0 }}
-              >
-                <FileText size={12} style={{ flexShrink: 0 }} />
-                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 100 }}>{d.name}</span>
-              </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: 190, flexShrink: 0, background: d.id === activeDocId ? "#FFFFFF" : "transparent", border: "1px solid " + (d.id === activeDocId ? T.border : T.borderSoft), borderRadius: 7, padding: "6px 8px" }}>
+              {renamingDocId === d.id ? (
+                <input
+                  autoFocus
+                  value={docRenameDraft}
+                  onChange={(e) => setDocRenameDraft(e.target.value)}
+                  onBlur={() => commitDocRename(d.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") commitDocRename(d.id);
+                    if (e.key === "Escape") setRenamingDocId(null);
+                  }}
+                  style={{ fontSize: 12, fontWeight: 700, border: "1px solid " + T.accent, borderRadius: 4, padding: "1px 4px", width: 90, minWidth: 0 }}
+                />
+              ) : (
+                <button
+                  onClick={() => { setActiveDocId(d.id); clearAccountSelection(); }}
+                  onDoubleClick={(e) => { e.stopPropagation(); setRenamingDocId(d.id); setDocRenameDraft(d.name); }}
+                  style={{ background: "none", border: "none", padding: 0, fontSize: 12, fontWeight: d.id === activeDocId ? 700 : 500, color: d.id === activeDocId ? T.text : T.textMuted, display: "flex", alignItems: "center", gap: 5, overflow: "hidden", minWidth: 0, flex: 1, textAlign: "left" }}
+                >
+                  <FileText size={12} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</span>
+                </button>
+              )}
               <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                 <button onClick={() => onCloseDocument(d.id)} style={{ background: "none", border: "none", color: T.textFaint, padding: "0 2px" }} aria-label={"Cerrar archivo " + d.name}>
                   <Trash2 size={11} />
@@ -411,14 +438,14 @@ export function Sidebar({
             <div key={section.key} style={{ marginBottom: 4 }}>
               <div
                 className="navitem"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 10px 2px 16px", borderRadius: 6, background: groupActive ? "#FFFFFF" : "transparent", boxShadow: groupActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none" }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px 8px 16px", marginBottom: 6, borderRadius: 6, background: groupActive ? "#FFFFFF" : "transparent", boxShadow: groupActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none" }}
               >
                 <button
                   onClick={() => onAccountTypeGroupClick(section.key)}
-                  style={{ background: "none", border: "none", padding: "4px 0", display: "flex", alignItems: "center", gap: 5, flex: 1, textAlign: "left" }}
+                  style={{ background: "none", border: "none", padding: "2px 0", display: "flex", alignItems: "center", gap: 5, flex: 1, textAlign: "left" }}
                 >
-                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: groupActive ? T.accent : T.textFaint, fontWeight: 600 }}>
-                    <SectionIcon size={10} /> {section.label}
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: groupActive ? T.accent : T.textFaint, fontWeight: 700 }}>
+                    <SectionIcon size={11} /> {section.label}
                   </span>
                 </button>
                 <button onClick={() => openAccountForm(section.key, null, true)} style={{ background: "none", border: "none", color: T.textFaint, padding: 1 }} aria-label={"Anadir " + section.label}>
@@ -429,7 +456,7 @@ export function Sidebar({
               {group.map((a) => {
                 const bal = balances[a.id] || 0;
                 const low = (a.warning && bal < a.warning) || bal < 0;
-                const highlighted = activeAccounts.has(a.id);
+                const highlighted = !activeAccountTypeGroup && activeAccounts.has(a.id);
                 const isDragging = draggedAccountId === a.id;
                 const isDragOver = dragOverAccountId === a.id && draggedAccountId !== a.id;
                 return (
