@@ -41,6 +41,7 @@ export default function App() {
     updateDoc,
     applyToDocs,
     createDocument,
+    createDocumentReplacing,
     addDocument,
     removeDocument,
     getSavedPath,
@@ -1174,7 +1175,7 @@ export default function App() {
       name = base + " " + n;
       n++;
     }
-    createDocument(name);
+    createDocumentReplacing(name);
   }
   function handleCloseDocumentMenu() {
     if (activeDocId) removeDocument(activeDocId);
@@ -1517,7 +1518,7 @@ export default function App() {
         ) : (
           <WelcomeScreen
             onCreate={(name) => {
-              createDocument(name);
+              createDocumentReplacing(name);
               setShowWelcome(false);
             }}
             onOpenFile={() => {
