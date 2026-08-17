@@ -12,7 +12,7 @@ import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMo
 import { computeProgramadorMonthStats, computeProgramadorRows, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
 import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv, pickAndImportProgramadorCsv } from "./lib/csv";
-import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, writeDocumentToPath } from "./lib/docFile";
+import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, saveNewDocumentToDesktop, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
 import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type CustomAmountEntry, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
 import { ACCOUNT_SECTIONS, Sidebar, type MainView, type SidebarSection } from "./components/Sidebar";
@@ -99,6 +99,7 @@ export default function App() {
   // la preferencia guardada. Se pone a false en cuanto el usuario elige
   // una accion en la bienvenida, para no volver a mostrarla en esta sesion.
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
+  const [welcomeError, setWelcomeError] = useState<string | null>(null);
   const [historyTick, setHistoryTick] = useState(0);
   const undoStackRef = useRef<LedgerDocument[]>([]);
   const redoStackRef = useRef<LedgerDocument[]>([]);
@@ -1063,6 +1064,55 @@ export default function App() {
   function handleOpenTestDocument() {
     addDocument(createTestDocument());
   }
+  // "Crear un nuevo documento" desde la bienvenida: primero se pide el
+  // nombre (formulario propio de WelcomeScreen), luego se crea limpio (sin
+  // arrastrar los documentos que estuvieran abiertos antes) y se guarda de
+  // inmediato en el Escritorio, sin dialogo adicional.
+  async function handleCreateFromWelcome(name: string) {
+    const doc = createDocumentReplacing(name);
+    if (!doc) return;
+    try {
+      const path = await saveNewDocumentToDesktop(doc);
+      setSavedPath(doc.id, path);
+      addRecentPath(path);
+      markSaved(doc.id);
+    } catch (err) {
+      console.error("Error guardando el documento nuevo en el Escritorio", err);
+    }
+  }
+  // "Abrir el ultimo documento usado": si el archivo ya no existe (movido o
+  // eliminado), se avisa y el usuario se queda en la bienvenida.
+  async function handleOpenLastUsed() {
+    const path = recentPaths[0];
+    if (!path) return;
+    try {
+      await openDocumentFromPathReplacing(path);
+      setWelcomeError(null);
+      setShowWelcome(false);
+    } catch (err) {
+      console.error("Error abriendo el ultimo documento usado", err);
+      setWelcomeError("El ultimo documento usado ya no esta disponible (se ha movido o eliminado). Elige otra opcion.");
+    }
+  }
+  // "Abrir un documento" desde la bienvenida: sustituye (nunca se queda
+  // vinculado al documento anterior, a diferencia de "Anadir documento").
+  // Si el usuario cancela el selector de archivos, no se cierra la bienvenida.
+  async function handleOpenFileFromWelcome() {
+    try {
+      const path = await pickOpenDocumentPath();
+      if (!path) return;
+      await openDocumentFromPathReplacing(path);
+      setWelcomeError(null);
+      setShowWelcome(false);
+    } catch (err) {
+      console.error("Error abriendo el documento", err);
+    }
+  }
+  function baseNameFromPath(path: string): string {
+    const withSlashes = path.replace(/\\/g, "/");
+    const last = withSlashes.slice(withSlashes.lastIndexOf("/") + 1);
+    return last.replace(/\.nice$/i, "") || path;
+  }
 
   // Archivo > Abrir... / Abrir Reciente: a diferencia de "Anadir documento"
   // (que deja el documento activo tal cual y anade el nuevo al lado), estas
@@ -1551,18 +1601,18 @@ export default function App() {
           </>
         ) : (
           <WelcomeScreen
-            onCreate={(name) => {
-              createDocumentReplacing(name);
+            onCreate={async (name) => {
+              await handleCreateFromWelcome(name);
               setShowWelcome(false);
             }}
-            onOpenFile={() => {
-              handleOpenDocumentFile();
-              setShowWelcome(false);
-            }}
+            onOpenFile={handleOpenFileFromWelcome}
             onOpenTest={() => {
               handleOpenTestDocument();
               setShowWelcome(false);
             }}
+            lastUsedName={recentPaths[0] ? baseNameFromPath(recentPaths[0]) : null}
+            onOpenLastUsed={handleOpenLastUsed}
+            error={welcomeError}
             skipWelcomeOnStart={skipWelcomeOnStart}
             onToggleSkipWelcome={setSkipWelcomeOnStart}
           />

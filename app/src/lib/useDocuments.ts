@@ -135,11 +135,11 @@ export function useDocuments() {
    */
   const createDocumentReplacing = useCallback((name: string) => {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) return null;
     const doc = emptyDocument(trimmed);
     setDocuments([doc]);
     setActiveDocId(doc.id);
-    return doc.id;
+    return doc;
   }, []);
 
   /** Marca el documento como "guardado" ahora mismo (tras un Guardar/Guardar como con exito): su contenido actual pasa a ser la referencia para isDocDirty. */

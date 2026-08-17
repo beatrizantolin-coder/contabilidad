@@ -1,17 +1,23 @@
 import { useState } from "react";
-import { FilePlus2, FlaskConical, FolderOpen } from "lucide-react";
+import { AlertTriangle, FilePlus2, FlaskConical, FolderClock, FolderOpen } from "lucide-react";
 import { T } from "../theme";
 
 export function WelcomeScreen({
   onCreate,
   onOpenFile,
   onOpenTest,
+  lastUsedName,
+  onOpenLastUsed,
+  error,
   skipWelcomeOnStart,
   onToggleSkipWelcome,
 }: {
   onCreate: (name: string) => void;
   onOpenFile: () => void;
   onOpenTest: () => void;
+  lastUsedName: string | null;
+  onOpenLastUsed: () => void;
+  error: string | null;
   skipWelcomeOnStart: boolean;
   onToggleSkipWelcome: (value: boolean) => void;
 }) {
@@ -24,6 +30,25 @@ export function WelcomeScreen({
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Bienvenido a Conta-Nice</div>
         <p style={{ fontSize: 11.5, color: T.textFaint, margin: "0 0 10px" }}>© B-Nice design 2026 · Version 1.01.1708</p>
         <p style={{ fontSize: 13, color: T.textMuted, margin: "0 0 26px" }}>Elige cómo quieres empezar.</p>
+
+        {error && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              textAlign: "left",
+              background: "#FEF2F2",
+              border: "1px solid #FECACA",
+              borderRadius: 8,
+              padding: "10px 12px",
+              marginBottom: 16,
+            }}
+          >
+            <AlertTriangle size={15} style={{ color: "#DC2626", flexShrink: 0, marginTop: 1 }} />
+            <span style={{ fontSize: 12, color: "#991B1B" }}>{error}</span>
+          </div>
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 10, textAlign: "left" }}>
           <form
@@ -52,6 +77,19 @@ export function WelcomeScreen({
               </button>
             </div>
           </form>
+
+          {lastUsedName && (
+            <button
+              onClick={onOpenLastUsed}
+              style={{ border: "1px solid " + T.border, borderRadius: 10, padding: 16, background: "#fff", textAlign: "left", cursor: "pointer", display: "flex", flexDirection: "column", gap: 6 }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <FolderClock size={16} style={{ color: T.accent }} />
+                <span style={{ fontSize: 13.5, fontWeight: 600 }}>Abrir el último documento usado</span>
+              </div>
+              <p style={{ fontSize: 12, color: T.textMuted, margin: 0 }}>{lastUsedName}</p>
+            </button>
+          )}
 
           <button
             onClick={onOpenFile}
