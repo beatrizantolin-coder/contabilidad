@@ -7,6 +7,7 @@ import {
   FolderInput,
   FolderOpen,
   History,
+  Home,
   Pencil,
   Plus,
   Printer,
@@ -24,6 +25,7 @@ import { lucideToMenuIcon } from "./menuIcon";
 
 export interface AppMenuHandlers {
   newDocument: () => void;
+  openWelcome: () => void;
   openReplacing: () => void;
   openRecent: (path: string) => void;
   closeDocument: () => void;
@@ -65,11 +67,11 @@ export async function buildAppMenu(handlersRef: { current: AppMenuHandlers }, st
   };
 
   const [
-    iconNewDoc, iconOpen, iconRecent, iconClose, iconSave, iconDuplicateDoc, iconRename, iconExport, iconPrint,
+    iconNewDoc, iconOpenWelcome, iconOpen, iconRecent, iconClose, iconSave, iconDuplicateDoc, iconRename, iconExport, iconPrint,
     iconUndo, iconRedo, iconDuplicateTx, iconDelete, iconSelectAll, iconSearch,
     iconAddDoc, iconNewAccount, iconNewTx, iconNewScheduled, iconNewCategory, iconNewFilter,
   ] = await Promise.all([
-    lucideToMenuIcon(FilePlus2), lucideToMenuIcon(FolderOpen), lucideToMenuIcon(History), lucideToMenuIcon(X), lucideToMenuIcon(Save),
+    lucideToMenuIcon(FilePlus2), lucideToMenuIcon(Home), lucideToMenuIcon(FolderOpen), lucideToMenuIcon(History), lucideToMenuIcon(X), lucideToMenuIcon(Save),
     lucideToMenuIcon(Copy), lucideToMenuIcon(Pencil), lucideToMenuIcon(Download), lucideToMenuIcon(Printer),
     lucideToMenuIcon(Undo2), lucideToMenuIcon(Redo2), lucideToMenuIcon(Copy), lucideToMenuIcon(Trash2), lucideToMenuIcon(CheckSquare), lucideToMenuIcon(SlidersHorizontal),
     lucideToMenuIcon(FolderInput), lucideToMenuIcon(Wallet), lucideToMenuIcon(Plus), lucideToMenuIcon(Repeat), lucideToMenuIcon(Tag), lucideToMenuIcon(SlidersHorizontal),
@@ -101,6 +103,7 @@ export async function buildAppMenu(handlersRef: { current: AppMenuHandlers }, st
     text: "Archivo",
     items: [
       await IconMenuItem.new({ text: "Nuevo documento", icon: iconNewDoc, accelerator: "CmdOrCtrl+N", action: () => call("newDocument") }),
+      await IconMenuItem.new({ text: "Abrir ventana de inicio", icon: iconOpenWelcome, action: () => call("openWelcome") }),
       await IconMenuItem.new({ text: "Abrir...", icon: iconOpen, accelerator: "CmdOrCtrl+O", action: () => call("openReplacing") }),
       await Submenu.new({ text: "Abrir Reciente", items: recentItems }),
       await PredefinedMenuItem.new({ item: "Separator" }),

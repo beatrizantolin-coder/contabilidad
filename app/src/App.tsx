@@ -1218,6 +1218,7 @@ export default function App() {
 
   const menuHandlers: AppMenuHandlers = {
     newDocument: handleNewDocumentMenu,
+    openWelcome: () => setShowWelcome(true),
     openReplacing: handleOpenReplacing,
     openRecent: handleOpenRecent,
     closeDocument: handleCloseDocumentMenu,
