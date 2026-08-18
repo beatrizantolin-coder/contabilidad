@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { PALETTE, T, statusInfo } from "./theme";
 import { useDocuments } from "./lib/useDocuments";
 import { genId, genSeq } from "./lib/id";
@@ -1313,6 +1314,43 @@ export default function App() {
     if (doc) await handleSaveDoc(doc);
     closeDocumentNow(id);
   }
+
+  // Boton rojo de la ventana (macOS): antes de cerrar la app se pregunta por
+  // los cambios sin guardar del documento activo, con el mismo dialogo de 3
+  // opciones que al cerrar una pestana de documento. Se usan refs porque el
+  // listener de Tauri se registra una sola vez al montar y debe leer siempre
+  // el estado mas reciente, no el que tenia en el momento de suscribirse.
+  const [quitConfirmPending, setQuitConfirmPending] = useState(false);
+  const activeDocForQuitRef = useRef(activeDoc);
+  activeDocForQuitRef.current = activeDoc;
+  const isDocDirtyForQuitRef = useRef(isDocDirty);
+  isDocDirtyForQuitRef.current = isDocDirty;
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    getCurrentWindow()
+      .onCloseRequested((event) => {
+        const doc = activeDocForQuitRef.current;
+        if (doc && isDocDirtyForQuitRef.current(doc)) {
+          event.preventDefault();
+          setQuitConfirmPending(true);
+        }
+      })
+      .then((fn) => {
+        unlisten = fn;
+      });
+    return () => unlisten?.();
+  }, []);
+  async function saveAndQuit() {
+    const doc = activeDocForQuitRef.current;
+    if (doc) await handleSaveDoc(doc);
+    setQuitConfirmPending(false);
+    await getCurrentWindow().destroy();
+  }
+  function quitWithoutSaving() {
+    setQuitConfirmPending(false);
+    getCurrentWindow().destroy();
+  }
+
   function handleNewFilterMenu() {
     setFilters(emptyFilters());
     setShowFilters(true);
@@ -1680,6 +1718,16 @@ export default function App() {
             />
           );
         })()}
+      {quitConfirmPending && activeDoc && (
+        <CloseDocumentModal
+          docName={activeDoc.name}
+          title="Salir de Conta-Nice"
+          description={'¿Quieres guardar los cambios de "' + activeDoc.name + '" antes de salir? El archivo nunca se elimina del disco, solo se cierra la aplicacion.'}
+          onSaveAndClose={saveAndQuit}
+          onCloseWithoutSaving={quitWithoutSaving}
+          onCancel={() => setQuitConfirmPending(false)}
+        />
+      )}
       {showOptionsModal && (
         <OptionsModal
           currency={currency}

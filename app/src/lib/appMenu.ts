@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { lucideToMenuIcon } from "./menuIcon";
+import { APP_VERSION } from "./version";
 
 export interface AppMenuHandlers {
   newDocument: () => void;
@@ -87,7 +88,7 @@ export async function buildAppMenu(handlersRef: { current: AppMenuHandlers }, st
   const appMenu = await Submenu.new({
     text: "Conta-Nice",
     items: [
-      await PredefinedMenuItem.new({ item: { About: null } }),
+      await PredefinedMenuItem.new({ item: { About: { name: "Conta-Nice", version: APP_VERSION, copyright: "© B-Nice design 2026" } } }),
       await PredefinedMenuItem.new({ item: "Separator" }),
       await PredefinedMenuItem.new({ item: "Services" }),
       await PredefinedMenuItem.new({ item: "Separator" }),
