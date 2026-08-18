@@ -142,6 +142,7 @@ export function Sidebar({
   const [accDraft, setAccDraft] = useState<AccDraft>(emptyAccDraft("checking", false));
   const [draggedAccountId, setDraggedAccountId] = useState<ID | null>(null);
   const [dragOverAccountId, setDragOverAccountId] = useState<ID | null>(null);
+  const [dragOverGroupType, setDragOverGroupType] = useState<AccountType | null>(null);
   const [savedDocFeedback, setSavedDocFeedback] = useState<string | null>(null);
 
   async function handleSaveDocumentClick(d: LedgerDocument) {
@@ -150,17 +151,26 @@ export function Sidebar({
     setTimeout(() => setSavedDocFeedback((cur) => (cur === d.id ? null : cur)), 1200);
   }
 
-  // Reordenar cuentas por arrastre: se sigue el raton manualmente (en vez de
-  // usar el HTML5 drag-and-drop nativo) porque bajo WebKitGTK el gesto de
-  // arrastre nativo no siempre se dispara de forma fiable.
+  // Reordenar cuentas dentro de un grupo, o moverlas a otro grupo distinto:
+  // se sigue el raton manualmente (en vez de usar el HTML5 drag-and-drop
+  // nativo) porque bajo WebKitGTK el gesto de arrastre nativo no siempre se
+  // dispara de forma fiable.
   useEffect(() => {
     if (!draggedAccountId) return;
     function onMove(e: MouseEvent) {
       const el = document.elementFromPoint(e.clientX, e.clientY);
+      const draggedType = accounts.find((a) => a.id === draggedAccountId)?.type || "checking";
+      const groupEl = el?.closest("[data-account-group]") as HTMLElement | null;
+      const hoverGroupType = groupEl?.dataset.accountGroup as AccountType | undefined;
+      if (hoverGroupType && hoverGroupType !== draggedType) {
+        setDragOverGroupType(hoverGroupType);
+        setDragOverAccountId(null);
+        return;
+      }
+      setDragOverGroupType(null);
       const row = el?.closest("[data-account-id]") as HTMLElement | null;
       const rowId = row?.dataset.accountId;
       const rowType = row?.dataset.accountType;
-      const draggedType = accounts.find((a) => a.id === draggedAccountId)?.type || "checking";
       if (rowId && rowId !== draggedAccountId && rowType === draggedType) {
         setDragOverAccountId(rowId);
       } else {
@@ -168,11 +178,28 @@ export function Sidebar({
       }
     }
     function onUp() {
-      if (dragOverAccountId && draggedAccountId && dragOverAccountId !== draggedAccountId) {
+      const dragged = accounts.find((a) => a.id === draggedAccountId);
+      if (dragged && dragOverGroupType) {
+        const label = ACCOUNT_SECTIONS.find((s) => s.key === dragOverGroupType)?.label ?? dragOverGroupType;
+        if (window.confirm('¿Mover "' + dragged.name + '" a ' + label + "?")) {
+          updateAccount(dragged.id, {
+            name: dragged.name,
+            type: dragOverGroupType,
+            opening: dragged.opening,
+            linkedAccountId: dragged.linkedAccountId,
+            savingsKind: dragged.savingsKind,
+            cardKind: dragged.cardKind,
+            paymentMode: dragged.paymentMode,
+            monthlyPayment: dragged.monthlyPayment,
+            customIcon: dragged.customIcon,
+          });
+        }
+      } else if (dragOverAccountId && draggedAccountId && dragOverAccountId !== draggedAccountId) {
         onReorderAccounts(draggedAccountId, dragOverAccountId);
       }
       setDraggedAccountId(null);
       setDragOverAccountId(null);
+      setDragOverGroupType(null);
     }
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -181,7 +208,7 @@ export function Sidebar({
       window.removeEventListener("mouseup", onUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draggedAccountId, dragOverAccountId]);
+  }, [draggedAccountId, dragOverAccountId, dragOverGroupType]);
 
   // Los formularios de añadir documento/cuenta son estado local de esta
   // barra lateral: se cierran solos al cambiar de vista, de documento
@@ -450,32 +477,15 @@ export function Sidebar({
           const group = accounts.filter((a) => (a.type || "checking") === section.key);
           const groupActive = activeAccountTypeGroup === section.key;
           return (
-            <div
-              key={section.key}
-              style={{ marginBottom: 4 }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const draggedId = e.dataTransfer.getData("text/plain");
-                const dragged = accounts.find((x) => x.id === draggedId);
-                if (!dragged || (dragged.type || "checking") === section.key) return;
-                if (!window.confirm('¿Mover "' + dragged.name + '" a ' + section.label + "?")) return;
-                updateAccount(dragged.id, {
-                  name: dragged.name,
-                  type: section.key,
-                  opening: dragged.opening,
-                  linkedAccountId: dragged.linkedAccountId,
-                  savingsKind: dragged.savingsKind,
-                  cardKind: dragged.cardKind,
-                  paymentMode: dragged.paymentMode,
-                  monthlyPayment: dragged.monthlyPayment,
-                  customIcon: dragged.customIcon,
-                });
-              }}
-            >
+            <div key={section.key} data-account-group={section.key} style={{ marginBottom: 4 }}>
               <div
                 className="navitem"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px 8px 16px", marginBottom: 6, borderRadius: 6, background: groupActive ? "#FFFFFF" : "transparent", boxShadow: groupActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none" }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px 8px 16px", marginBottom: 6, borderRadius: 6,
+                  background: dragOverGroupType === section.key ? "#EAF1FC" : groupActive ? "#FFFFFF" : "transparent",
+                  boxShadow: groupActive || dragOverGroupType === section.key ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  outline: dragOverGroupType === section.key ? "1px dashed " + T.accent : "none",
+                }}
               >
                 <button
                   onClick={() => onAccountTypeGroupClick(section.key)}
@@ -502,8 +512,6 @@ export function Sidebar({
                     className="accrow navitem"
                     data-account-id={a.id}
                     data-account-type={a.type || "checking"}
-                    draggable
-                    onDragStart={(e) => e.dataTransfer.setData("text/plain", a.id)}
                     style={{
                       borderRadius: 7,
                       background: highlighted ? "#FFFFFF" : "transparent",

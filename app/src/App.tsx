@@ -202,7 +202,13 @@ export default function App() {
   const balances = useMemo(() => computeBalances(accounts, transactions), [accounts, transactions]);
   const totalBalance = accounts.reduce((s, a) => s + (balances[a.id] || 0), 0);
 
-  const scopeIds = useMemo(() => (activeAccounts.size === 0 ? new Set(accounts.map((a) => a.id)) : activeAccounts), [activeAccounts, accounts]);
+  // Un grupo de cuentas seleccionado (p.ej. Tarjetas) sin ninguna cuenta de
+  // ese tipo debe filtrar a "ninguna cuenta", no a "todas": activeAccounts
+  // vacio solo significa "sin filtro" cuando no hay ademas un grupo activo.
+  const scopeIds = useMemo(
+    () => (activeAccounts.size === 0 && !activeAccountTypeGroup ? new Set(accounts.map((a) => a.id)) : activeAccounts),
+    [activeAccounts, activeAccountTypeGroup, accounts],
+  );
   const scopedTotal = useMemo(() => accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + (balances[a.id] || 0), 0), [accounts, scopeIds, balances]);
 
   const chronological = useMemo(() => computeChronological(transactions), [transactions]);
@@ -1112,9 +1118,14 @@ export default function App() {
   // nombre (formulario propio de WelcomeScreen), luego se crea limpio (sin
   // arrastrar los documentos que estuvieran abiertos antes) y se guarda de
   // inmediato en el Escritorio, sin dialogo adicional.
-  async function handleCreateFromWelcome(name: string) {
+  async function handleCreateFromWelcome(name: string): Promise<boolean> {
+    if (!name.trim()) {
+      setWelcomeError("Por favor, introduce un nombre para el nuevo documento.");
+      return false;
+    }
     const doc = createDocumentReplacing(name);
-    if (!doc) return;
+    if (!doc) return false;
+    setWelcomeError(null);
     try {
       const path = await saveNewDocumentToDesktop(doc);
       setSavedPath(doc.id, path);
@@ -1123,6 +1134,7 @@ export default function App() {
     } catch (err) {
       console.error("Error guardando el documento nuevo en el Escritorio", err);
     }
+    return true;
   }
   // "Abrir el ultimo documento usado": si el archivo ya no existe (movido o
   // eliminado), se avisa y el usuario se queda en la bienvenida.
@@ -1292,12 +1304,16 @@ export default function App() {
   function handleCloseDocumentMenu() {
     if (activeDocId) requestCloseDocument(activeDocId);
   }
-  // Papelera de una pastilla de documento (barra lateral): cierra el
-  // documento (nunca borra el archivo del disco). Si tiene cambios sin
-  // guardar, primero pregunta con el dialogo de 3 opciones; si esta limpio,
-  // cierra directamente sin preguntar.
-  function requestCloseDocument(id: ID) {
-    if (documents.length <= 1) return;
+  // Papelera de una pastilla de documento (barra lateral), o boton rojo de
+  // cerrar la ventana (macOS): cierra el documento (nunca borra el archivo
+  // del disco; nunca cierra la app entera). Si tiene cambios sin guardar,
+  // primero pregunta con el dialogo de 3 opciones; si esta limpio, cierra
+  // directamente sin preguntar. Desde la barra lateral no se permite cerrar
+  // el ultimo documento abierto (evita quedarse sin ninguno sin querer); el
+  // boton rojo de la ventana si lo permite, cayendo a la pantalla de
+  // bienvenida cuando no queda ningun documento abierto.
+  function requestCloseDocument(id: ID, opts?: { evenIfLast?: boolean }) {
+    if (!opts?.evenIfLast && documents.length <= 1) return;
     const doc = documents.find((d) => d.id === id);
     if (doc && isDocDirty(doc)) {
       setCloseDocConfirmId(id);
@@ -1315,41 +1331,27 @@ export default function App() {
     closeDocumentNow(id);
   }
 
-  // Boton rojo de la ventana (macOS): antes de cerrar la app se pregunta por
-  // los cambios sin guardar del documento activo, con el mismo dialogo de 3
-  // opciones que al cerrar una pestana de documento. Se usan refs porque el
-  // listener de Tauri se registra una sola vez al montar y debe leer siempre
-  // el estado mas reciente, no el que tenia en el momento de suscribirse.
-  const [quitConfirmPending, setQuitConfirmPending] = useState(false);
-  const activeDocForQuitRef = useRef(activeDoc);
-  activeDocForQuitRef.current = activeDoc;
-  const isDocDirtyForQuitRef = useRef(isDocDirty);
-  isDocDirtyForQuitRef.current = isDocDirty;
+  // Boton rojo de la ventana (macOS): nunca cierra la app, solo el documento
+  // activo (igual que su papelera en la barra lateral). Se usa un ref porque
+  // el listener de Tauri se registra una sola vez al montar y debe ejecutar
+  // siempre la version mas reciente de la logica de cierre, no la que
+  // capturo el closure en el momento de suscribirse.
+  const handleWindowCloseRef = useRef<() => void>(() => {});
+  handleWindowCloseRef.current = () => {
+    if (activeDocId) requestCloseDocument(activeDocId, { evenIfLast: true });
+  };
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     getCurrentWindow()
       .onCloseRequested((event) => {
-        const doc = activeDocForQuitRef.current;
-        if (doc && isDocDirtyForQuitRef.current(doc)) {
-          event.preventDefault();
-          setQuitConfirmPending(true);
-        }
+        event.preventDefault();
+        handleWindowCloseRef.current();
       })
       .then((fn) => {
         unlisten = fn;
       });
     return () => unlisten?.();
   }, []);
-  async function saveAndQuit() {
-    const doc = activeDocForQuitRef.current;
-    if (doc) await handleSaveDoc(doc);
-    setQuitConfirmPending(false);
-    await getCurrentWindow().destroy();
-  }
-  function quitWithoutSaving() {
-    setQuitConfirmPending(false);
-    getCurrentWindow().destroy();
-  }
 
   function handleNewFilterMenu() {
     setFilters(emptyFilters());
@@ -1688,8 +1690,8 @@ export default function App() {
         ) : (
           <WelcomeScreen
             onCreate={async (name) => {
-              await handleCreateFromWelcome(name);
-              setShowWelcome(false);
+              const created = await handleCreateFromWelcome(name);
+              if (created) setShowWelcome(false);
             }}
             onOpenFile={handleOpenFileFromWelcome}
             onOpenTest={() => {
@@ -1718,16 +1720,6 @@ export default function App() {
             />
           );
         })()}
-      {quitConfirmPending && activeDoc && (
-        <CloseDocumentModal
-          docName={activeDoc.name}
-          title="Salir de Conta-Nice"
-          description={'¿Quieres guardar los cambios de "' + activeDoc.name + '" antes de salir? El archivo nunca se elimina del disco, solo se cierra la aplicacion.'}
-          onSaveAndClose={saveAndQuit}
-          onCloseWithoutSaving={quitWithoutSaving}
-          onCancel={() => setQuitConfirmPending(false)}
-        />
-      )}
       {showOptionsModal && (
         <OptionsModal
           currency={currency}
