@@ -28,6 +28,7 @@ import { PrevisionPanel } from "./components/PrevisionPanel";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { RenameDocumentModal } from "./components/RenameDocumentModal";
 import { CloseDocumentModal } from "./components/CloseDocumentModal";
+import { OptionsModal } from "./components/OptionsModal";
 import { buildAppMenu, type AppMenuHandlers } from "./lib/appMenu";
 
 const emptyFilters = (): Filters => ({ search: "", categories: [], subcategories: [], type: "all", from: "", to: "", matchMode: "all" });
@@ -52,7 +53,12 @@ export default function App() {
     addRecentPath,
     skipWelcomeOnStart,
     setSkipWelcomeOnStart,
+    currency,
+    setCurrency,
+    passwordProtect,
+    setPasswordProtect,
   } = useDocuments();
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
 
   const [activeAccounts, setActiveAccounts] = useState<Set<ID>>(new Set());
   const [activeAccountTypeGroup, setActiveAccountTypeGroup] = useState<AccountType | null>(null);
@@ -1429,6 +1435,7 @@ export default function App() {
               recurringCount={programadorRows.length}
               categoriesCount={categories.length}
               savedFiltersCount={savedFilters.length}
+              onOpenOptions={() => setShowOptionsModal(true)}
             />
             {!sidebarCollapsed && (
               <div
@@ -1671,6 +1678,15 @@ export default function App() {
             />
           );
         })()}
+      {showOptionsModal && (
+        <OptionsModal
+          currency={currency}
+          onChangeCurrency={setCurrency}
+          passwordProtect={passwordProtect}
+          onTogglePasswordProtect={() => setPasswordProtect(!passwordProtect)}
+          onClose={() => setShowOptionsModal(false)}
+        />
+      )}
     </div>
   );
 }

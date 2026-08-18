@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LedgerDocument } from "../types";
+import type { Currency, LedgerDocument } from "../types";
 import { genId } from "./id";
 import { todayISO } from "./format";
 import { applyRecurringDueLogic } from "./recurring";
@@ -22,6 +22,8 @@ export function useDocuments() {
   const [savedSnapshots, setSavedSnapshots] = useState<Record<string, string>>({});
   const [recentPaths, setRecentPaths] = useState<string[]>([]);
   const [skipWelcomeOnStart, setSkipWelcomeOnStartState] = useState(false);
+  const [currency, setCurrencyState] = useState<Currency>("EUR");
+  const [passwordProtect, setPasswordProtectState] = useState(false);
   const prevDocsRef = useRef<LedgerDocument[]>([]);
   const hydratedRef = useRef(false);
 
@@ -43,6 +45,8 @@ export function useDocuments() {
       setSavedPaths(manifest.savedPaths);
       setRecentPaths(manifest.recentPaths);
       setSkipWelcomeOnStartState(manifest.skipWelcomeOnStart);
+      setCurrencyState(manifest.currency);
+      setPasswordProtectState(manifest.passwordProtect);
       const active = manifest.activeDocumentId && loaded.some((d) => d.id === manifest.activeDocumentId)
         ? manifest.activeDocumentId
         : loaded[0]?.id ?? null;
@@ -80,9 +84,11 @@ export function useDocuments() {
         savedPaths,
         recentPaths,
         skipWelcomeOnStart,
+        currency,
+        passwordProtect,
       }).catch((err) => console.error("Error guardando el manifiesto", err));
     });
-  }, [documents, activeDocId, savedPaths, recentPaths, skipWelcomeOnStart]);
+  }, [documents, activeDocId, savedPaths, recentPaths, skipWelcomeOnStart, currency, passwordProtect]);
 
   // Autogeneracion de recurrentes + vencimiento automatico: por cada
   // documento, cualquier movimiento "programado" cuya fecha ya llego pasa a
@@ -201,6 +207,14 @@ export function useDocuments() {
     setSkipWelcomeOnStartState(value);
   }, []);
 
+  const setCurrency = useCallback((value: Currency) => {
+    setCurrencyState(value);
+  }, []);
+
+  const setPasswordProtect = useCallback((value: boolean) => {
+    setPasswordProtectState(value);
+  }, []);
+
   const activeDoc = documents.find((d) => d.id === activeDocId) ?? null;
 
   return {
@@ -222,5 +236,9 @@ export function useDocuments() {
     addRecentPath,
     skipWelcomeOnStart,
     setSkipWelcomeOnStart,
+    currency,
+    setCurrency,
+    passwordProtect,
+    setPasswordProtect,
   };
 }

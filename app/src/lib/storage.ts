@@ -2,10 +2,12 @@ import { invoke } from "@tauri-apps/api/core";
 import type { LedgerDocument, Manifest } from "../types";
 import { migrateDocument } from "./migrate";
 
+const CURRENCIES = ["EUR", "GBP", "USD"] as const;
+
 export async function loadManifest(): Promise<Manifest> {
   const raw = await invoke<unknown>("read_manifest");
   if (!raw || typeof raw !== "object")
-    return { documentIds: [], activeDocumentId: null, savedPaths: {}, recentPaths: [], skipWelcomeOnStart: false };
+    return { documentIds: [], activeDocumentId: null, savedPaths: {}, recentPaths: [], skipWelcomeOnStart: false, currency: "EUR", passwordProtect: false };
   const m = raw as Partial<Manifest>;
   return {
     documentIds: Array.isArray(m.documentIds) ? m.documentIds : [],
@@ -13,6 +15,8 @@ export async function loadManifest(): Promise<Manifest> {
     savedPaths: m.savedPaths && typeof m.savedPaths === "object" ? m.savedPaths : {},
     recentPaths: Array.isArray(m.recentPaths) ? m.recentPaths.filter((p): p is string => typeof p === "string") : [],
     skipWelcomeOnStart: typeof m.skipWelcomeOnStart === "boolean" ? m.skipWelcomeOnStart : false,
+    currency: (CURRENCIES as readonly string[]).includes(m.currency as string) ? (m.currency as Manifest["currency"]) : "EUR",
+    passwordProtect: typeof m.passwordProtect === "boolean" ? m.passwordProtect : false,
   };
 }
 

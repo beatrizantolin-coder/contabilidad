@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FilePlus, FileText, Folder, FolderPlus, GripVertical, Landmark, LineChart, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, SlidersHorizontal, Tag, Trash2, X } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FilePlus, FileText, Folder, FolderPlus, GripVertical, Landmark, LineChart, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, Settings, SlidersHorizontal, Tag, Trash2, X } from "lucide-react";
 import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -88,6 +88,7 @@ export function Sidebar({
   recurringCount,
   categoriesCount,
   savedFiltersCount,
+  onOpenOptions,
   collapsed,
   onToggleCollapsed,
 }: {
@@ -125,11 +126,13 @@ export function Sidebar({
   recurringCount: number;
   categoriesCount: number;
   savedFiltersCount: number;
+  onOpenOptions: () => void;
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
   const [showDocForm, setShowDocForm] = useState(false);
   const [docMenuOpen, setDocMenuOpen] = useState(false);
+  const [collapsedDocsOpen, setCollapsedDocsOpen] = useState(false);
   const [docNameDraft, setDocNameDraft] = useState("");
   const [renamingDocId, setRenamingDocId] = useState<ID | null>(null);
   const [docRenameDraft, setDocRenameDraft] = useState("");
@@ -179,14 +182,15 @@ export function Sidebar({
   }, [draggedAccountId, dragOverAccountId]);
 
   // Los formularios de añadir documento/cuenta son estado local de esta
-  // barra lateral: se cierran solos al cambiar de vista o de documento
-  // activo, igual que los paneles laterales de App.tsx.
+  // barra lateral: se cierran solos al cambiar de vista, de documento
+  // activo, de seccion de la barra lateral o de cuenta/grupo de cuentas
+  // seleccionado, igual que los paneles laterales de App.tsx.
   useEffect(() => {
     setShowDocForm(false);
     setShowAccForm(false);
     setDocMenuOpen(false);
     setRenamingDocId(null);
-  }, [view, activeDocId]);
+  }, [view, activeDocId, sidebarSection, activeAccountTypeGroup]);
 
   function commitDocRename(id: ID) {
     const trimmed = docRenameDraft.trim();
@@ -265,12 +269,24 @@ export function Sidebar({
 
       {collapsed ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, color: T.textMuted }}>
-          <button onClick={() => setSidebarSection("documentos")} style={{ background: "none", border: "none", color: sidebarSection === "documentos" ? T.accent : T.textMuted, padding: 4 }} aria-label="Documentos" title="Documentos">
-            <FileText size={17} />
+          <button onClick={() => { setSidebarSection("documentos"); clearAccountSelection(); }} style={{ background: "none", border: "none", color: sidebarSection === "documentos" ? T.accent : T.textMuted, padding: 4 }} aria-label="Documentos" title="Documentos">
+            <Folder size={17} />
           </button>
-          <button onClick={() => setShowDocForm((s) => !s)} style={{ background: "none", border: "none", color: T.textMuted, padding: 4 }} aria-label="Añadir documento" title="Añadir documento">
+          <button onClick={() => setCollapsedDocsOpen((s) => !s)} style={{ background: "none", border: "none", color: collapsedDocsOpen ? T.accent : T.textMuted, padding: 4 }} aria-label="Ver documentos abiertos" title="Ver documentos abiertos">
             <Plus size={14} />
           </button>
+          {collapsedDocsOpen &&
+            documents.map((d) => (
+              <button
+                key={d.id}
+                onClick={() => { setActiveDocId(d.id); clearAccountSelection(); setView("transactions"); setSidebarSection("documentos"); }}
+                style={{ background: "none", border: "none", color: d.id === activeDocId ? T.accent : T.textMuted, padding: 3 }}
+                aria-label={d.name}
+                title={d.name}
+              >
+                <FileText size={14} />
+              </button>
+            ))}
           <div style={{ width: 20, borderTop: "1px solid " + T.border }} />
           <button onClick={onAccountsHeaderClick} style={{ background: "none", border: "none", color: sidebarSection === "cuentas" ? T.accent : T.textMuted, padding: 4 }} aria-label="Cuentas" title="Cuentas">
             <CircleDollarSign size={17} />
@@ -291,17 +307,17 @@ export function Sidebar({
             <Plus size={14} />
           </button>
           <div style={{ width: 20, borderTop: "1px solid " + T.border }} />
-          <button onClick={() => { setSidebarSection("recurring"); setView("recurring"); }} style={{ background: "none", border: "none", color: sidebarSection === "recurring" ? T.accent : T.textMuted, padding: 4 }} aria-label="Programador" title="Programador">
+          <button onClick={() => { setSidebarSection("recurring"); setView("recurring"); clearAccountSelection(); }} style={{ background: "none", border: "none", color: sidebarSection === "recurring" ? T.accent : T.textMuted, padding: 4 }} aria-label="Programador" title="Programador">
             <Repeat size={17} />
           </button>
-          <button onClick={() => { setSidebarSection("categories"); setView("categories"); }} style={{ background: "none", border: "none", color: sidebarSection === "categories" ? T.accent : T.textMuted, padding: 4 }} aria-label="Categorias" title="Categorias">
+          <button onClick={() => { setSidebarSection("categories"); setView("categories"); clearAccountSelection(); }} style={{ background: "none", border: "none", color: sidebarSection === "categories" ? T.accent : T.textMuted, padding: 4 }} aria-label="Categorias" title="Categorias">
             <Tag size={15} />
           </button>
-          <button onClick={() => { setSidebarSection("filters"); setView("filters"); }} style={{ background: "none", border: "none", color: sidebarSection === "filters" ? T.accent : T.textMuted, padding: 4 }} aria-label="Filtros" title="Filtros">
+          <button onClick={() => { setSidebarSection("filters"); setView("filters"); clearAccountSelection(); }} style={{ background: "none", border: "none", color: sidebarSection === "filters" ? T.accent : T.textMuted, padding: 4 }} aria-label="Filtros" title="Filtros">
             <SlidersHorizontal size={17} />
           </button>
           <button
-            onClick={() => { setSidebarSection("previsiones"); setView("previsiones"); }}
+            onClick={() => { setSidebarSection("previsiones"); setView("previsiones"); clearAccountSelection(); }}
             style={{ background: "none", border: "none", color: sidebarSection === "previsiones" ? T.accent : T.textMuted, padding: 4 }}
             aria-label="Previsiones"
             title="Previsiones"
@@ -313,7 +329,7 @@ export function Sidebar({
       <>
       <div style={{ padding: "0 2px", position: "relative" }}>
         <button
-          onClick={() => setSidebarSection("documentos")}
+          onClick={() => { setSidebarSection("documentos"); clearAccountSelection(); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: sidebarSection === "documentos" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "documentos" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}
         >
@@ -590,7 +606,7 @@ export function Sidebar({
       <div style={{ borderTop: "1px solid " + T.border, margin: "14px 10px 10px" }} />
       <div style={{ marginTop: 12, padding: "0 2px" }}>
         <button
-          onClick={() => { setSidebarSection("recurring"); setView("recurring"); }}
+          onClick={() => { setSidebarSection("recurring"); setView("recurring"); clearAccountSelection(); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: sidebarSection === "recurring" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "recurring" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
@@ -603,7 +619,7 @@ export function Sidebar({
 
       <div style={{ marginTop: 6, padding: "0 2px" }}>
         <button
-          onClick={() => { setSidebarSection("categories"); setView("categories"); }}
+          onClick={() => { setSidebarSection("categories"); setView("categories"); clearAccountSelection(); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: sidebarSection === "categories" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "categories" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
@@ -616,7 +632,7 @@ export function Sidebar({
 
       <div style={{ marginTop: 6, padding: "0 2px" }}>
         <button
-          onClick={() => { setSidebarSection("filters"); setView("filters"); }}
+          onClick={() => { setSidebarSection("filters"); setView("filters"); clearAccountSelection(); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: sidebarSection === "filters" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "filters" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
@@ -629,12 +645,25 @@ export function Sidebar({
 
       <div style={{ marginTop: 6, padding: "0 2px" }}>
         <button
-          onClick={() => { setSidebarSection("previsiones"); setView("previsiones"); }}
+          onClick={() => { setSidebarSection("previsiones"); setView("previsiones"); clearAccountSelection(); }}
           className="navitem"
           style={{ width: "100%", textAlign: "left", background: sidebarSection === "previsiones" ? "#FFFFFF" : "transparent", boxShadow: sidebarSection === "previsiones" ? "0 1px 2px rgba(0,0,0,0.06)" : "none", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
           <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
             <LineChart size={13} style={{ color: sidebarSection === "previsiones" ? T.accent : T.textMuted }} /> Previsiones
+          </span>
+        </button>
+      </div>
+
+      <div style={{ borderTop: "1px solid " + T.border, margin: "10px 10px 6px" }} />
+      <div style={{ padding: "0 2px" }}>
+        <button
+          onClick={onOpenOptions}
+          className="navitem"
+          style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", borderRadius: 7, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <span style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+            <Settings size={13} style={{ color: T.textMuted }} /> Opciones
           </span>
         </button>
       </div>

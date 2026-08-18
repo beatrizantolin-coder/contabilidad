@@ -153,6 +153,8 @@ export interface LedgerDocument {
   savedFilters: SavedFilter[];
 }
 
+export type Currency = "EUR" | "GBP" | "USD";
+
 export interface Manifest {
   documentIds: ID[];
   activeDocumentId: ID | null;
@@ -162,4 +164,7 @@ export interface Manifest {
   recentPaths: string[];
   /** Si es true, se salta la ventana de bienvenida al iniciar y se abre directamente el ultimo documento. Por defecto false: la bienvenida se muestra siempre. */
   skipWelcomeOnStart: boolean;
+  /** Ajustes de la seccion "Opciones" de la barra lateral. Por ahora solo se guardan, sin efecto real todavia. */
+  currency: Currency;
+  passwordProtect: boolean;
 }
