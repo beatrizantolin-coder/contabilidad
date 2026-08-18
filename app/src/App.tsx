@@ -541,7 +541,7 @@ export default function App() {
     const id = genId();
     updateDoc(docId, (d) => ({
       ...d,
-      accounts: d.accounts.concat([{ id, warning: 0, ...normalizeAccountFields({ name, type, opening, linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null }) }]),
+      accounts: d.accounts.concat([{ id, warning: 0, ...normalizeAccountFields({ name, type, opening, linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null, customIcon: null }) }]),
     }));
     return id;
   }

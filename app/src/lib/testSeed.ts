@@ -74,9 +74,9 @@ export function createTestDocument(): LedgerDocument {
     id: docId,
     name: "Documento de prueba",
     accounts: [
-      { id: checkingId, name: "Cuenta corriente", opening: 1500, warning: 0, type: "checking", linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null },
-      { id: savingsId, name: "Ahorro", opening: 4000, warning: 0, type: "savings", linkedAccountId: null, savingsKind: "savings", cardKind: null, paymentMode: null, monthlyPayment: null },
-      { id: creditId, name: "Visa", opening: 0, warning: -200, type: "credit", linkedAccountId: checkingId, savingsKind: null, cardKind: "credit", paymentMode: "month_end", monthlyPayment: null },
+      { id: checkingId, name: "Cuenta corriente", opening: 1500, warning: 0, type: "checking", linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null, customIcon: null },
+      { id: savingsId, name: "Ahorro", opening: 4000, warning: 0, type: "savings", linkedAccountId: null, savingsKind: "savings", cardKind: null, paymentMode: null, monthlyPayment: null, customIcon: null },
+      { id: creditId, name: "Visa", opening: 0, warning: -200, type: "credit", linkedAccountId: checkingId, savingsKind: null, cardKind: "credit", paymentMode: "month_end", monthlyPayment: null, customIcon: null },
     ],
     categories: [
       { id: catSupermercado, name: "Supermercado", color: PALETTE[0], kind: "expense", subcategories: [] },

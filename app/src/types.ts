@@ -22,6 +22,8 @@ export interface Account {
   paymentMode: PaymentMode | null;
   /** Solo con paymentMode "fixed": cantidad fija que se paga cada mes, independientemente de los cargos. */
   monthlyPayment: number | null;
+  /** Icono personalizado del banco (imagen como data URL), o null para usar el icono generico del tipo de cuenta. */
+  customIcon: string | null;
 }
 
 export type CategoryKind = "expense" | "income" | "transfer";

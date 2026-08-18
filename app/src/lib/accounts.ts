@@ -9,6 +9,7 @@ export interface AccountDraftFields {
   cardKind: CardKind | null;
   paymentMode: PaymentMode | null;
   monthlyPayment: number | null;
+  customIcon: string | null;
 }
 
 /** Limpia los campos que no aplican al tipo de cuenta elegido (p.ej. forma de pago fuera de una tarjeta de credito). */
@@ -24,5 +25,6 @@ export function normalizeAccountFields(f: AccountDraftFields): Omit<Account, "id
     cardKind: isCard ? f.cardKind : null,
     paymentMode: isCreditCard ? f.paymentMode : null,
     monthlyPayment: isCreditCard && f.paymentMode === "fixed" ? f.monthlyPayment : null,
+    customIcon: f.customIcon,
   };
 }

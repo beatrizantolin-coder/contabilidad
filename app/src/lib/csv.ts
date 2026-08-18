@@ -185,7 +185,7 @@ export function parseProgramadorCsv(csvText: string, accounts: Account[]): Progr
     let accId = accByName.get(normalizeKey(accName));
     if (!accId) {
       accId = genId();
-      nextAccounts.push({ id: accId, name: accName, opening: 0, warning: 0, type: "checking", linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null });
+      nextAccounts.push({ id: accId, name: accName, opening: 0, warning: 0, type: "checking", linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null, customIcon: null });
       accByName.set(normalizeKey(accName), accId);
     }
 
@@ -306,7 +306,7 @@ export function parseIcomptaCsv(csvText: string, accounts: Account[], categories
     let accId = accByName.get(normalizeKey(accName));
     if (!accId) {
       accId = genId();
-      nextAccounts.push({ id: accId, name: accName, opening: 0, warning: 0, type: accType, linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null });
+      nextAccounts.push({ id: accId, name: accName, opening: 0, warning: 0, type: accType, linkedAccountId: null, savingsKind: null, cardKind: null, paymentMode: null, monthlyPayment: null, customIcon: null });
       accByName.set(normalizeKey(accName), accId);
     }
 

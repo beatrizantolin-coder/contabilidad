@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FilePlus, FileText, Folder, FolderPlus, GripVertical, Landmark, LineChart, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, Settings, SlidersHorizontal, Tag, Trash2, X } from "lucide-react";
+import { Banknote, CheckCircle2, CircleDollarSign, CreditCard, FilePlus, FileText, Folder, FolderPlus, GripVertical, Image as ImageIcon, Landmark, LineChart, Link2, PanelLeft, PanelLeftClose, PiggyBank, Pencil, Plus, Repeat, Save, Settings, SlidersHorizontal, Tag, Trash2, X } from "lucide-react";
 import type { Account, AccountType, CardKind, ID, LedgerDocument, PaymentMode, SavingsKind } from "../types";
 import { ACCOUNT_TYPES, T, inputStyle } from "../theme";
 import { fmt } from "../lib/format";
@@ -41,13 +41,15 @@ interface AccDraft {
   monthlyPayment: string;
   /** Si es true, el formulario oculta el selector de tipo (ya viene implicito por la seccion desde la que se abrio). */
   lockType: boolean;
+  /** Icono personalizado del banco (imagen como data URL), o null para usar el icono generico del tipo de cuenta. */
+  customIcon: string | null;
 }
 
 const emptyAccDraft = (type: AccountType, lockType: boolean): AccDraft => ({
   id: null, name: "", opening: "", type, linkedAccountId: null,
   savingsKind: type === "savings" ? "savings" : null,
   cardKind: type === "credit" ? "debit" : null,
-  paymentMode: null, monthlyPayment: "", lockType,
+  paymentMode: null, monthlyPayment: "", lockType, customIcon: null,
 });
 
 const ACCOUNT_NAME_LABEL: Record<AccountType, string> = {
@@ -213,7 +215,7 @@ export function Sidebar({
         savingsKind: existing.savingsKind ?? (existing.type === "savings" ? "savings" : null),
         cardKind: existing.cardKind ?? (existing.type === "credit" ? "debit" : null),
         paymentMode: existing.paymentMode, monthlyPayment: existing.monthlyPayment != null ? String(existing.monthlyPayment) : "",
-        lockType: false,
+        lockType: false, customIcon: existing.customIcon,
       });
     } else {
       setAccDraft(emptyAccDraft(type, lockType));
@@ -239,6 +241,7 @@ export function Sidebar({
       cardKind: accDraft.cardKind,
       paymentMode: accDraft.paymentMode,
       monthlyPayment: Number(accDraft.monthlyPayment) || 0,
+      customIcon: accDraft.customIcon,
     };
     if (accDraft.id) updateAccount(accDraft.id, fields);
     else addAccount(fields);
@@ -447,7 +450,29 @@ export function Sidebar({
           const group = accounts.filter((a) => (a.type || "checking") === section.key);
           const groupActive = activeAccountTypeGroup === section.key;
           return (
-            <div key={section.key} style={{ marginBottom: 4 }}>
+            <div
+              key={section.key}
+              style={{ marginBottom: 4 }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const draggedId = e.dataTransfer.getData("text/plain");
+                const dragged = accounts.find((x) => x.id === draggedId);
+                if (!dragged || (dragged.type || "checking") === section.key) return;
+                if (!window.confirm('¿Mover "' + dragged.name + '" a ' + section.label + "?")) return;
+                updateAccount(dragged.id, {
+                  name: dragged.name,
+                  type: section.key,
+                  opening: dragged.opening,
+                  linkedAccountId: dragged.linkedAccountId,
+                  savingsKind: dragged.savingsKind,
+                  cardKind: dragged.cardKind,
+                  paymentMode: dragged.paymentMode,
+                  monthlyPayment: dragged.monthlyPayment,
+                  customIcon: dragged.customIcon,
+                });
+              }}
+            >
               <div
                 className="navitem"
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px 8px 16px", marginBottom: 6, borderRadius: 6, background: groupActive ? "#FFFFFF" : "transparent", boxShadow: groupActive ? "0 1px 2px rgba(0,0,0,0.06)" : "none" }}
@@ -477,6 +502,8 @@ export function Sidebar({
                     className="accrow navitem"
                     data-account-id={a.id}
                     data-account-type={a.type || "checking"}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData("text/plain", a.id)}
                     style={{
                       borderRadius: 7,
                       background: highlighted ? "#FFFFFF" : "transparent",
@@ -503,7 +530,11 @@ export function Sidebar({
                       onClick={(e) => { onAccountClick(a.id, e.shiftKey, e.metaKey || e.ctrlKey); setSidebarSection("cuentas"); setView("transactions"); }}
                       style={{ background: "none", border: "none", color: T.text, textAlign: "left", flex: 1, padding: 0, display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}
                     >
-                      <SectionIcon size={11} style={{ color: T.textFaint, flexShrink: 0 }} />
+                      {a.customIcon ? (
+                        <img src={a.customIcon} alt="" style={{ width: 14, height: 14, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                      ) : (
+                        <SectionIcon size={11} style={{ color: T.textFaint, flexShrink: 0 }} />
+                      )}
                       <span style={{ fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
                     </button>
                     <span className="amount" style={{ fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 20, color: low ? "#8A1F1F" : "#1F6B32", background: low ? "#FBE7E7" : "#E7F5EA", flexShrink: 0 }}>
@@ -566,7 +597,7 @@ export function Sidebar({
               </select>
               <select value={accDraft.linkedAccountId ?? ""} onChange={(e) => setAccDraft((d) => ({ ...d, linkedAccountId: e.target.value || null }))} required style={inputStyle}>
                 <option value="">Cuenta asociada (obligatoria)</option>
-                {accounts.filter((a) => a.id !== accDraft.id).map((a) => (
+                {accounts.filter((a) => a.id !== accDraft.id && a.type === "checking").map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
@@ -591,6 +622,35 @@ export function Sidebar({
               )}
             </>
           )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {accDraft.customIcon ? (
+              <img src={accDraft.customIcon} alt="" style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover", border: "1px solid " + T.border }} />
+            ) : (
+              <div style={{ width: 26, height: 26, borderRadius: "50%", background: T.borderSoft, display: "flex", alignItems: "center", justifyContent: "center", color: T.textFaint }}>
+                <ImageIcon size={13} />
+              </div>
+            )}
+            <label style={{ fontSize: 11.5, color: T.accent, cursor: "pointer", fontWeight: 600 }}>
+              {accDraft.customIcon ? "Cambiar icono del banco" : "Icono personalizado del banco"}
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => setAccDraft((d) => ({ ...d, customIcon: typeof reader.result === "string" ? reader.result : null }));
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </label>
+            {accDraft.customIcon && (
+              <button type="button" onClick={() => setAccDraft((d) => ({ ...d, customIcon: null }))} style={{ background: "none", border: "none", color: T.textFaint }}>
+                <X size={12} />
+              </button>
+            )}
+          </div>
           <input placeholder="Saldo inicial" type="number" step="0.01" value={accDraft.opening} onChange={(e) => setAccDraft((d) => ({ ...d, opening: e.target.value }))} style={inputStyle} />
           <div style={{ display: "flex", gap: 8 }}>
             <button type="submit" style={{ flex: 1, background: T.accent, border: "none", borderRadius: 6, padding: "7px 0", color: "#fff", fontWeight: 600, fontSize: 12.5 }}>

@@ -57,6 +57,7 @@ function migrateAccount(raw: any): Account {
     cardKind: raw.cardKind ?? null,
     paymentMode: raw.paymentMode ?? null,
     monthlyPayment: raw.monthlyPayment ?? null,
+    customIcon: raw.customIcon ?? null,
   };
 }
 
