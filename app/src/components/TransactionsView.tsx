@@ -16,6 +16,7 @@ const GRID_MIN_WIDTH = 760;
 export function TransactionsView({
   title,
   titleIcon: TitleIcon,
+  isEmptyGroupView,
   monthIncome,
   monthExpense,
   onClearAll,
@@ -64,6 +65,8 @@ export function TransactionsView({
   title: string;
   /** Icono del tipo de cuenta, mostrado junto al titulo cuando hay un grupo de cuentas seleccionado (Bancos/Ahorro/Tarjetas/Efectivo). */
   titleIcon?: LucideIcon;
+  /** true cuando se ha seleccionado un grupo de cuentas entero (Bancos/Ahorro/Tarjetas/Efectivo) y no hay ningun movimiento que mostrar: solo se muestra el encabezado, sin barra de herramientas, filtros ni tabla vacia. */
+  isEmptyGroupView: boolean;
   monthIncome: number;
   monthExpense: number;
   onClearAll: () => void;
@@ -173,6 +176,7 @@ export function TransactionsView({
             </span>
           </div>
         </div>
+        {!isEmptyGroupView && (
         <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ position: "relative" }}>
             <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
@@ -232,14 +236,15 @@ export function TransactionsView({
             <Plus size={14} /> Movimiento
           </button>
         </div>
+        )}
       </div>
 
-      {showFilters && (
+      {!isEmptyGroupView && showFilters && (
         <div className="no-print">
           <FiltersBar filters={filters} setFilters={setFilters} categories={categories} onSaveFilter={onSaveFilter} />
         </div>
       )}
-      {showMovementsRange && (
+      {!isEmptyGroupView && showMovementsRange && (
         <div className="no-print">
           <MovementsRangeBar onApply={onApplyMovementsRange} />
         </div>
@@ -265,6 +270,9 @@ export function TransactionsView({
         </div>
       )}
 
+      {isEmptyGroupView ? (
+        <div style={{ flex: 1 }} />
+      ) : (
       <div style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
           <span />
@@ -411,13 +419,16 @@ export function TransactionsView({
           });
         })()}
       </div>
+      )}
 
+      {!isEmptyGroupView && (
       <div style={{ borderTop: "1px solid " + T.border, padding: "8px 20px", background: T.bgElevated, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ fontSize: 11.5, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{footerLabel}</span>
         <span className="amount" style={{ fontSize: 14, fontWeight: 700 }}>
           {fmt(footerAmount)}
         </span>
       </div>
+      )}
     </>
   );
 }

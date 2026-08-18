@@ -1392,6 +1392,7 @@ export default function App() {
     ? accounts.find((a) => a.id === [...activeAccounts][0])?.name ?? "-"
     : activeAccounts.size + " cuentas seleccionadas";
   const accountsTitleIcon = activeAccountTypeGroup ? ACCOUNT_SECTIONS.find((s) => s.key === activeAccountTypeGroup)?.icon : undefined;
+  const isEmptyGroupView = !!activeAccountTypeGroup && filteredTx.length === 0;
 
   return (
     <div style={{ height: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif", overflow: "hidden" }}>
@@ -1510,6 +1511,7 @@ export default function App() {
                   <TransactionsView
                     title={accountsTitle}
                     titleIcon={accountsTitleIcon}
+                    isEmptyGroupView={isEmptyGroupView}
                     monthIncome={monthIncome}
                     monthExpense={monthExpense}
                     onClearAll={clearTransactionsView}
