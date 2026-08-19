@@ -77,9 +77,8 @@ export function TransactionsView({
   onDuplicateSelected,
   onBulkEditSelected,
   onDeleteSelected,
-  footerLabel,
-  footerAmount,
   accountName,
+  rowZoom,
 }: {
   title: string;
   /** Icono del tipo de cuenta, mostrado junto al titulo cuando hay un grupo de cuentas seleccionado (Bancos/Ahorro/Tarjetas/Efectivo). */
@@ -126,9 +125,9 @@ export function TransactionsView({
   onDuplicateSelected: () => void;
   onBulkEditSelected: () => void;
   onDeleteSelected: () => void;
-  footerLabel: string;
-  footerAmount: number;
   accountName: (id: ID) => string;
+  /** Zoom de fila de la barra de estado global: escala el alto de fila y el tamaño de fuente de la tabla. */
+  rowZoom: number;
 }) {
   const [draggedTxId, setDraggedTxId] = useState<ID | null>(null);
   const [dragOverTxId, setDragOverTxId] = useState<ID | null>(null);
@@ -401,7 +400,7 @@ export function TransactionsView({
                           else onSelectRow(t.id);
                         }}
                         style={{
-                          display: "grid", gridTemplateColumns: gridColumns, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: "8px 20px", fontSize: 13,
+                          display: "grid", gridTemplateColumns: gridColumns, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: Math.round(8 * rowZoom) + "px 20px", fontSize: Math.round(13 * rowZoom),
                           borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
                           borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
                         }}
@@ -487,15 +486,6 @@ export function TransactionsView({
             );
           });
         })()}
-      </div>
-      )}
-
-      {!isEmptyGroupView && (
-      <div style={{ borderTop: "1px solid " + T.border, padding: "8px 20px", background: T.bgElevated, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 11.5, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{footerLabel}</span>
-        <span className="amount" style={{ fontSize: 14, fontWeight: 700 }}>
-          {fmt(footerAmount)}
-        </span>
       </div>
       )}
     </>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LineChart, Minus, Plus } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -9,7 +10,7 @@ import { computeBalances, computeChronological, computeRunningMaps, hasLocalSibl
 import { normalizeAccountFields, type AccountDraftFields } from "./lib/accounts";
 import { emptyDraft, type TxDraft } from "./lib/txDraft";
 import { computeBulkEditDraft, emptyBulkEditState, type BulkEditField, type BulkEditState } from "./lib/bulkEdit";
-import { endOfNthMonthISO, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, todayISO } from "./lib/format";
+import { endOfNthMonthISO, fmt, monthKey, monthYearLabel, shortDate, startOfCurrentMonthISO, todayISO } from "./lib/format";
 import { computeProgramadorMonthStats, computeProgramadorRows, seriesKey, type ProgramadorRow } from "./lib/recurring";
 import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoRange } from "./lib/evolution";
 import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv, pickAndImportProgramadorCsv } from "./lib/csv";
@@ -26,6 +27,7 @@ import { CategoriesView } from "./components/CategoriesView";
 import { CategoryEditForm } from "./components/CategoryEditForm";
 import { FiltersView } from "./components/FiltersView";
 import { PrevisionPanel } from "./components/PrevisionPanel";
+import { PrevisionFloatPanel } from "./components/PrevisionFloatPanel";
 import { WelcomeScreen } from "./components/WelcomeScreen";
 import { RenameDocumentModal } from "./components/RenameDocumentModal";
 import { CloseDocumentModal } from "./components/CloseDocumentModal";
@@ -68,6 +70,11 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(270);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("cuentas");
+  // Barra de estado global (presente en todas las pantallas): panel flotante
+  // de Previsión de balance y zoom de tabla. No se persisten en disco: se
+  // reinician al reiniciar la app.
+  const [showPrevisionFloat, setShowPrevisionFloat] = useState(false);
+  const [rowZoom, setRowZoom] = useState(1);
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters());
@@ -202,7 +209,16 @@ export default function App() {
     () => (activeAccounts.size === 0 && !activeAccountTypeGroup ? new Set(accounts.map((a) => a.id)) : activeAccounts),
     [activeAccounts, activeAccountTypeGroup, accounts],
   );
-  const scopedTotal = useMemo(() => accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + (balances[a.id] || 0), 0), [accounts, scopeIds, balances]);
+  // "Total seleccionado" de la barra de estado global: suma de los movimientos
+  // marcados (no del saldo de las cuentas), igual en cualquier pantalla; 0 sin
+  // seleccion.
+  const scopedSelectedTotal = useMemo(
+    () =>
+      selectedIds.size === 0
+        ? 0
+        : transactions.filter((t) => selectedIds.has(t.id)).reduce((s, t) => s + (t.type === "income" || t.type === "transfer_in" ? t.amount : -t.amount), 0),
+    [transactions, selectedIds],
+  );
 
   const chronological = useMemo(() => computeChronological(transactions), [transactions]);
   const runningMaps = useMemo(() => computeRunningMaps(accounts, chronological, scopeIds), [accounts, chronological, scopeIds]);
@@ -1491,7 +1507,8 @@ export default function App() {
                 style={{ position: "absolute", left: sidebarWidth - 3, top: 0, bottom: 0, width: 6, cursor: "col-resize", zIndex: 5 }}
               />
             )}
-            <main style={{ background: T.bg, display: "flex", flexDirection: "row", minWidth: 0, minHeight: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0 }}>
+            <main style={{ background: T.bg, display: "flex", flexDirection: "row", minWidth: 0, minHeight: 0, flex: 1 }}>
               <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
                 {view === "recurring" && (
                   <RecurringView
@@ -1584,9 +1601,8 @@ export default function App() {
                     onDuplicateSelected={duplicateSelected}
                     onBulkEditSelected={editSelected}
                     onDeleteSelected={deleteSelected}
-                    footerLabel="Total seleccionado"
-                    footerAmount={scopedTotal}
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
+                    rowZoom={rowZoom}
                   />
                 )}
 
@@ -1677,6 +1693,52 @@ export default function App() {
                 </SidePanel>
               )}
             </main>
+
+            <div style={{ height: 40, flexShrink: 0, borderTop: "1px solid " + T.border, background: T.bgElevated, display: "flex", alignItems: "center", padding: "0 16px", position: "relative" }}>
+              <button
+                onClick={() => setShowPrevisionFloat((s) => !s)}
+                style={{ background: "none", border: "none", color: showPrevisionFloat ? T.accent : T.textFaint, padding: 4, display: "flex" }}
+                aria-label="Previsión de balance"
+                title="Previsión de balance"
+              >
+                <LineChart size={16} />
+              </button>
+              <div style={{ flex: 1 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: 20 }}>
+                <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Total seleccionado</span>
+                <span className="amount" style={{ fontSize: 13, fontWeight: 700 }}>{fmt(scopedSelectedTotal)}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", border: "1px solid " + T.border, borderRadius: 6, overflow: "hidden" }}>
+                <button
+                  onClick={() => setRowZoom((z) => Math.min(1.6, +(z + 0.15).toFixed(2)))}
+                  style={{ background: "none", border: "none", color: T.textMuted, padding: "5px 9px", borderRight: "1px solid " + T.border }}
+                  aria-label="Aumentar tamaño de fila"
+                  title="Aumentar tamaño de fila"
+                >
+                  <Plus size={13} />
+                </button>
+                <button
+                  onClick={() => setRowZoom((z) => Math.max(0.75, +(z - 0.15).toFixed(2)))}
+                  style={{ background: "none", border: "none", color: T.textMuted, padding: "5px 9px" }}
+                  aria-label="Reducir tamaño de fila"
+                  title="Reducir tamaño de fila"
+                >
+                  <Minus size={13} />
+                </button>
+              </div>
+
+              {showPrevisionFloat && (
+                <PrevisionFloatPanel
+                  movements={previsionMovements}
+                  categories={categories}
+                  accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
+                  evoRange={evoRange}
+                  setEvoRange={setEvoRange}
+                  onClose={() => setShowPrevisionFloat(false)}
+                />
+              )}
+            </div>
+            </div>
           </>
         ) : (
           <WelcomeScreen
