@@ -386,6 +386,17 @@ export default function App() {
     () => computePrevisionMovements(chronological, transactions, scopeIds, evoRange),
     [chronological, transactions, scopeIds, evoRange],
   );
+  // Saldo justo antes del inicio del rango de Previsiones: apertura de las
+  // cuentas en ambito + todo el historico real anterior a esa fecha. Punto
+  // de partida del saldo acumulado que se muestra fila a fila en la tabla.
+  const previsionBaseline = useMemo(() => {
+    const rangeFrom = evoRange.from || todayISO();
+    const openingSum = accounts.filter((a) => scopeIds.has(a.id)).reduce((s, a) => s + a.opening, 0);
+    const priorSum = chronological
+      .filter((t) => scopeIds.has(t.accountId) && (t.type !== "transfer_in" || !hasLocalSibling(t, transactions, scopeIds)) && t.date < rangeFrom)
+      .reduce((s, t) => s + (t.type === "income" || t.type === "transfer_in" ? Number(t.amount) : -Number(t.amount)), 0);
+    return openingSum + priorSum;
+  }, [accounts, scopeIds, chronological, transactions, evoRange]);
 
   function setAccounts(fn: (a: Account[]) => Account[]) {
     if (!activeDocId) return;
@@ -1633,6 +1644,7 @@ export default function App() {
                     points={evoPoints}
                     ticks={evoTicks}
                     movements={previsionMovements}
+                    baseline={previsionBaseline}
                     categories={categories}
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                     evoRange={evoRange}
