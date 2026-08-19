@@ -43,7 +43,6 @@ function SortHead({ field, label, sort, onSort }: { field: CatSortField; label: 
 }
 
 export function CategoriesView({
-  docName,
   categories,
   budgets,
   spendByCategory,
@@ -59,7 +58,6 @@ export function CategoriesView({
   onExport,
   onImport,
 }: {
-  docName: string;
   categories: Category[];
   budgets: Budgets;
   spendByCategory: CategorySpend[];
@@ -270,60 +268,60 @@ export function CategoriesView({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px", gap: 10, flexWrap: "nowrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <Tag size={17} style={{ color: T.accent }} /> Categorias
-          </h2>
-          <p style={{ fontSize: 12.5, color: T.textMuted, margin: "4px 0 0" }}>Categorias de {docName}.</p>
-          <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
-              <TrendingUp size={12} /> <span className="amount">{fmt(monthIncome)}</span>
-            </span>
-            <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
-              <TrendingDown size={12} /> <span className="amount">{fmt(monthExpense)}</span>
-            </span>
-          </div>
+      <div style={{ padding: "14px 20px 12px", borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
+        <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+          <Tag size={17} style={{ color: T.accent }} /> Categorias
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={onExport} style={smallBtn(false)}>
-            <Download size={13} />Exportar
-          </button>
-          <button onClick={onImport} style={smallBtn(false)}>
-            <Upload size={13} />Importar
-          </button>
-          <button onClick={() => onNewCategory(catTypeFilter !== "all" ? catTypeFilter : "expense")} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600 }}>
-            <Plus size={14} /> Nueva categoria
-          </button>
+        <div style={{ display: "flex", gap: 14, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
+            <TrendingUp size={13} /> <span className="amount">{fmt(monthIncome)}</span>
+          </span>
+          <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
+            <TrendingDown size={13} /> <span className="amount">{fmt(monthExpense)}</span>
+          </span>
         </div>
-      </div>
 
-      <div style={{ padding: 14, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <Field label="Descripcion">
-            <div style={{ position: "relative" }}>
-              <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
-              <input placeholder="Buscar" value={catSearch} onChange={(e) => setCatSearch(e.target.value)} style={{ ...inputStyle, paddingLeft: 28, width: 170 }} />
-            </div>
-          </Field>
-          <Field label="Tipo">
-            <select value={catTypeFilter} onChange={(e) => setCatTypeFilter(e.target.value as CatTypeFilter)} style={{ ...inputStyle, width: 150 }}>
-              <option value="all">Todos los tipos</option>
-              <option value="expense">Gastos</option>
-              <option value="income">Ingresos</option>
-              <option value="transfer">Transferencias</option>
-            </select>
-          </Field>
-          <Field label="Mostrar">
-            <select value={catShowMode} onChange={(e) => setCatShowMode(e.target.value as CatShowMode)} style={{ ...inputStyle, width: 150 }}>
-              <option value="categories">Categorias</option>
-              <option value="subcategories">Subcategorias</option>
-              <option value="all">Todas</option>
-            </select>
-          </Field>
-          <button onClick={clearFilters} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
-            <Eraser size={13} />
-          </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <Field label="Descripcion">
+              <div style={{ position: "relative" }}>
+                <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
+                <input placeholder="Buscar" value={catSearch} onChange={(e) => setCatSearch(e.target.value)} style={{ ...inputStyle, paddingLeft: 28, width: 170 }} />
+              </div>
+            </Field>
+            <Field label="Tipo">
+              <select value={catTypeFilter} onChange={(e) => setCatTypeFilter(e.target.value as CatTypeFilter)} style={{ ...inputStyle, width: 150 }}>
+                <option value="all">Todos los tipos</option>
+                <option value="expense">Gastos</option>
+                <option value="income">Ingresos</option>
+                <option value="transfer">Transferencias</option>
+              </select>
+            </Field>
+            <Field label="Mostrar">
+              <select value={catShowMode} onChange={(e) => setCatShowMode(e.target.value as CatShowMode)} style={{ ...inputStyle, width: 150 }}>
+                <option value="categories">Categorias</option>
+                <option value="subcategories">Subcategorias</option>
+                <option value="all">Todas</option>
+              </select>
+            </Field>
+            <button onClick={clearFilters} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
+              <Eraser size={13} />
+            </button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+            <button onClick={onExport} style={smallBtn(false)}>
+              <Download size={13} />
+              <span className="btn-label">Exportar</span>
+            </button>
+            <button onClick={onImport} style={smallBtn(false)}>
+              <Upload size={13} />
+              <span className="btn-label">Importar</span>
+            </button>
+            <button onClick={() => onNewCategory(catTypeFilter !== "all" ? catTypeFilter : "expense")} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600, marginLeft: 6 }}>
+              <Plus size={14} />
+              <span className="btn-label">Nueva categoria</span>
+            </button>
+          </div>
         </div>
       </div>
 

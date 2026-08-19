@@ -1556,7 +1556,6 @@ export default function App() {
 
                 {view === "categories" && (
                   <CategoriesView
-                    docName={activeDoc.name}
                     categories={categories}
                     budgets={budgets}
                     spendByCategory={byCategory}

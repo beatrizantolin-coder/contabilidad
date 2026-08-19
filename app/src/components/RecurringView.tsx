@@ -132,98 +132,99 @@ export function RecurringView({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 24px 4px", gap: 10, flexWrap: "nowrap" }}>
-        <div style={{ minWidth: 0 }}>
-          <h2 style={{ fontFamily: "Inter, sans-serif", fontSize: 17, fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <Repeat size={17} style={{ color: T.accent }} /> Programador
-          </h2>
-          <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12.5, color: T.textMuted }}>Movimientos recurrentes</span>
-            <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
-              <ArrowUpCircle size={12} /> <span className="amount">{fmt(monthIncome)}</span>
-            </span>
-            <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
-              <ArrowDownCircle size={12} /> <span className="amount">{fmt(monthExpense)}</span>
-            </span>
-            <span style={{ fontSize: 12, color: T.textFaint }}>{monthRangeLabel}</span>
-          </div>
+      <div style={{ padding: "14px 20px 12px", borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
+        <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+          <Repeat size={17} style={{ color: T.accent }} /> Programador
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <button onClick={handleExport} style={smallBtn(false)}>
-            <Download size={13} />Exportar
-          </button>
-          <button onClick={onImport} style={smallBtn(false)}>
-            <Upload size={13} />Importar
-          </button>
-          <button onClick={onNewScheduled} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600 }}>
-            <Plus size={14} /> Nueva operacion
-          </button>
+        <div style={{ display: "flex", gap: 14, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, color: T.textMuted }}>Movimientos recurrentes:</span>
+          <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
+            <ArrowUpCircle size={13} /> <span className="amount">{fmt(monthIncome)}</span>
+          </span>
+          <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
+            <ArrowDownCircle size={13} /> <span className="amount">{fmt(monthExpense)}</span>
+          </span>
+          <span style={{ fontSize: 12, color: T.textFaint }}>{monthRangeLabel}</span>
         </div>
-      </div>
 
-      <div style={{ padding: 14, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
-          <Field label="Descripcion">
-            <div style={{ position: "relative" }}>
-              <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
-              <input placeholder="Buscar" value={progSearch} onChange={(e) => setProgSearch(e.target.value)} style={{ ...inputStyle, paddingLeft: 28, width: 160 }} />
-            </div>
-          </Field>
-          <Field label="Cuenta">
-            <div style={{ position: "relative" }}>
-              <button
-                type="button"
-                onClick={() => setProgAccountPopoverOpen((s) => !s)}
-                style={{ ...inputStyle, width: 150, textAlign: "left", cursor: "pointer", color: progAccountFilter.size === 0 ? T.textFaint : T.text }}
-              >
-                {progAccountFilter.size === 0 ? "Todas" : progAccountFilter.size + " seleccionada" + (progAccountFilter.size === 1 ? "" : "s")}
-              </button>
-              {progAccountPopoverOpen && (
-                <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, padding: 8, zIndex: 30, minWidth: 190, maxHeight: 240, overflowY: "auto", boxShadow: "0 4px 14px rgba(0,0,0,0.1)" }}>
-                  <button type="button" onClick={() => setProgAccountFilter(new Set())} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 4px", background: "none", border: "none", textAlign: "left", cursor: "pointer" }}>
-                    <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid " + (progAccountFilter.size === 0 ? T.accent : T.border), background: progAccountFilter.size === 0 ? T.accent : "#FFFFFF" }} />
-                    <span style={{ fontSize: 12.5, fontWeight: 600 }}>Todas</span>
-                  </button>
-                  <div style={{ borderTop: "1px solid " + T.borderSoft, margin: "4px 0" }} />
-                  {accounts.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => setProgAccountFilter((prev) => { const next = new Set(prev); if (next.has(a.id)) next.delete(a.id); else next.add(a.id); return next; })}
-                      style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 4px", background: "none", border: "none", textAlign: "left", cursor: "pointer" }}
-                    >
-                      <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid " + (progAccountFilter.has(a.id) ? T.accent : T.border), background: progAccountFilter.has(a.id) ? T.accent : "#FFFFFF" }} />
-                      <span style={{ fontSize: 12.5 }}>{a.name}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <Field label="Descripcion">
+              <div style={{ position: "relative" }}>
+                <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
+                <input placeholder="Buscar" value={progSearch} onChange={(e) => setProgSearch(e.target.value)} style={{ ...inputStyle, paddingLeft: 28, width: 160 }} />
+              </div>
+            </Field>
+            <Field label="Cuenta">
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={() => setProgAccountPopoverOpen((s) => !s)}
+                  style={{ ...inputStyle, width: 150, textAlign: "left", cursor: "pointer", color: progAccountFilter.size === 0 ? T.textFaint : T.text }}
+                >
+                  {progAccountFilter.size === 0 ? "Todas" : progAccountFilter.size + " seleccionada" + (progAccountFilter.size === 1 ? "" : "s")}
+                </button>
+                {progAccountPopoverOpen && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, padding: 8, zIndex: 30, minWidth: 190, maxHeight: 240, overflowY: "auto", boxShadow: "0 4px 14px rgba(0,0,0,0.1)" }}>
+                    <button type="button" onClick={() => setProgAccountFilter(new Set())} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 4px", background: "none", border: "none", textAlign: "left", cursor: "pointer" }}>
+                      <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid " + (progAccountFilter.size === 0 ? T.accent : T.border), background: progAccountFilter.size === 0 ? T.accent : "#FFFFFF" }} />
+                      <span style={{ fontSize: 12.5, fontWeight: 600 }}>Todas</span>
                     </button>
-                  ))}
-                  <button type="button" onClick={() => setProgAccountPopoverOpen(false)} style={{ marginTop: 6, width: "100%", background: T.accent, border: "none", borderRadius: 6, padding: "6px 0", color: "#fff", fontSize: 12, fontWeight: 600 }}>
-                    Hecho
-                  </button>
-                </div>
-              )}
-            </div>
-          </Field>
-          <Field label="Tipo">
-            <select value={progTypeFilter} onChange={(e) => setProgTypeFilter(e.target.value as ProgTypeFilter)} style={{ ...inputStyle, width: 150 }}>
-              <option value="all">Todos los tipos</option>
-              <option value="expense">Gastos</option>
-              <option value="income">Ingresos</option>
-              <option value="transfer">Transferencias</option>
-            </select>
-          </Field>
-          <Field label="Agrupar">
-            <select value={progGroupBy} onChange={(e) => setProgGroupBy(e.target.value as ProgGroupBy)} style={{ ...inputStyle, width: 150 }}>
-              <option value="none">Ninguna</option>
-              <option value="fecha">Fecha</option>
-              <option value="cuenta">Cuenta</option>
-              <option value="tipo">Tipo</option>
-              <option value="periodicidad">Periodicidad</option>
-              <option value="recurrencia">Recurrencia</option>
-            </select>
-          </Field>
-          <button onClick={clearFilters} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
-            <Eraser size={13} />
-          </button>
+                    <div style={{ borderTop: "1px solid " + T.borderSoft, margin: "4px 0" }} />
+                    {accounts.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setProgAccountFilter((prev) => { const next = new Set(prev); if (next.has(a.id)) next.delete(a.id); else next.add(a.id); return next; })}
+                        style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "6px 4px", background: "none", border: "none", textAlign: "left", cursor: "pointer" }}
+                      >
+                        <span style={{ width: 14, height: 14, borderRadius: "50%", flexShrink: 0, border: "2px solid " + (progAccountFilter.has(a.id) ? T.accent : T.border), background: progAccountFilter.has(a.id) ? T.accent : "#FFFFFF" }} />
+                        <span style={{ fontSize: 12.5 }}>{a.name}</span>
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => setProgAccountPopoverOpen(false)} style={{ marginTop: 6, width: "100%", background: T.accent, border: "none", borderRadius: 6, padding: "6px 0", color: "#fff", fontSize: 12, fontWeight: 600 }}>
+                      Hecho
+                    </button>
+                  </div>
+                )}
+              </div>
+            </Field>
+            <Field label="Tipo">
+              <select value={progTypeFilter} onChange={(e) => setProgTypeFilter(e.target.value as ProgTypeFilter)} style={{ ...inputStyle, width: 150 }}>
+                <option value="all">Todos los tipos</option>
+                <option value="expense">Gastos</option>
+                <option value="income">Ingresos</option>
+                <option value="transfer">Transferencias</option>
+              </select>
+            </Field>
+            <Field label="Agrupar">
+              <select value={progGroupBy} onChange={(e) => setProgGroupBy(e.target.value as ProgGroupBy)} style={{ ...inputStyle, width: 150 }}>
+                <option value="none">Ninguna</option>
+                <option value="fecha">Fecha</option>
+                <option value="cuenta">Cuenta</option>
+                <option value="tipo">Tipo</option>
+                <option value="periodicidad">Periodicidad</option>
+                <option value="recurrencia">Recurrencia</option>
+              </select>
+            </Field>
+            <button onClick={clearFilters} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
+              <Eraser size={13} />
+            </button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+            <button onClick={handleExport} style={smallBtn(false)}>
+              <Download size={13} />
+              <span className="btn-label">Exportar</span>
+            </button>
+            <button onClick={onImport} style={smallBtn(false)}>
+              <Upload size={13} />
+              <span className="btn-label">Importar</span>
+            </button>
+            <button onClick={onNewScheduled} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, fontSize: 13, fontWeight: 600, marginLeft: 6 }}>
+              <Plus size={14} />
+              <span className="btn-label">Nueva operacion</span>
+            </button>
+          </div>
         </div>
       </div>
 
