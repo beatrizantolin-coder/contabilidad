@@ -1,13 +1,34 @@
-import { useEffect, useState } from "react";
-import { ArrowRightLeft, CalendarRange, ChevronDown, ChevronRight, Download, Eraser, FolderPlus, GripVertical, LineChart, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Save, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRightLeft, CalendarDays, ChevronDown, ChevronRight, Download, Eraser, Eye, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload, type LucideIcon } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
-import { fmt, shortDate, todayISO } from "../lib/format";
+import { endOfCurrentMonthISO, fmt, shortDate, startOfCurrentMonthISO, todayISO } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { FiltersBar } from "./FiltersBar";
 import { MovementsRangeBar } from "./MovementsRangeBar";
+import { KindBadge } from "./KindBadge";
 
-const GRID_COLUMNS = "18px 74px 76px 1fr 140px 100px 28px 100px 56px";
+/** Columnas opcionales que el usuario puede mostrar/ocultar desde "Ver columnas". */
+type VisibleCols = { cuenta: boolean; tipo: boolean; estado: boolean; comentario: boolean };
+
+function buildGridColumns(v: VisibleCols): string {
+  return [
+    "18px",
+    "74px",
+    v.cuenta ? "110px" : null,
+    v.tipo ? "50px" : null,
+    v.estado ? "76px" : null,
+    "1fr",
+    v.comentario ? "140px" : null,
+    "100px",
+    "28px",
+    "100px",
+    "56px",
+  ]
+    .filter((x): x is string => x !== null)
+    .join(" ");
+}
+
 // Ancho minimo de la tabla: por debajo de este punto se prefiere scroll
 // horizontal (el contenedor padre ya tiene overflow:auto) a comprimir las
 // columnas hasta que el texto de las cabeceras se solape o se corte.
@@ -46,8 +67,6 @@ export function TransactionsView({
   canReorder,
   onReorderWithinGroup,
   onAdd,
-  onSave,
-  onSaveAs,
   onUndo,
   onRedo,
   canUndo,
@@ -60,7 +79,7 @@ export function TransactionsView({
   onDeleteSelected,
   footerLabel,
   footerAmount,
-  onOpenPrevision,
+  accountName,
 }: {
   title: string;
   /** Icono del tipo de cuenta, mostrado junto al titulo cuando hay un grupo de cuentas seleccionado (Bancos/Ahorro/Tarjetas/Efectivo). */
@@ -97,8 +116,6 @@ export function TransactionsView({
   canReorder: boolean;
   onReorderWithinGroup: (draggedId: ID, targetId: ID) => void;
   onAdd: () => void;
-  onSave: () => void;
-  onSaveAs: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -111,11 +128,14 @@ export function TransactionsView({
   onDeleteSelected: () => void;
   footerLabel: string;
   footerAmount: number;
-  onOpenPrevision: () => void;
+  accountName: (id: ID) => string;
 }) {
   const [draggedTxId, setDraggedTxId] = useState<ID | null>(null);
   const [dragOverTxId, setDragOverTxId] = useState<ID | null>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [visibleCols, setVisibleCols] = useState<VisibleCols>({ cuenta: false, tipo: false, estado: true, comentario: true });
+  const [showColMenu, setShowColMenu] = useState(false);
+  const gridColumns = useMemo(() => buildGridColumns(visibleCols), [visibleCols]);
 
   function toggleGroupCollapse(key: string) {
     setCollapsedGroups((prev) => {
@@ -161,81 +181,114 @@ export function TransactionsView({
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid " + T.border, gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
-            {TitleIcon && <TitleIcon size={17} style={{ color: T.accent }} />}
-            {title}
-          </div>
-          <div style={{ display: "flex", gap: 14, marginTop: 3, alignItems: "center" }}>
-            <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
-              <TrendingUp size={12} /> <span className="amount">{fmt(monthIncome)}</span>
-            </span>
-            <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
-              <TrendingDown size={12} /> <span className="amount">{fmt(monthExpense)}</span>
-            </span>
-          </div>
+      <div style={{ padding: "14px 20px 12px", borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
+        <div style={{ fontSize: 16, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+          {TitleIcon && <TitleIcon size={17} style={{ color: T.accent }} />}
+          {title}
+        </div>
+        <div style={{ display: "flex", gap: 14, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, color: T.textMuted }}>Movimientos recientes:</span>
+          <span style={{ fontSize: 12, color: T.income, display: "flex", alignItems: "center", gap: 4 }}>
+            <TrendingUp size={13} /> <span className="amount">{fmt(monthIncome)}</span>
+          </span>
+          <span style={{ fontSize: 12, color: T.expense, display: "flex", alignItems: "center", gap: 4 }}>
+            <TrendingDown size={13} /> <span className="amount">{fmt(monthExpense)}</span>
+          </span>
+          <span style={{ fontSize: 12, color: T.textFaint }}>
+            {shortDate(startOfCurrentMonthISO())} - {shortDate(endOfCurrentMonthISO())}
+          </span>
         </div>
         {!isEmptyGroupView && (
-        <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ position: "relative" }}>
-            <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
-            <input
-              placeholder="Buscar movimientos"
-              value={filters.search}
-              onChange={(e) => {
-                const val = e.target.value;
-                setFilters((f) => ({ ...f, search: val }));
-              }}
-              style={{ ...inputStyle, paddingLeft: 28, width: 170, height: 30, boxSizing: "border-box" }}
-            />
+          <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <div style={{ position: "relative" }}>
+                <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: T.textFaint }} />
+                <input
+                  placeholder="Buscar movimientos"
+                  value={filters.search}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFilters((f) => ({ ...f, search: val }));
+                  }}
+                  style={{ ...inputStyle, paddingLeft: 28, width: 170, height: 30, boxSizing: "border-box" }}
+                />
+              </div>
+              <button onClick={onClearAll} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
+                <Eraser size={13} />
+              </button>
+              <div style={{ position: "relative" }}>
+                <button onClick={() => setShowColMenu((s) => !s)} style={smallBtn(showColMenu)} aria-label="Ver columnas" title="Ver columnas">
+                  <Eye size={13} />
+                </button>
+                {showColMenu && (
+                  <>
+                    <div onClick={() => setShowColMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+                    <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#FFFFFF", border: "1px solid " + T.border, borderRadius: 8, boxShadow: "0 4px 14px rgba(0,0,0,0.1)", zIndex: 41, minWidth: 150, padding: 6 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 6px", fontSize: 12.5, cursor: "pointer" }}>
+                        <input type="checkbox" checked={visibleCols.cuenta} onChange={(e) => { const checked = e.target.checked; setVisibleCols((c) => ({ ...c, cuenta: checked })); }} /> Cuenta
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 6px", fontSize: 12.5, cursor: "pointer" }}>
+                        <input type="checkbox" checked={visibleCols.tipo} onChange={(e) => { const checked = e.target.checked; setVisibleCols((c) => ({ ...c, tipo: checked })); }} /> Tipo
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 6px", fontSize: 12.5, cursor: "pointer" }}>
+                        <input type="checkbox" checked={visibleCols.estado} onChange={(e) => { const checked = e.target.checked; setVisibleCols((c) => ({ ...c, estado: checked })); }} /> Estado
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 7, padding: "5px 6px", fontSize: 12.5, cursor: "pointer" }}>
+                        <input type="checkbox" checked={visibleCols.comentario} onChange={(e) => { const checked = e.target.checked; setVisibleCols((c) => ({ ...c, comentario: checked })); }} /> Comentario
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+              <button onClick={onUndo} disabled={!canUndo} title="Deshacer" style={{ ...smallBtn(false), opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "default" }}>
+                <Undo2 size={13} />
+              </button>
+              <button onClick={onRedo} disabled={!canRedo} title="Rehacer" style={{ ...smallBtn(false), opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "default" }}>
+                <Redo2 size={13} />
+              </button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  onClick={() => {
+                    setShowMovementsRange((s) => !s);
+                    setShowFilters(() => false);
+                  }}
+                  style={smallBtn(showMovementsRange)}
+                >
+                  <CalendarDays size={13} />
+                  <span className="btn-label">Movimientos</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowFilters((s) => !s);
+                    setShowMovementsRange(() => false);
+                  }}
+                  style={smallBtn(showFilters)}
+                >
+                  <SlidersHorizontal size={13} />
+                  <span className="btn-label">Filtros</span>
+                </button>
+                <button onClick={onExport} style={smallBtn(false)}>
+                  <Download size={13} />
+                  <span className="btn-label">Exportar</span>
+                </button>
+                <button onClick={onImport} style={smallBtn(false)}>
+                  <Upload size={13} />
+                  <span className="btn-label">Importar</span>
+                </button>
+              </div>
+              <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, boxSizing: "border-box", fontSize: 13, fontWeight: 600, marginLeft: 6 }}>
+                <Plus size={14} />
+                <span className="btn-label">Movimiento</span>
+              </button>
+            </div>
           </div>
-          <button onClick={onClearAll} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
-            <Eraser size={13} />Limpiar
-          </button>
-          <button onClick={onSave} title="Guardar documento" aria-label="Guardar documento" style={smallBtn(false)}>
-            <Save size={12} />
-          </button>
-          <button onClick={onSaveAs} title="Guardar como" aria-label="Guardar como" style={smallBtn(false)}>
-            <FolderPlus size={12} />
-          </button>
-          <button onClick={onUndo} disabled={!canUndo} title="Deshacer" style={{ ...smallBtn(false), opacity: canUndo ? 1 : 0.4, cursor: canUndo ? "pointer" : "default" }}>
-            <Undo2 size={12} />
-          </button>
-          <button onClick={onRedo} disabled={!canRedo} title="Rehacer" style={{ ...smallBtn(false), opacity: canRedo ? 1 : 0.4, cursor: canRedo ? "pointer" : "default" }}>
-            <Redo2 size={12} />
-          </button>
-          <button
-            onClick={() => {
-              setShowMovementsRange((s) => !s);
-              setShowFilters(() => false);
-            }}
-            style={smallBtn(showMovementsRange)}
-          >
-            <CalendarRange size={12} />Movimientos
-          </button>
-          <button
-            onClick={() => {
-              setShowFilters((s) => !s);
-              setShowMovementsRange(() => false);
-            }}
-            style={smallBtn(showFilters)}
-          >
-            <SlidersHorizontal size={12} />Filtros
-          </button>
-          <button onClick={onExport} style={smallBtn(false)}>
-            <Download size={12} />Exportar
-          </button>
-          <button onClick={onImport} style={smallBtn(false)}>
-            <Upload size={12} />Importar
-          </button>
-          <button onClick={onOpenPrevision} title="Previsión de balance" aria-label="Previsión de balance" style={smallBtn(false)}>
-            <LineChart size={12} />
-          </button>
-          <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, boxSizing: "border-box", fontSize: 13, fontWeight: 600 }}>
+        )}
+        {isEmptyGroupView && (
+          <button onClick={onAdd} style={{ display: "flex", alignItems: "center", gap: 6, background: T.accent, border: "none", color: "#fff", borderRadius: 6, padding: "0 13px", height: 30, boxSizing: "border-box", fontSize: 13, fontWeight: 600, marginTop: 12 }}>
             <Plus size={14} /> Movimiento
           </button>
-        </div>
         )}
       </div>
 
@@ -274,12 +327,14 @@ export function TransactionsView({
         <div style={{ flex: 1, padding: "28px 20px", color: T.textMuted, fontSize: 13 }}>No hay movimientos que mostrar.</div>
       ) : (
       <div style={{ flex: 1, overflow: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: gridColumns, minWidth: GRID_MIN_WIDTH, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
           <span />
           <SortableHeader label="Fecha" column="date" sortBy={sortBy} onSort={onSort} />
-          <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />
+          {visibleCols.cuenta && <span>Cuenta</span>}
+          {visibleCols.tipo && <span style={{ textAlign: "center" }}>Tipo</span>}
+          {visibleCols.estado && <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />}
           <SortableHeader label="Descripcion" column="name" sortBy={sortBy} onSort={onSort} />
-          <SortableHeader label="Comentario" column="comment" sortBy={sortBy} onSort={onSort} />
+          {visibleCols.comentario && <SortableHeader label="Comentario" column="comment" sortBy={sortBy} onSort={onSort} />}
           <SortableHeader label="Importe" column="amount" sortBy={sortBy} onSort={onSort} align="right" />
           <span />
           <span style={{ textAlign: "right" }}>Saldo</span>
@@ -346,7 +401,7 @@ export function TransactionsView({
                           else onSelectRow(t.id);
                         }}
                         style={{
-                          display: "grid", gridTemplateColumns: GRID_COLUMNS, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: "8px 20px", fontSize: 13,
+                          display: "grid", gridTemplateColumns: gridColumns, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: "8px 20px", fontSize: 13,
                           borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
                           borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
                         }}
@@ -367,13 +422,25 @@ export function TransactionsView({
                         <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>
                           {shortDate(t.date)}
                         </span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onCycleStatus(t); }}
-                          title={st.label}
-                          style={{ display: "flex", alignItems: "center", justifyContent: "center", color: isFutureScheduled ? T.textFaint : st.color, background: "none", border: "none", padding: 2, width: "100%" }}
-                        >
-                          <StIcon size={15} />
-                        </button>
+                        {visibleCols.cuenta && (
+                          <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {accountName(t.accountId)}
+                          </span>
+                        )}
+                        {visibleCols.tipo && (
+                          <span style={{ display: "flex", justifyContent: "center" }}>
+                            <KindBadge kind={isTransfer ? "transfer" : t.type === "income" ? "income" : "expense"} size={14} />
+                          </span>
+                        )}
+                        {visibleCols.estado && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onCycleStatus(t); }}
+                            title={st.label}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "center", color: isFutureScheduled ? T.textFaint : st.color, background: "none", border: "none", padding: 2, width: "100%" }}
+                          >
+                            <StIcon size={15} />
+                          </button>
+                        )}
                         <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none" }}>
                           <span style={dot(isFutureScheduled ? T.textFaint : info.color, 8)} />
                           {t.name}
@@ -382,9 +449,11 @@ export function TransactionsView({
                           {t.recurring && <Repeat size={11} style={{ color: T.textFaint }} />}
                           {isTransfer && <ArrowRightLeft size={12} style={{ color: T.transfer }} />}
                         </span>
-                        <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.comment || ""}>
-                          {t.comment || ""}
-                        </span>
+                        {visibleCols.comentario && (
+                          <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.comment || ""}>
+                            {t.comment || ""}
+                          </span>
+                        )}
                         <span className="amount" style={{ textAlign: "right", color: isFutureScheduled ? T.textFaint : color, fontWeight: 500 }}>
                           {t.type === "income" || isTransferIn ? "+" : isTransferOut ? "" : "-"}
                           {fmt(Math.abs(t.amount))}

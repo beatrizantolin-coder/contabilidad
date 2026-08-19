@@ -68,13 +68,6 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(270);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>("cuentas");
-  // Previsiones es una pantalla central mas (como Programador o Categorias):
-  // el boton de la barra de herramientas de Movimientos navega a ella igual
-  // que el icono de la barra lateral.
-  function goToPrevisiones() {
-    setView("previsiones");
-    setSidebarSection("previsiones");
-  }
   const [showTxForm, setShowTxForm] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters());
@@ -1581,8 +1574,6 @@ export default function App() {
                     setShowMovementsRange={setShowMovementsRange}
                     onApplyMovementsRange={applyMovementsRange}
                     onAdd={openNewTxForm}
-                    onSave={handleSave}
-                    onSaveAs={handleSaveAs}
                     onUndo={undo}
                     onRedo={redo}
                     canUndo={canUndo}
@@ -1595,7 +1586,7 @@ export default function App() {
                     onDeleteSelected={deleteSelected}
                     footerLabel="Total seleccionado"
                     footerAmount={scopedTotal}
-                    onOpenPrevision={goToPrevisiones}
+                    accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                   />
                 )}
 

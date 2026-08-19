@@ -44,6 +44,8 @@ export const startOfCurrentMonthISO = (): string => {
   return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
 };
 
+export const endOfCurrentMonthISO = (): string => endOfNthMonthISO(0);
+
 export const startOfCurrentWeekISO = (): string => {
   const d = new Date();
   const day = d.getDay();

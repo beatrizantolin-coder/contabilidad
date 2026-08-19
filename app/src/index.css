@@ -66,3 +66,12 @@ input[type="checkbox"] {
     height: auto;
   }
 }
+
+/* Barras de herramientas de las pantallas centrales (Movimientos, Programador,
+   Categorias, Filtros, Previsiones): en ventanas estrechas los botones quedan
+   solo con su icono, sin el texto, para que quepan sin scroll horizontal. */
+@media (max-width: 980px) {
+  .btn-label {
+    display: none;
+  }
+}
