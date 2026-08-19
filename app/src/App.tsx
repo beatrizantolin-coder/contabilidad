@@ -675,16 +675,17 @@ export default function App() {
 
   // Clic en una fila del Programador: si ya es una ocurrencia real, se edita
   // tal cual. Si es solo una prevision (fecha futura aun no generada), se
-  // materializa en ese momento como movimiento real "Programado" con esa
-  // fecha, y se abre directamente su edicion.
+  // abre su edicion con un borrador "virtual" que aun no existe en
+  // `transactions` — no se materializa como movimiento real hasta que se
+  // pulsa Guardar (submitTx inserta con ese id si no lo encuentra ya
+  // existente); si se cancela, no queda ningun movimiento fantasma.
   function openProgramadorRow(row: ProgramadorRow) {
     if (row.real) {
       editTx(row.tx);
       return;
     }
-    const newTx = { ...row.tx, id: genId(), seq: genSeq(), date: row.date, status: "programado" as const };
-    setTransactions((prev) => prev.concat([newTx]));
-    editTx(newTx);
+    const virtualTx = { ...row.tx, id: genId(), seq: genSeq(), date: row.date, status: "programado" as const };
+    editTx(virtualTx);
   }
 
   function openCategoryEdit(id: ID) {
@@ -798,26 +799,29 @@ export default function App() {
       }
     } else if (txDraft.id) {
       const id = txDraft.id;
-      setTransactions((prev) =>
-        prev.map((t) =>
-          t.id === id
-            ? ({
-                ...t,
-                accountId: txDraft.accountId!,
-                date: effectiveDate,
-                name: txDraft.name,
-                comment: txDraft.comment,
-                categoryId: txDraft.categoryId,
-                subcategoryId: txDraft.subcategoryId,
-                subsubcategoryId: txDraft.subsubcategoryId,
-                amount,
-                type: txDraft.type,
-                recurring,
-                status: txDraft.status,
-              } as Transaction)
-            : t,
-        ),
-      );
+      setTransactions((prev) => {
+        const patch = {
+          accountId: txDraft.accountId!,
+          date: effectiveDate,
+          name: txDraft.name,
+          comment: txDraft.comment,
+          categoryId: txDraft.categoryId,
+          subcategoryId: txDraft.subcategoryId,
+          subsubcategoryId: txDraft.subsubcategoryId,
+          amount,
+          type: txDraft.type,
+          recurring,
+          status: txDraft.status,
+        };
+        // Una ocurrencia del Programador aun no materializada se edita con un
+        // borrador "virtual" que ya trae id pero todavia no existe en
+        // `transactions`: si no se encuentra, se inserta con ese mismo id en
+        // vez de no hacer nada (comportamiento normal de .map).
+        if (!prev.some((t) => t.id === id)) {
+          return prev.concat([{ id, seq: genSeq(), ...patch } as Transaction]);
+        }
+        return prev.map((t) => (t.id === id ? ({ ...t, ...patch } as Transaction) : t));
+      });
     } else {
       setTransactions((prev) =>
         prev.concat([
@@ -861,6 +865,20 @@ export default function App() {
       });
     }
     setShowTxForm(true);
+  }
+
+  // Boton "Duplicar" del formulario de edicion individual: crea una copia
+  // independiente del movimiento abierto y abre esa copia para seguir
+  // editandola, sin tocar el original. Las transferencias se excluyen (se
+  // editan como par vinculado, igual que en la duplicacion en masa).
+  function duplicateCurrentTx() {
+    if (!txDraft?.id) return;
+    const original = transactions.find((t) => t.id === txDraft.id);
+    if (!original || isTransferTx(original)) return;
+    pushHistory();
+    const copy: Transaction = { ...original, id: genId(), seq: genSeq(), status: "pendiente" as const };
+    setTransactions((prev) => prev.concat([copy]));
+    editTx(copy);
   }
 
   function removeTx(t: Transaction) {
@@ -985,6 +1003,18 @@ export default function App() {
     if (t) editTx(t);
   }
 
+  /** Tras cambiar la seleccion: 0 elementos cierra el panel, 1 abre su edicion completa, varios abre la edicion en masa automaticamente. */
+  function openPanelForSelection(ids: Set<ID>) {
+    if (ids.size > 1) {
+      openBulkEdit(ids);
+    } else if (ids.size === 1) {
+      const t = transactions.find((x) => ids.has(x.id));
+      if (t) editTx(t);
+    } else {
+      closeEditPanels();
+    }
+  }
+
   /** Mayusculas+clic: sustituye la seleccion por el rango entre el ultimo marcado y este. */
   function handleShiftSelect(id: ID) {
     if (lastClickedId !== null) {
@@ -994,27 +1024,27 @@ export default function App() {
       if (lastIdx !== -1 && curIdx !== -1) {
         const start = Math.min(lastIdx, curIdx);
         const end = Math.max(lastIdx, curIdx);
-        setSelectedIds(new Set(ids.slice(start, end + 1)));
+        const rangeSet = new Set(ids.slice(start, end + 1));
+        setSelectedIds(rangeSet);
         setLastClickedId(id);
-        closeEditPanels();
+        openPanelForSelection(rangeSet);
         return;
       }
     }
-    setSelectedIds(new Set([id]));
+    const single = new Set([id]);
+    setSelectedIds(single);
     setLastClickedId(id);
-    closeEditPanels();
+    openPanelForSelection(single);
   }
 
   /** Cmd/Ctrl+clic: anade o quita este elemento sin tocar el resto de la seleccion. */
   function handleToggleSelect(id: ID) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
     setLastClickedId(id);
-    closeEditPanels();
+    openPanelForSelection(next);
   }
 
   function duplicateSelected() {
@@ -1057,19 +1087,10 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedIds, transactions, activeDocId]);
 
-  /** Boton "Editar" de la barra de seleccion: con 1 solo elemento abre la edicion completa, con varios abre la edicion en masa. */
-  function editSelected() {
-    if (selectedIds.size === 1) {
-      const only = transactions.find((t) => selectedIds.has(t.id));
-      if (only) editTx(only);
-      return;
-    }
-    openBulkEdit();
-  }
-
-  function openBulkEdit() {
+  function openBulkEdit(idsOverride?: Set<ID>) {
+    const ids = idsOverride ?? selectedIds;
     setShowTxForm(false);
-    const selected = transactions.filter((t) => selectedIds.has(t.id));
+    const selected = transactions.filter((t) => ids.has(t.id));
     setBulkEdit(computeBulkEditDraft(selected));
     setBulkEditTouched(new Set());
     setShowBulkEdit(true);
@@ -1597,10 +1618,6 @@ export default function App() {
                     canRedo={canRedo}
                     onExport={handleExport}
                     onImport={handleImport}
-                    onClearSelection={clearSelection}
-                    onDuplicateSelected={duplicateSelected}
-                    onBulkEditSelected={editSelected}
-                    onDeleteSelected={deleteSelected}
                     accountName={(id) => accounts.find((a) => a.id === id)?.name ?? "-"}
                     rowZoom={rowZoom}
                   />
@@ -1687,6 +1704,7 @@ export default function App() {
                         setCategoryColor={setCategoryColor}
                         onSubmit={submitTx}
                         onCancel={resetDraft}
+                        onDuplicate={duplicateCurrentTx}
                       />
                     )
                   )}

@@ -73,10 +73,6 @@ export function TransactionsView({
   canRedo,
   onExport,
   onImport,
-  onClearSelection,
-  onDuplicateSelected,
-  onBulkEditSelected,
-  onDeleteSelected,
   accountName,
   rowZoom,
 }: {
@@ -121,10 +117,6 @@ export function TransactionsView({
   canRedo: boolean;
   onExport: () => void;
   onImport: () => void;
-  onClearSelection: () => void;
-  onDuplicateSelected: () => void;
-  onBulkEditSelected: () => void;
-  onDeleteSelected: () => void;
   accountName: (id: ID) => string;
   /** Zoom de fila de la barra de estado global: escala el alto de fila y el tamaño de fuente de la tabla. */
   rowZoom: number;
@@ -299,26 +291,6 @@ export function TransactionsView({
       {!isEmptyGroupView && showMovementsRange && (
         <div className="no-print">
           <MovementsRangeBar onApply={onApplyMovementsRange} />
-        </div>
-      )}
-
-      {selectedIds.size > 0 && (
-        <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 20px", background: "#EAF1FC", borderBottom: "1px solid " + T.border }}>
-          <span style={{ fontSize: 12.5, color: T.accent, fontWeight: 600 }}>
-            {selectedIds.size} seleccionado{selectedIds.size === 1 ? "" : "s"}
-          </span>
-          <button onClick={onClearSelection} style={smallBtn(false)}>
-            Borrar
-          </button>
-          <button onClick={onDuplicateSelected} style={smallBtn(false)}>
-            Duplicar
-          </button>
-          <button onClick={onBulkEditSelected} style={smallBtn(false)}>
-            Editar
-          </button>
-          <button onClick={onDeleteSelected} style={{ ...smallBtn(false), color: T.expense, borderColor: T.expense }}>
-            Eliminar
-          </button>
         </div>
       )}
 

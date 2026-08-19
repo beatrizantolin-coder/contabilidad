@@ -67,6 +67,26 @@ input[type="checkbox"] {
   }
 }
 
+@keyframes slideInPanel {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideUpPanel {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* Barras de herramientas de las pantallas centrales (Movimientos, Programador,
    Categorias, Filtros, Previsiones): en ventanas estrechas los botones quedan
    solo con su icono, sin el texto, para que quepan sin scroll horizontal. */

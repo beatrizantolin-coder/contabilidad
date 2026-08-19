@@ -25,6 +25,7 @@ export function TransactionForm({
   setCategoryColor,
   onSubmit,
   onCancel,
+  onDuplicate,
 }: {
   txDraft: TxDraft;
   setTxDraft: (fn: (d: TxDraft) => TxDraft) => void;
@@ -40,6 +41,8 @@ export function TransactionForm({
   setCategoryColor: (id: ID, color: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
+  /** Solo aplica a movimientos ya existentes (no transferencias, que se editan como par vinculado). */
+  onDuplicate?: () => void;
 }) {
   const targetDocAccounts = (documents.find((d) => d.id === txDraft.toDocId) || documents.find((d) => d.id === activeDocId))?.accounts ?? [];
   const selectedCategory = categories.find((c) => c.id === txDraft.categoryId);
@@ -621,12 +624,17 @@ export function TransactionForm({
         <input value={txDraft.comment} onChange={(e) => setTxDraft((d) => ({ ...d, comment: e.target.value }))} style={inputStyle} placeholder="Opcional" />
       </Field>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 2 }}>
         <button type="button" onClick={onCancel} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "8px 14px", color: T.textMuted, fontSize: 13 }}>
           Cancelar
         </button>
+        {txDraft.id && onDuplicate && (
+          <button type="button" onClick={onDuplicate} style={{ background: "none", border: "1px solid " + T.border, borderRadius: 6, padding: "8px 14px", color: T.text, fontSize: 13 }}>
+            Duplicar
+          </button>
+        )}
         <button type="submit" style={{ background: T.accent, border: "none", borderRadius: 6, padding: "8px 16px", color: "#fff", fontWeight: 600, fontSize: 13 }}>
-          {txDraft.id ? "Guardar cambios" : "Guardar movimiento"}
+          {txDraft.id ? "Actualizar" : "Guardar"}
         </button>
       </div>
     </form>

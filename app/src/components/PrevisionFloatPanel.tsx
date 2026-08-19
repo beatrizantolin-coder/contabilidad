@@ -52,6 +52,7 @@ export function PrevisionFloatPanel({
       style={{
         position: "absolute", bottom: "100%", left: 0, right: 0, maxHeight: 420, background: "#FFFFFF",
         borderTop: "1px solid " + T.border, boxShadow: "0 -8px 20px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", zIndex: 40,
+        animation: "slideUpPanel .18s ease-out",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px 4px" }}>
