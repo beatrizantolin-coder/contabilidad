@@ -16,7 +16,7 @@ import { computeEvoPoints, computeEvoTicks, computePrevisionMovements, type EvoR
 import { exportCategoriesCsv, exportTransactionsCsv, pickAndImportCategoriesCsv, pickAndImportIcomptaCsv, pickAndImportProgramadorCsv } from "./lib/csv";
 import { pickOpenDocumentPath, pickSaveDocumentPath, readDocumentFromPath, saveNewDocumentToDesktop, writeDocumentToPath } from "./lib/docFile";
 import { createTestDocument } from "./lib/testSeed";
-import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type CustomAmountEntry, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Transaction } from "./types";
+import { isTransferTx, type Account, type AccountType, type Budgets, type Category, type CategoryKind, type CustomAmountEntry, type Filters, type ID, type LedgerDocument, type SavedFilter, type SortColumn, type SortState, type Subcategory, type Transaction } from "./types";
 import { ACCOUNT_GROUP_LABELS, ACCOUNT_SECTIONS, Sidebar, type MainView, type SidebarSection } from "./components/Sidebar";
 import { TransactionForm } from "./components/TransactionForm";
 import { BulkEditForm } from "./components/BulkEditForm";
@@ -468,6 +468,39 @@ export default function App() {
     setBudgets((prev) => ({ ...prev, [catId]: value as number }));
   }
 
+  // Clona una (sub)categoria con un id nuevo para ella y, recursivamente,
+  // para todas sus descendientes, arrastrando el presupuesto asignado a
+  // cada nivel (bajo su nuevo id) en `extraBudgets`. El nombre no cambia
+  // aqui: el sufijo " (copia)" solo se anade al nodo que el usuario duplico
+  // explicitamente, no a sus hijos.
+  function cloneSubcategoryWithNewIds(sub: Subcategory, extraBudgets: Budgets): Subcategory {
+    const newId = genId();
+    if (budgets[sub.id] !== undefined) extraBudgets[newId] = budgets[sub.id];
+    return { ...sub, id: newId, subcategories: sub.subcategories.map((s) => cloneSubcategoryWithNewIds(s, extraBudgets)) };
+  }
+
+  function duplicateCategory(id: ID) {
+    const cat = categories.find((c) => c.id === id);
+    if (!cat) return;
+    const extraBudgets: Budgets = {};
+    const newId = genId();
+    if (budgets[cat.id] !== undefined) extraBudgets[newId] = budgets[cat.id];
+    const copy: Category = { ...cat, id: newId, name: cat.name + " (copia)", subcategories: cat.subcategories.map((s) => cloneSubcategoryWithNewIds(s, extraBudgets)) };
+    setCategories((prev) => prev.concat([copy]));
+    if (Object.keys(extraBudgets).length > 0) setBudgets((prev) => ({ ...prev, ...extraBudgets }));
+  }
+
+  function duplicateSubcategory(catId: ID, subId: ID) {
+    const cat = categories.find((c) => c.id === catId);
+    const sub = cat?.subcategories.find((s) => s.id === subId);
+    if (!cat || !sub) return;
+    const extraBudgets: Budgets = {};
+    const copy = cloneSubcategoryWithNewIds(sub, extraBudgets);
+    copy.name = sub.name + " (copia)";
+    setCategories((prev) => prev.map((c) => (c.id === catId ? { ...c, subcategories: c.subcategories.concat([copy]) } : c)));
+    if (Object.keys(extraBudgets).length > 0) setBudgets((prev) => ({ ...prev, ...extraBudgets }));
+  }
+
   async function handleSaveDoc(doc: LedgerDocument) {
     try {
       let path = getSavedPath(doc.id);
@@ -892,6 +925,15 @@ export default function App() {
     editTx(copy);
   }
 
+  // Icono "Duplicar" de una fila de Movimientos: copia independiente in
+  // situ, sin abrir su edicion (a diferencia del boton del formulario).
+  function duplicateTxRow(t: Transaction) {
+    if (!activeDocId || isTransferTx(t)) return;
+    pushHistory();
+    const copy: Transaction = { ...t, id: genId(), seq: genSeq(), status: "pendiente" as const };
+    setTransactions((prev) => prev.concat([copy]));
+  }
+
   function removeTx(t: Transaction) {
     if (!activeDocId) return;
     pushHistory();
@@ -925,6 +967,16 @@ export default function App() {
         .filter((x) => !x.recurring || seriesKey(x) !== key || !(row.real && x.id === row.tx.id))
         .map((x) => (!x.recurring || seriesKey(x) !== key ? x : { ...x, recurring: null })),
     );
+  }
+
+  // Icono "Duplicar" de una fila del Programador: copia independiente de la
+  // serie completa (mismo patron de recurrencia), con su propio id y sin
+  // tocar la original.
+  function duplicateProgramadorRow(row: ProgramadorRow) {
+    if (!activeDocId) return;
+    pushHistory();
+    const copy: Transaction = { ...row.tx, id: genId(), seq: genSeq(), status: "programado" as const };
+    setTransactions((prev) => prev.concat([copy]));
   }
 
   // Icono de cadena de una transferencia: desvincula si esta vinculada, o
@@ -1561,6 +1613,7 @@ export default function App() {
                     onNewScheduled={openScheduledForm}
                     onOpenRow={openProgramadorRow}
                     onRemove={removeProgramadorSeries}
+                    onDuplicate={duplicateProgramadorRow}
                     onImport={handleImportProgramador}
                   />
                 )}
@@ -1578,6 +1631,8 @@ export default function App() {
                     removeCategory={removeCategory}
                     onOpenCategory={openCategoryEdit}
                     removeSubcategory={removeSubcategory}
+                    onDuplicateCategory={duplicateCategory}
+                    onDuplicateSubcategory={duplicateSubcategory}
                     newCategoryTrigger={newCategoryTrigger}
                     onExport={handleExportCategories}
                     onImport={handleImportCategories}
@@ -1616,6 +1671,7 @@ export default function App() {
                     resultingBalance={resultingBalance}
                     onEdit={editTx}
                     onRemove={removeTx}
+                    onDuplicate={duplicateTxRow}
                     onCycleStatus={cycleStatus}
                     onToggleLink={toggleTransferLink}
                     sortBy={sortBy}

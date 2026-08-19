@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, CalendarDays, ChevronDown, ChevronRight, Download, Eraser, Eye, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowRightLeft, CalendarDays, ChevronDown, ChevronRight, Copy, Download, Eraser, Eye, GripVertical, Link2, Link2Off, Pencil, Plus, Redo2, Repeat, Search, SlidersHorizontal, Trash2, TrendingDown, TrendingUp, Undo2, Upload, type LucideIcon } from "lucide-react";
 import type { Category, Filters, ID, SortColumn, SortState, Transaction } from "../types";
 import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
 import { endOfCurrentMonthISO, fmt, shortDate, startOfCurrentMonthISO, todayISO } from "../lib/format";
 import { catInfo } from "../lib/categories";
+import { COL_MARGIN, HEADER_FONT, longestWord, measureTextWidth, useAutoColumnWidths, widestTextWidth, type ColDef } from "../lib/columnWidths";
 import { FiltersBar } from "./FiltersBar";
 import { MovementsRangeBar } from "./MovementsRangeBar";
 import { KindBadge } from "./KindBadge";
@@ -11,28 +12,15 @@ import { KindBadge } from "./KindBadge";
 /** Columnas opcionales que el usuario puede mostrar/ocultar desde "Ver columnas". */
 type VisibleCols = { cuenta: boolean; tipo: boolean; estado: boolean; comentario: boolean };
 
-function buildGridColumns(v: VisibleCols): string {
-  return [
-    "18px",
-    "74px",
-    v.cuenta ? "110px" : null,
-    v.tipo ? "50px" : null,
-    v.estado ? "76px" : null,
-    "1fr",
-    v.comentario ? "140px" : null,
-    "100px",
-    "28px",
-    "100px",
-    "56px",
-  ]
-    .filter((x): x is string => x !== null)
-    .join(" ");
-}
+/** Columnas siempre presentes, no se pueden ocultar desde "Ver columnas". */
+const ALWAYS_TX_COLS = new Set(["fecha", "descripcion", "importe", "saldo"]);
 
-// Ancho minimo de la tabla: por debajo de este punto se prefiere scroll
-// horizontal (el contenedor padre ya tiene overflow:auto) a comprimir las
-// columnas hasta que el texto de las cabeceras se solape o se corte.
-const GRID_MIN_WIDTH = 760;
+// El icono de reordenar (grip), el de vincular/desvincular transferencia
+// (link) y la columna de acciones tienen ancho fijo, fuera del motor de
+// medicion dinamica: no dependen del contenido de la tabla.
+const GRIP_WIDTH = 18;
+const LINK_WIDTH = 28;
+const ACTIONS_WIDTH = 72;
 
 export function TransactionsView({
   title,
@@ -58,6 +46,7 @@ export function TransactionsView({
   resultingBalance,
   onEdit,
   onRemove,
+  onDuplicate,
   onCycleStatus,
   onToggleLink,
   sortBy,
@@ -101,6 +90,8 @@ export function TransactionsView({
   resultingBalance: (t: Transaction) => number;
   onEdit: (t: Transaction) => void;
   onRemove: (t: Transaction) => void;
+  /** Crea una copia independiente del movimiento (nuevo id); no aplica a transferencias. */
+  onDuplicate: (t: Transaction) => void;
   onCycleStatus: (t: Transaction) => void;
   onToggleLink: (t: Transaction) => void;
   sortBy: SortState | null;
@@ -126,7 +117,68 @@ export function TransactionsView({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [visibleCols, setVisibleCols] = useState<VisibleCols>({ cuenta: false, tipo: false, estado: true, comentario: true });
   const [showColMenu, setShowColMenu] = useState(false);
-  const gridColumns = useMemo(() => buildGridColumns(visibleCols), [visibleCols]);
+
+  const tableRef = useRef<HTMLDivElement>(null);
+  const txColDefs = useMemo((): ColDef[] => {
+    const zoomedContentFont = Math.round(13 * rowZoom) + "px Inter, sans-serif";
+    const zoomedMonoFont = Math.round(13 * rowZoom) + "px 'IBM Plex Mono', monospace";
+    const dateTexts = filteredTx.map((t) => shortDate(t.date));
+    const cuentaTexts = filteredTx.map((t) => accountName(t.accountId));
+    const comentarioTexts = filteredTx.map((t) => t.comment || "");
+    const importeTexts = filteredTx.map((t) => {
+      const isIn = t.type === "income" || t.type === "transfer_in";
+      const isOut = t.type === "transfer";
+      return (isIn ? "+" : isOut ? "" : "-") + fmt(Math.abs(t.amount));
+    });
+    const saldoTexts = filteredTx.map((t) => fmt(resultingBalance(t)));
+    const descLongestWord = filteredTx.reduce((max, t) => {
+      const w = longestWord(t.name, zoomedContentFont);
+      return measureTextWidth(w, zoomedContentFont) > measureTextWidth(max, zoomedContentFont) ? w : max;
+    }, "");
+    const descIconsWidth = 8 + 7; // punto de color + separacion
+
+    return [
+      { key: "fecha", label: "Fecha", natural: () => Math.max(measureTextWidth("Fecha", HEADER_FONT), widestTextWidth(dateTexts, zoomedMonoFont)) + COL_MARGIN },
+      { key: "cuenta", label: "Cuenta", natural: () => Math.max(measureTextWidth("Cuenta", HEADER_FONT), widestTextWidth(cuentaTexts, zoomedContentFont)) + COL_MARGIN, min: () => measureTextWidth("Cuenta", HEADER_FONT) + COL_MARGIN },
+      { key: "tipo", label: "Tipo", natural: () => Math.max(measureTextWidth("Tipo", HEADER_FONT), 16) + COL_MARGIN },
+      { key: "estado", label: "Estado", natural: () => Math.max(measureTextWidth("Estado", HEADER_FONT), 18) + COL_MARGIN },
+      {
+        key: "descripcion", label: "Descripcion", grow: true,
+        natural: () => Math.max(measureTextWidth("Descripcion", HEADER_FONT), descIconsWidth + measureTextWidth(descLongestWord, zoomedContentFont)) + COL_MARGIN,
+      },
+      {
+        key: "comentario", label: "Comentario", grow: true,
+        natural: () => Math.max(measureTextWidth("Comentario", HEADER_FONT), widestTextWidth(comentarioTexts, zoomedContentFont)) + COL_MARGIN,
+        min: () => measureTextWidth("Comentario", HEADER_FONT) + COL_MARGIN,
+      },
+      { key: "importe", label: "Importe", natural: () => Math.max(measureTextWidth("Importe", HEADER_FONT), widestTextWidth(importeTexts, zoomedMonoFont)) + COL_MARGIN },
+      { key: "saldo", label: "Saldo", natural: () => Math.max(measureTextWidth("Saldo", HEADER_FONT), widestTextWidth(saldoTexts, zoomedMonoFont)) + COL_MARGIN },
+    ];
+  }, [filteredTx, rowZoom, accountName, resultingBalance]);
+  const activeTxCols = useMemo(
+    () => txColDefs.filter((c) => ALWAYS_TX_COLS.has(c.key) || visibleCols[c.key as keyof VisibleCols]),
+    [txColDefs, visibleCols],
+  );
+  const txAutoCols = useAutoColumnWidths(activeTxCols, tableRef, {}, [filteredTx, rowZoom, visibleCols]);
+  function txColWidth(key: string): number {
+    return Math.round(txAutoCols.widths[key] ?? 0);
+  }
+  const gridColumns = [
+    GRIP_WIDTH + "px",
+    txColWidth("fecha") + "px",
+    visibleCols.cuenta ? txColWidth("cuenta") + "px" : null,
+    visibleCols.tipo ? txColWidth("tipo") + "px" : null,
+    visibleCols.estado ? txColWidth("estado") + "px" : null,
+    txColWidth("descripcion") + "px",
+    visibleCols.comentario ? txColWidth("comentario") + "px" : null,
+    txColWidth("importe") + "px",
+    LINK_WIDTH + "px",
+    txColWidth("saldo") + "px",
+    ACTIONS_WIDTH + "px",
+  ]
+    .filter((x): x is string => x !== null)
+    .join(" ");
+  const tableMinWidth = txAutoCols.scroll ? GRIP_WIDTH + LINK_WIDTH + ACTIONS_WIDTH + txAutoCols.totalWidth : "100%";
 
   function toggleGroupCollapse(key: string) {
     setCollapsedGroups((prev) => {
@@ -299,18 +351,32 @@ export function TransactionsView({
           <span style={{ fontSize: 13, color: T.textFaint }}>No hay movimientos que mostrar</span>
         </div>
       ) : (
-      <div style={{ flex: 1, overflow: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: gridColumns, minWidth: GRID_MIN_WIDTH, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
+      <div ref={tableRef} style={{ flex: 1, overflow: "auto" }}>
+        <div style={{ display: "grid", gridTemplateColumns: gridColumns, minWidth: tableMinWidth, padding: "7px 0", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
           <span />
-          <SortableHeader label="Fecha" column="date" sortBy={sortBy} onSort={onSort} />
-          {visibleCols.cuenta && <span>Cuenta</span>}
-          {visibleCols.tipo && <span style={{ textAlign: "center" }}>Tipo</span>}
-          {visibleCols.estado && <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />}
-          <SortableHeader label="Descripcion" column="name" sortBy={sortBy} onSort={onSort} />
-          {visibleCols.comentario && <SortableHeader label="Comentario" column="comment" sortBy={sortBy} onSort={onSort} />}
-          <SortableHeader label="Importe" column="amount" sortBy={sortBy} onSort={onSort} align="right" />
+          <span style={{ padding: "0 16px" }}>
+            <SortableHeader label="Fecha" column="date" sortBy={sortBy} onSort={onSort} />
+          </span>
+          {visibleCols.cuenta && <span style={{ padding: "0 16px" }}>Cuenta</span>}
+          {visibleCols.tipo && <span style={{ textAlign: "center", padding: "0 16px" }}>Tipo</span>}
+          {visibleCols.estado && (
+            <span style={{ padding: "0 16px" }}>
+              <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />
+            </span>
+          )}
+          <span style={{ padding: "0 16px" }}>
+            <SortableHeader label="Descripcion" column="name" sortBy={sortBy} onSort={onSort} />
+          </span>
+          {visibleCols.comentario && (
+            <span style={{ padding: "0 16px" }}>
+              <SortableHeader label="Comentario" column="comment" sortBy={sortBy} onSort={onSort} />
+            </span>
+          )}
+          <span style={{ padding: "0 16px" }}>
+            <SortableHeader label="Importe" column="amount" sortBy={sortBy} onSort={onSort} align="right" />
+          </span>
           <span />
-          <span style={{ textAlign: "right" }}>Saldo</span>
+          <span style={{ textAlign: "right", padding: "0 16px" }}>Saldo</span>
           <span />
         </div>
 
@@ -336,7 +402,7 @@ export function TransactionsView({
                 {g.label !== "" && (
                   <button
                     onClick={() => toggleGroupCollapse(g.key)}
-                    style={{ width: "100%", minWidth: GRID_MIN_WIDTH, display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: T.bgElevated, border: "none", borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", textAlign: "left" }}
+                    style={{ width: "100%", minWidth: tableMinWidth, display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", background: T.bgElevated, border: "none", borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", textAlign: "left" }}
                   >
                     {isCollapsed ? <ChevronRight size={13} style={{ color: T.textMuted }} /> : <ChevronDown size={13} style={{ color: T.textMuted }} />}
                     <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{g.label}</span>
@@ -374,7 +440,7 @@ export function TransactionsView({
                           else onSelectRow(t.id);
                         }}
                         style={{
-                          display: "grid", gridTemplateColumns: gridColumns, minWidth: GRID_MIN_WIDTH, alignItems: "center", padding: Math.round(8 * rowZoom) + "px 20px", fontSize: Math.round(13 * rowZoom),
+                          display: "grid", gridTemplateColumns: gridColumns, minWidth: tableMinWidth, alignItems: "center", padding: Math.round(8 * rowZoom) + "px 0", fontSize: Math.round(13 * rowZoom),
                           borderBottom: "1px solid " + T.borderSoft, opacity: voided ? 0.55 : isDragging ? 0.4 : 1, background: selected ? "#EAF1FC" : "transparent", cursor: "pointer",
                           borderTop: isDragOver ? "2px solid " + T.accent : "2px solid transparent",
                         }}
@@ -392,16 +458,16 @@ export function TransactionsView({
                         ) : (
                           <span />
                         )}
-                        <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>
+                        <span className="amount" style={{ color: T.textMuted, fontSize: 12, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {shortDate(t.date)}
                         </span>
                         {visibleCols.cuenta && (
-                          <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 16px" }}>
                             {accountName(t.accountId)}
                           </span>
                         )}
                         {visibleCols.tipo && (
-                          <span style={{ display: "flex", justifyContent: "center" }}>
+                          <span style={{ display: "flex", justifyContent: "center", padding: "0 16px" }}>
                             <KindBadge kind={isTransfer ? "transfer" : t.type === "income" ? "income" : "expense"} size={14} />
                           </span>
                         )}
@@ -409,25 +475,27 @@ export function TransactionsView({
                           <button
                             onClick={(e) => { e.stopPropagation(); onCycleStatus(t); }}
                             title={st.label}
-                            style={{ display: "flex", alignItems: "center", justifyContent: "center", color: isFutureScheduled ? T.textFaint : st.color, background: "none", border: "none", padding: 2, width: "100%" }}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "center", color: isFutureScheduled ? T.textFaint : st.color, background: "none", border: "none", padding: "2px 16px", width: "100%" }}
                           >
                             <StIcon size={15} />
                           </button>
                         )}
-                        <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 7, textDecoration: voided ? "line-through" : "none", overflow: "hidden", minWidth: 0, padding: "0 16px" }}>
                           <span style={dot(isFutureScheduled ? T.textFaint : info.color, 8)} />
-                          {t.name}
-                          {isTransferOut ? " -> " + t.toLabel : ""}
-                          {isTransferIn ? " <- " + t.fromLabel : ""}
-                          {t.recurring && <Repeat size={11} style={{ color: T.textFaint }} />}
-                          {isTransfer && <ArrowRightLeft size={12} style={{ color: T.transfer }} />}
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {t.name}
+                            {isTransferOut ? " -> " + t.toLabel : ""}
+                            {isTransferIn ? " <- " + t.fromLabel : ""}
+                          </span>
+                          {t.recurring && <Repeat size={11} style={{ color: T.textFaint, flexShrink: 0 }} />}
+                          {isTransfer && <ArrowRightLeft size={12} style={{ color: T.transfer, flexShrink: 0 }} />}
                         </span>
                         {visibleCols.comentario && (
-                          <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.comment || ""}>
+                          <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 16px" }} title={t.comment || ""}>
                             {t.comment || ""}
                           </span>
                         )}
-                        <span className="amount" style={{ textAlign: "right", color: isFutureScheduled ? T.textFaint : color, fontWeight: 500 }}>
+                        <span className="amount" style={{ textAlign: "right", color: isFutureScheduled ? T.textFaint : color, fontWeight: 500, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {t.type === "income" || isTransferIn ? "+" : isTransferOut ? "" : "-"}
                           {fmt(Math.abs(t.amount))}
                         </span>
@@ -442,13 +510,18 @@ export function TransactionsView({
                             </button>
                           )}
                         </span>
-                        <span className="amount" style={{ textAlign: "right", color: isFutureScheduled ? T.textFaint : balance < 0 ? T.expense : T.textMuted, fontSize: 12.5 }}>
+                        <span className="amount" style={{ textAlign: "right", color: isFutureScheduled ? T.textFaint : balance < 0 ? T.expense : T.textMuted, fontSize: 12.5, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {fmt(balance)}
                         </span>
-                        <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
+                        <span style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                           <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar">
                             <Pencil size={12} />
                           </button>
+                          {!isTransfer && (
+                            <button onClick={(e) => { e.stopPropagation(); onDuplicate(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Duplicar">
+                              <Copy size={12} />
+                            </button>
+                          )}
                           <button onClick={(e) => { e.stopPropagation(); onRemove(t); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Eliminar">
                             <Trash2 size={12} />
                           </button>

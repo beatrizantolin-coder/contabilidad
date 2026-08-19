@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ArrowDownCircle, ArrowUpCircle, Ban, LineChart } from "lucide-react";
 import { T, dot, tinyBtn } from "../theme";
 import { fmt, quickRange, shortDate, todayISO, endOfYearISO, type QuickRangeKey } from "../lib/format";
 import type { EvoPoint, EvoRange, EvoTick, PrevisionMovement } from "../lib/evolution";
 import type { Category, ID } from "../types";
 import { catInfo } from "../lib/categories";
+import { COL_MARGIN, HEADER_FONT, CONTENT_FONT, MONO_FONT, longestWord, measureTextWidth, useAutoColumnWidths, widestTextWidth, type ColDef } from "../lib/columnWidths";
 import { KindBadge } from "./KindBadge";
 import { DateField } from "./DateField";
 
@@ -16,7 +17,9 @@ const QUICK_KEYS: readonly [QuickRangeKey, string][] = [
   ["finDeAno", "Fin de año"],
 ];
 
-const GRID_TEMPLATE = "74px 50px 130px 1fr 110px 100px 40px";
+// El icono de excluir/incluir de cada fila tiene ancho fijo, fuera del
+// motor de medicion dinamica.
+const ICON_WIDTH = 40;
 
 interface EvoMarker {
   xPct: number;
@@ -76,6 +79,37 @@ export function PrevisionPanel({
       return { ...m, balance: running, excluded };
     });
   }, [movements, baseline, excludedIds]);
+
+  const tableRef = useRef<HTMLDivElement>(null);
+  const prevColDefs = useMemo((): ColDef[] => {
+    const fechaTexts = movements.map((m) => shortDate(m.date));
+    const cuentaTexts = movements.map((m) => accountName(m.tx.accountId));
+    const importeTexts = movements.map((m) => (m.tx.type === "income" ? "+" : "-") + fmt(Math.abs(m.amount)));
+    const saldoTexts = movementsWithBalance.map((m) => fmt(m.balance));
+    const descLongestWord = movements.reduce((max, m) => {
+      const w = longestWord(m.tx.name, CONTENT_FONT);
+      return measureTextWidth(w, CONTENT_FONT) > measureTextWidth(max, CONTENT_FONT) ? w : max;
+    }, "");
+    const descIconsWidth = 8 + 7;
+
+    return [
+      { key: "fecha", label: "Fecha", natural: () => Math.max(measureTextWidth("Fecha", HEADER_FONT), widestTextWidth(fechaTexts, MONO_FONT)) + COL_MARGIN },
+      { key: "tipo", label: "Tipo", natural: () => Math.max(measureTextWidth("Tipo", HEADER_FONT), 16) + COL_MARGIN },
+      { key: "cuenta", label: "Cuenta", natural: () => Math.max(measureTextWidth("Cuenta", HEADER_FONT), widestTextWidth(cuentaTexts, CONTENT_FONT)) + COL_MARGIN, min: () => measureTextWidth("Cuenta", HEADER_FONT) + COL_MARGIN },
+      {
+        key: "descripcion", label: "Descripcion", grow: true,
+        natural: () => Math.max(measureTextWidth("Descripcion", HEADER_FONT), descIconsWidth + measureTextWidth(descLongestWord, CONTENT_FONT)) + COL_MARGIN,
+      },
+      { key: "importe", label: "Importe", natural: () => Math.max(measureTextWidth("Importe", HEADER_FONT), widestTextWidth(importeTexts, MONO_FONT)) + COL_MARGIN },
+      { key: "saldo", label: "Saldo", natural: () => Math.max(measureTextWidth("Saldo", HEADER_FONT), widestTextWidth(saldoTexts, MONO_FONT)) + COL_MARGIN },
+    ];
+  }, [movements, movementsWithBalance, accountName]);
+  const prevAutoCols = useAutoColumnWidths(prevColDefs, tableRef, {}, [movements, movementsWithBalance]);
+  function prevColWidth(key: string): number {
+    return Math.round(prevAutoCols.widths[key] ?? 0);
+  }
+  const gridColumns = ["fecha", "tipo", "cuenta", "descripcion", "importe", "saldo"].map((k) => prevColWidth(k) + "px").join(" ") + " " + ICON_WIDTH + "px";
+  const tableMinWidth = prevAutoCols.scroll ? prevAutoCols.totalWidth + ICON_WIDTH : "100%";
 
   const includedMovements = movements.filter((m) => !excludedIds.has(previsionRowKey(m)));
   const previsionIncome = includedMovements.filter((m) => m.tx.type === "income").reduce((s, m) => s + m.amount, 0);
@@ -144,18 +178,18 @@ export function PrevisionPanel({
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      <div ref={tableRef} style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         {movements.length === 0 ? (
           <div style={{ fontSize: 12.5, color: T.textFaint, padding: "16px 24px" }}>Sin movimientos previstos en este rango.</div>
         ) : (
-          <>
-            <div style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, padding: "6px 20px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated, position: "sticky", top: 0 }}>
-              <span>Fecha</span>
-              <span style={{ textAlign: "center" }}>Tipo</span>
-              <span>Cuenta</span>
-              <span>Descripcion</span>
-              <span style={{ textAlign: "right" }}>Importe</span>
-              <span style={{ textAlign: "right" }}>Saldo</span>
+          <div style={{ minWidth: tableMinWidth }}>
+            <div style={{ display: "grid", gridTemplateColumns: gridColumns, padding: "6px 0", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated, position: "sticky", top: 0 }}>
+              <span style={{ padding: "0 16px" }}>Fecha</span>
+              <span style={{ textAlign: "center", padding: "0 16px" }}>Tipo</span>
+              <span style={{ padding: "0 16px" }}>Cuenta</span>
+              <span style={{ padding: "0 16px" }}>Descripcion</span>
+              <span style={{ textAlign: "right", padding: "0 16px" }}>Importe</span>
+              <span style={{ textAlign: "right", padding: "0 16px" }}>Saldo</span>
               <span />
             </div>
             {movementsWithBalance
@@ -170,24 +204,24 @@ export function PrevisionPanel({
                 return (
                   <div
                     key={t.id + "-" + m.date + "-" + idx}
-                    style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, alignItems: "center", padding: "6px 20px", fontSize: 12, borderBottom: "1px solid " + T.borderSoft, opacity: m.excluded ? 0.5 : m.real ? 1 : 0.7 }}
+                    style={{ display: "grid", gridTemplateColumns: gridColumns, alignItems: "center", padding: "6px 0", fontSize: 12, borderBottom: "1px solid " + T.borderSoft, opacity: m.excluded ? 0.5 : m.real ? 1 : 0.7 }}
                   >
-                    <span className="amount" style={{ color: T.textMuted, fontSize: 11.5, textDecoration: strike }}>
+                    <span className="amount" style={{ color: T.textMuted, fontSize: 11.5, textDecoration: strike, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {shortDate(m.date)}
                     </span>
-                    <span style={{ display: "flex", justifyContent: "center" }}>
+                    <span style={{ display: "flex", justifyContent: "center", padding: "0 16px" }}>
                       <KindBadge kind={isTransfer ? "transfer" : t.type === "income" ? "income" : "expense"} size={13} />
                     </span>
-                    <span style={{ color: T.textMuted, fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: strike }}>{accountName(t.accountId)}</span>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textDecoration: strike }}>
+                    <span style={{ color: T.textMuted, fontSize: 11.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textDecoration: strike, padding: "0 16px" }}>{accountName(t.accountId)}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden", textDecoration: strike, padding: "0 16px" }}>
                       <span style={dot(info.color, 7)} />
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
                     </span>
-                    <span className="amount" style={{ textAlign: "right", color: m.excluded ? T.textFaint : color, fontWeight: 500, textDecoration: strike }}>
+                    <span className="amount" style={{ textAlign: "right", color: m.excluded ? T.textFaint : color, fontWeight: 500, textDecoration: strike, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {t.type === "income" ? "+" : "-"}
                       {fmt(Math.abs(m.amount))}
                     </span>
-                    <span className="amount" style={{ textAlign: "right", color: m.balance < 0 ? T.expense : T.textMuted, fontSize: 11.5 }}>
+                    <span className="amount" style={{ textAlign: "right", color: m.balance < 0 ? T.expense : T.textMuted, fontSize: 11.5, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {fmt(m.balance)}
                     </span>
                     <span style={{ display: "flex", justifyContent: "center" }}>
@@ -204,7 +238,7 @@ export function PrevisionPanel({
                   </div>
                 );
               })}
-          </>
+          </div>
         )}
       </div>
 

@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Search, Tag, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, Copy, Download, Eraser, Pencil, Plus, Search, Tag, Trash2, TrendingDown, TrendingUp, Upload } from "lucide-react";
 import type { Budgets, Category, CategoryKind, ID } from "../types";
 import { T, dot, inputStyle, smallBtn } from "../theme";
 import { fmt } from "../lib/format";
 import { subcategoryColor } from "../lib/color";
+import { COL_MARGIN, HEADER_FONT, CONTENT_FONT, longestWord, measureTextWidth, useAutoColumnWidths, type ColDef } from "../lib/columnWidths";
 import { Field } from "./Field";
 import { KindBadge } from "./KindBadge";
 
@@ -21,7 +22,11 @@ interface CatSort {
 }
 
 const TYPE_SORT_ORDER: Record<CategoryKind, number> = { expense: 0, income: 1, transfer: 2 };
-const GRID_TEMPLATE = "36px 190px 1fr 150px 22px 22px";
+// El chevron de expandir/contraer vive en su propia columna de ancho fijo,
+// para que el punto de color y el nombre de Categoria queden siempre
+// alineados entre filas de categoria y de subcategoria.
+const CHEVRON_WIDTH = 21;
+const ACTIONS_WIDTH = 76;
 
 /** 0-70% verde, 71-90% naranja, 91-100%+ rojo; sin presupuesto asignado, null (usa el color propio). */
 function budgetColorForRatio(ratio: number): string {
@@ -54,6 +59,8 @@ export function CategoriesView({
   removeCategory,
   onOpenCategory,
   removeSubcategory,
+  onDuplicateCategory,
+  onDuplicateSubcategory,
   newCategoryTrigger,
   onExport,
   onImport,
@@ -69,6 +76,10 @@ export function CategoriesView({
   removeCategory: (id: ID) => void;
   onOpenCategory: (id: ID) => void;
   removeSubcategory: (catId: ID, subId: ID) => void;
+  /** Copia independiente de la categoria (y sus subcategorias) con " (copia)" en el nombre. */
+  onDuplicateCategory: (id: ID) => void;
+  /** Copia independiente de la subcategoria con " (copia)" en el nombre. */
+  onDuplicateSubcategory: (catId: ID, subId: ID) => void;
   /** Se incrementa desde Documento > Nueva Categoria (menú nativo) para abrir el panel lateral. */
   newCategoryTrigger: number;
   onExport: () => void;
@@ -167,6 +178,59 @@ export function CategoriesView({
     }
   }
 
+  const tableRef = useRef<HTMLDivElement>(null);
+  const catColDefs = useMemo((): ColDef[] => {
+    const nameTexts: string[] = [];
+    const presupuestoTexts: string[] = [];
+    function pushText(name: string, val: number, limit: number | undefined) {
+      nameTexts.push(name);
+      presupuestoTexts.push(limit ? fmt(val) + " / " + fmt(limit) : "Sin asignar");
+    }
+    if (catShowMode === "subcategories") {
+      flatSubcats.forEach(({ sub }) => {
+        const { val, limit } = subRowData(sub);
+        pushText(sub.name, val, limit);
+      });
+    } else {
+      visibleCategories.forEach((cat) => {
+        const { val, limit } = catRowData(cat);
+        pushText(cat.name, val, limit);
+        if (catShowMode === "all") {
+          cat.subcategories.forEach((sub) => {
+            const { val: subVal, limit: subLimit } = subRowData(sub);
+            pushText(sub.name, subVal, subLimit);
+          });
+        }
+      });
+    }
+    const catLongestWord = nameTexts.reduce((max, s) => {
+      const w = longestWord(s, CONTENT_FONT);
+      return measureTextWidth(w, CONTENT_FONT) > measureTextWidth(max, CONTENT_FONT) ? w : max;
+    }, "");
+    const catDotIconsWidth = 12 + 7;
+    const presupuestoWidest = presupuestoTexts.reduce((mx, s) => Math.max(mx, measureTextWidth(s, CONTENT_FONT)), 0);
+
+    return [
+      { key: "tipo", label: "Tipo", natural: () => Math.max(measureTextWidth("Tipo", HEADER_FONT), 16) + COL_MARGIN },
+      {
+        key: "categoria", label: "Categoria", grow: true,
+        natural: () => Math.max(measureTextWidth("Categoria", HEADER_FONT), catDotIconsWidth + measureTextWidth(catLongestWord, CONTENT_FONT)) + COL_MARGIN,
+      },
+      {
+        key: "progreso", label: "Progreso", grow: true,
+        natural: () => Math.max(measureTextWidth("Progreso", HEADER_FONT), 100) + COL_MARGIN,
+        min: () => Math.max(measureTextWidth("Progreso", HEADER_FONT), 60) + COL_MARGIN,
+      },
+      { key: "presupuesto", label: "Presupuesto", natural: () => Math.max(measureTextWidth("Presupuesto", HEADER_FONT), presupuestoWidest) + COL_MARGIN },
+    ];
+  }, [visibleCategories, flatSubcats, catShowMode]);
+  const catAutoCols = useAutoColumnWidths(catColDefs, tableRef, {}, [visibleCategories, flatSubcats, catShowMode]);
+  function catColWidth(key: string): number {
+    return Math.round(catAutoCols.widths[key] ?? 0);
+  }
+  const gridColumns = [catColWidth("tipo") + "px", CHEVRON_WIDTH + "px", catColWidth("categoria") + "px", catColWidth("progreso") + "px", catColWidth("presupuesto") + "px", ACTIONS_WIDTH + "px"].join(" ");
+  const tableMinWidth = catAutoCols.scroll ? catAutoCols.totalWidth + CHEVRON_WIDTH + ACTIONS_WIDTH : "100%";
+
   function renderCatRow(cat: Category) {
     const { val, limit, pct, ratio } = catRowData(cat);
     const budgetColor = !limit ? null : budgetColorForRatio(ratio);
@@ -178,12 +242,12 @@ export function CategoriesView({
         <div
           className="accrow"
           onClick={() => onOpenCategory(cat.id)}
-          style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, alignItems: "center", columnGap: 10, padding: "9px 24px", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft }}
+          style={{ display: "grid", gridTemplateColumns: gridColumns, alignItems: "center", padding: "9px 0", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft }}
         >
-          <span style={{ display: "flex", justifyContent: "center" }}>
+          <span style={{ display: "flex", justifyContent: "center", padding: "0 16px" }}>
             <KindBadge kind={cat.kind} size={16} />
           </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+          <span style={{ display: "flex", alignItems: "center" }}>
             {hasSubs ? (
               <button
                 onClick={(e) => { e.stopPropagation(); toggleExpanded(cat.id); }}
@@ -194,13 +258,17 @@ export function CategoriesView({
             ) : (
               <span style={{ width: 13, flexShrink: 0 }} />
             )}
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden", padding: "0 16px" }}>
             <span style={dot(cat.color, 12)} />
             <span style={{ fontSize: 13.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat.name}</span>
           </span>
-          <div style={{ height: 6, background: T.borderSoft, borderRadius: 3 }}>
-            <div style={{ height: 6, borderRadius: 3, width: pct + "%", background: barColor }} />
+          <div style={{ padding: "0 16px" }}>
+            <div style={{ height: 6, background: T.borderSoft, borderRadius: 3 }}>
+              <div style={{ height: 6, borderRadius: 3, width: pct + "%", background: barColor }} />
+            </div>
           </div>
-          <span className="amount" style={{ fontSize: 13, textAlign: "right" }}>
+          <span className="amount" style={{ fontSize: 13, textAlign: "right", padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             <span style={{ color: T.textMuted }}>{fmt(val)}</span>
             {limit ? (
               <>
@@ -210,12 +278,17 @@ export function CategoriesView({
               <span style={{ color: T.textFaint, fontWeight: 400 }}> / Sin asignar</span>
             )}
           </span>
-          <button onClick={(e) => { e.stopPropagation(); onOpenCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Editar " + cat.name}>
-            <Pencil size={11} />
-          </button>
-          <button onClick={(e) => { e.stopPropagation(); removeCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Eliminar " + cat.name}>
-            <Trash2 size={12} />
-          </button>
+          <span style={{ display: "flex", justifyContent: "center", gap: 4, padding: "0 16px" }}>
+            <button onClick={(e) => { e.stopPropagation(); onOpenCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Editar " + cat.name}>
+              <Pencil size={11} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onDuplicateCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Duplicar " + cat.name}>
+              <Copy size={11} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); removeCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Eliminar " + cat.name}>
+              <Trash2 size={12} />
+            </button>
+          </span>
         </div>
         {hasSubs && expanded && cat.subcategories.filter((s) => matchesSearch(s.name) || matchesSearch(cat.name)).map((sub) => renderSubRow(cat, sub))}
       </div>
@@ -231,20 +304,23 @@ export function CategoriesView({
         key={sub.id}
         onClick={() => onOpenCategory(cat.id)}
         className="accrow"
-        style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, alignItems: "center", columnGap: 10, padding: "7px 24px", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated }}
+        style={{ display: "grid", gridTemplateColumns: gridColumns, alignItems: "center", padding: "7px 0", cursor: "pointer", borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated }}
       >
-        <span style={{ display: "flex", justifyContent: "center" }}>
+        <span style={{ display: "flex", justifyContent: "center", padding: "0 16px" }}>
           <KindBadge kind={cat.kind} size={14} />
         </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 21, overflow: "hidden" }}>
+        <span />
+        <span style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden", padding: "0 16px 0 37px" }}>
           <span style={dot(subcategoryColor(cat.color), 8)} />
           <span style={{ fontSize: 12, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sub.name}</span>
           {catShowMode === "subcategories" && <span style={{ fontSize: 10.5, color: T.textFaint }}>({cat.name})</span>}
         </span>
-        <div style={{ height: 4, background: T.borderSoft, borderRadius: 2 }}>
-          <div style={{ height: 4, borderRadius: 2, width: pct + "%", background: barColor }} />
+        <div style={{ padding: "0 16px" }}>
+          <div style={{ height: 4, background: T.borderSoft, borderRadius: 2 }}>
+            <div style={{ height: 4, borderRadius: 2, width: pct + "%", background: barColor }} />
+          </div>
         </div>
-        <span className="amount" style={{ fontSize: 11, textAlign: "right" }}>
+        <span className="amount" style={{ fontSize: 11, textAlign: "right", padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           <span style={{ color: T.textMuted }}>{fmt(val)}</span>
           {limit ? (
             <>
@@ -254,12 +330,17 @@ export function CategoriesView({
             <span style={{ color: T.textFaint, fontWeight: 400 }}> / Sin asignar</span>
           )}
         </span>
-        <button onClick={(e) => { e.stopPropagation(); onOpenCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Editar " + sub.name}>
-          <Pencil size={10} />
-        </button>
-        <button onClick={(e) => { e.stopPropagation(); removeSubcategory(cat.id, sub.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2, justifySelf: "start" }} aria-label={"Eliminar " + sub.name}>
-          <Trash2 size={11} />
-        </button>
+        <span style={{ display: "flex", justifyContent: "center", gap: 4, padding: "0 16px" }}>
+          <button onClick={(e) => { e.stopPropagation(); onOpenCategory(cat.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Editar " + sub.name}>
+            <Pencil size={10} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); onDuplicateSubcategory(cat.id, sub.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Duplicar " + sub.name}>
+            <Copy size={10} />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); removeSubcategory(cat.id, sub.id); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label={"Eliminar " + sub.name}>
+            <Trash2 size={11} />
+          </button>
+        </span>
       </div>
     );
   }
@@ -325,20 +406,27 @@ export function CategoriesView({
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, columnGap: 10, padding: "7px 24px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated }}>
-        <SortHead field="tipo" label="Tipo" sort={catSort} onSort={handleSort} />
-        <SortHead field="categoria" label="Categoria" sort={catSort} onSort={handleSort} />
-        <SortHead field="progreso" label="Progreso" sort={catSort} onSort={handleSort} />
-        <span style={{ textAlign: "right" }}>
-          <SortHead field="presupuesto" label="Presupuesto" sort={catSort} onSort={handleSort} />
-        </span>
-        <span />
-        <span />
-      </div>
-
-      <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+      <div ref={tableRef} style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        <div style={{ minWidth: tableMinWidth }}>
+        <div style={{ display: "grid", gridTemplateColumns: gridColumns, padding: "7px 0", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
+          <span style={{ padding: "0 16px" }}>
+            <SortHead field="tipo" label="Tipo" sort={catSort} onSort={handleSort} />
+          </span>
+          <span />
+          <span style={{ padding: "0 16px" }}>
+            <SortHead field="categoria" label="Categoria" sort={catSort} onSort={handleSort} />
+          </span>
+          <span style={{ padding: "0 16px" }}>
+            <SortHead field="progreso" label="Progreso" sort={catSort} onSort={handleSort} />
+          </span>
+          <span style={{ textAlign: "right", padding: "0 16px" }}>
+            <SortHead field="presupuesto" label="Presupuesto" sort={catSort} onSort={handleSort} />
+          </span>
+          <span />
+        </div>
         {isEmpty && <div style={{ fontSize: 13, color: T.textFaint, padding: "18px 24px" }}>Sin categorias que coincidan.</div>}
         {catShowMode === "subcategories" ? flatSubcats.map(({ cat, sub }) => renderSubRow(cat, sub)) : visibleCategories.map((cat) => renderCatRow(cat))}
+        </div>
       </div>
     </div>
   );

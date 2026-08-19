@@ -1,15 +1,18 @@
-import { useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Download, Eraser, Pencil, Plus, Repeat, Search, Trash2, Upload } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ArrowDownCircle, ArrowUpCircle, ChevronDown, ChevronRight, Copy, Download, Eraser, Pencil, Plus, Repeat, Search, Trash2, Upload } from "lucide-react";
 import type { Account, Category, ID } from "../types";
 import { isVariableSeries, occurrenceAmount, type ProgramadorRow } from "../lib/recurring";
 import { T, dot, inputStyle, smallBtn } from "../theme";
 import { fmt, freqLabel, freqPerMonth, monthYearLabel, shortDate } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { exportProgramadorCsv } from "../lib/csv";
+import { COL_MARGIN, HEADER_FONT, CONTENT_FONT, MONO_FONT, longestWord, measureTextWidth, useAutoColumnWidths, widestTextWidth, type ColDef } from "../lib/columnWidths";
 import { Field } from "./Field";
 import { KindBadge } from "./KindBadge";
 
-const GRID_TEMPLATE = "78px 120px 36px 100px 1fr 90px 100px 56px";
+// Icono de accion (editar/duplicar/detener) siempre a ancho fijo, fuera del
+// motor de medicion dinamica.
+const ACTIONS_WIDTH = 72;
 
 type ProgTypeFilter = "all" | "income" | "expense" | "transfer";
 type ProgGroupBy = "none" | "fecha" | "cuenta" | "tipo" | "periodicidad" | "recurrencia";
@@ -43,6 +46,7 @@ export function RecurringView({
   onNewScheduled,
   onOpenRow,
   onRemove,
+  onDuplicate,
   onImport,
 }: {
   docName: string;
@@ -57,6 +61,8 @@ export function RecurringView({
   onOpenRow: (row: ProgramadorRow) => void;
   /** Detiene la serie recurrente completa de esta fila (no solo el movimiento de la fecha ancla). */
   onRemove: (row: ProgramadorRow) => void;
+  /** Crea una copia independiente de la serie completa (nuevo id, no vinculada al original). */
+  onDuplicate: (row: ProgramadorRow) => void;
   onImport: () => void;
 }) {
   const [progSearch, setProgSearch] = useState("");
@@ -86,6 +92,45 @@ export function RecurringView({
   const filteredRows = programadorRows.filter(
     (row) => matchesSearch(row.tx.name) && (progAccountFilter.size === 0 || progAccountFilter.has(row.tx.accountId)) && (progTypeFilter === "all" || row.tx.type === progTypeFilter),
   );
+
+  const tableRef = useRef<HTMLDivElement>(null);
+  const progColDefs = useMemo((): ColDef[] => {
+    const fechaTexts = programadorRows.map((row) => shortDate(row.date));
+    const cuentaTexts = programadorRows.map((row) => accountName(row.tx.accountId));
+    const periodicidadTexts = programadorRows.map((row) => (row.tx.recurring ? freqLabel(row.tx.recurring) : ""));
+    const importeTexts = programadorRows.map((row) => {
+      const amt = row.tx.recurring ? occurrenceAmount(Number(row.tx.amount), row.tx.recurring, row.date) : Number(row.tx.amount);
+      return (row.tx.type === "income" ? "+" : "-") + fmt(Math.abs(amt));
+    });
+    const descLongestWord = programadorRows.reduce((max, row) => {
+      const w = longestWord(row.tx.name, CONTENT_FONT);
+      return measureTextWidth(w, CONTENT_FONT) > measureTextWidth(max, CONTENT_FONT) ? w : max;
+    }, "");
+    const descIconsWidth = 8 + 7;
+
+    return [
+      { key: "fecha", label: "Fecha", natural: () => Math.max(measureTextWidth("Fecha", HEADER_FONT), widestTextWidth(fechaTexts, MONO_FONT)) + COL_MARGIN },
+      { key: "cuenta", label: "Cuenta", natural: () => Math.max(measureTextWidth("Cuenta", HEADER_FONT), widestTextWidth(cuentaTexts, CONTENT_FONT)) + COL_MARGIN, min: () => measureTextWidth("Cuenta", HEADER_FONT) + COL_MARGIN },
+      { key: "tipo", label: "Tipo", natural: () => Math.max(measureTextWidth("Tipo", HEADER_FONT), 16) + COL_MARGIN },
+      {
+        key: "periodicidad", label: "Periodicidad",
+        natural: () => Math.max(measureTextWidth("Periodicidad", HEADER_FONT), widestTextWidth(periodicidadTexts, CONTENT_FONT)) + COL_MARGIN,
+        min: () => measureTextWidth("Periodicidad", HEADER_FONT) + COL_MARGIN,
+      },
+      {
+        key: "descripcion", label: "Descripcion", grow: true,
+        natural: () => Math.max(measureTextWidth("Descripcion", HEADER_FONT), descIconsWidth + measureTextWidth(descLongestWord, CONTENT_FONT)) + COL_MARGIN,
+      },
+      { key: "recurrencia", label: "Recurrencia", natural: () => Math.max(measureTextWidth("Recurrencia", HEADER_FONT), measureTextWidth("Variable", CONTENT_FONT)) + COL_MARGIN },
+      { key: "importe", label: "Importe", natural: () => Math.max(measureTextWidth("Importe", HEADER_FONT), widestTextWidth(importeTexts, MONO_FONT)) + COL_MARGIN },
+    ];
+  }, [programadorRows, accountName]);
+  const progAutoCols = useAutoColumnWidths(progColDefs, tableRef, {}, [programadorRows]);
+  function progColWidth(key: string): number {
+    return Math.round(progAutoCols.widths[key] ?? 0);
+  }
+  const gridColumns = ["fecha", "cuenta", "tipo", "periodicidad", "descripcion", "recurrencia", "importe"].map((k) => progColWidth(k) + "px").join(" ") + " " + ACTIONS_WIDTH + "px";
+  const tableMinWidth = progAutoCols.scroll ? progAutoCols.totalWidth + ACTIONS_WIDTH : "100%";
 
   async function handleExport() {
     try {
@@ -231,15 +276,26 @@ export function RecurringView({
       {filteredRows.length === 0 ? (
         <div style={{ fontSize: 13, color: T.textFaint, padding: "18px 24px" }}>Sin movimientos recurrentes que coincidan.</div>
       ) : (
-        <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-          <div style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, columnGap: 10, padding: "7px 24px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0, zIndex: 1 }}>
-            <SortHead field="fecha" label="Fecha" sort={progSort} onSort={handleSort} />
-            <SortHead field="cuenta" label="Cuenta" sort={progSort} onSort={handleSort} />
-            <span style={{ textAlign: "center" }}>Tipo</span>
-            <SortHead field="periodicidad" label="Periodicidad" sort={progSort} onSort={handleSort} />
-            <SortHead field="descripcion" label="Descripcion" sort={progSort} onSort={handleSort} />
-            <SortHead field="recurrencia" label="Recurrencia" sort={progSort} onSort={handleSort} />
-            <span style={{ textAlign: "right" }}>
+        <div ref={tableRef} style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          <div style={{ minWidth: tableMinWidth }}>
+          <div style={{ display: "grid", gridTemplateColumns: gridColumns, padding: "7px 0", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0, zIndex: 1 }}>
+            <span style={{ padding: "0 16px" }}>
+              <SortHead field="fecha" label="Fecha" sort={progSort} onSort={handleSort} />
+            </span>
+            <span style={{ padding: "0 16px" }}>
+              <SortHead field="cuenta" label="Cuenta" sort={progSort} onSort={handleSort} />
+            </span>
+            <span style={{ textAlign: "center", padding: "0 16px" }}>Tipo</span>
+            <span style={{ padding: "0 16px" }}>
+              <SortHead field="periodicidad" label="Periodicidad" sort={progSort} onSort={handleSort} />
+            </span>
+            <span style={{ padding: "0 16px" }}>
+              <SortHead field="descripcion" label="Descripcion" sort={progSort} onSort={handleSort} />
+            </span>
+            <span style={{ textAlign: "center", padding: "0 16px" }}>
+              <SortHead field="recurrencia" label="Recurrencia" sort={progSort} onSort={handleSort} />
+            </span>
+            <span style={{ textAlign: "right", padding: "0 16px" }}>
               <SortHead field="importe" label="Importe" align="right" sort={progSort} onSort={handleSort} />
             </span>
             <span />
@@ -273,29 +329,34 @@ export function RecurringView({
                         key={t.id + "-" + row.date}
                         className="accrow"
                         onClick={() => onOpenRow(row)}
-                        style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, alignItems: "center", padding: "8px 24px", fontSize: 13, borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", opacity: row.real ? 1 : 0.7 }}
+                        style={{ display: "grid", gridTemplateColumns: gridColumns, alignItems: "center", padding: "8px 0", fontSize: 13, borderBottom: "1px solid " + T.borderSoft, cursor: "pointer", opacity: row.real ? 1 : 0.7 }}
                       >
-                        <span className="amount" style={{ color: T.textMuted, fontSize: 12 }}>
+                        <span className="amount" style={{ color: T.textMuted, fontSize: 12, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {shortDate(row.date)}
                         </span>
-                        <span style={{ color: T.textMuted, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{accountName(t.accountId)}</span>
-                        <span style={{ display: "flex", justifyContent: "center" }}>
+                        <span style={{ color: T.textMuted, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 16px" }}>{accountName(t.accountId)}</span>
+                        <span style={{ display: "flex", justifyContent: "center", padding: "0 16px" }}>
                           <KindBadge kind={isTransfer ? "transfer" : (t.type as "income" | "expense")} size={15} />
                         </span>
-                        <span style={{ color: T.textMuted, fontSize: 12 }}>{t.recurring ? freqLabel(t.recurring) : ""}</span>
-                        <span style={{ display: "flex", alignItems: "center", gap: 7, color: T.text, overflow: "hidden" }}>
+                        <span style={{ color: T.textMuted, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 16px" }}>{t.recurring ? freqLabel(t.recurring) : ""}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 7, color: T.text, overflow: "hidden", padding: "0 16px" }}>
                           <span style={dot(info.color, 8)} />
                           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
                         </span>
-                        <span style={{ fontSize: 11.5, color: variable ? T.accent : T.textFaint, fontWeight: variable ? 600 : 400 }}>{variable ? "Variable" : "Fija"}</span>
-                        <span className="amount" style={{ textAlign: "right", color: realColor, fontWeight: 500 }}>
+                        <span style={{ textAlign: "center", fontSize: 11.5, color: variable ? T.accent : T.textFaint, fontWeight: variable ? 600 : 400, padding: "0 16px" }}>{variable ? "Variable" : "Fija"}</span>
+                        <span className="amount" style={{ textAlign: "right", color: realColor, fontWeight: 500, padding: "0 16px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {t.type === "income" ? "+" : "-"}
                           {fmt(Math.abs(amt))}
                         </span>
-                        <span style={{ display: "flex", gap: 4, justifySelf: "end" }}>
+                        <span style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                           <button onClick={(e) => { e.stopPropagation(); onOpenRow(row); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Editar">
                             <Pencil size={12} />
                           </button>
+                          {!isTransfer && (
+                            <button onClick={(e) => { e.stopPropagation(); onDuplicate(row); }} className="rowbtn" style={{ background: "none", border: "none", color: T.textFaint, padding: 2 }} aria-label="Duplicar">
+                              <Copy size={12} />
+                            </button>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); onRemove(row); }}
                             className="rowbtn"
@@ -312,6 +373,7 @@ export function RecurringView({
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </div>
