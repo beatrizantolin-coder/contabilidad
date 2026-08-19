@@ -1462,7 +1462,13 @@ export default function App() {
     ? accounts.find((a) => a.id === [...activeAccounts][0])?.name ?? "-"
     : activeAccounts.size + " cuentas seleccionadas";
   const accountsTitleIcon = activeAccountTypeGroup ? ACCOUNT_SECTIONS.find((s) => s.key === activeAccountTypeGroup)?.icon : undefined;
-  const isEmptyGroupView = !!activeAccountTypeGroup && filteredTx.length === 0;
+  // Generalizado: cualquier ambito (cuenta suelta, grupo o "todas las
+  // cuentas") sin NINGUN movimiento propio (antes de aplicar busqueda/
+  // filtros) muestra solo la cabecera con este aviso, en vez de la barra
+  // de herramientas y una tabla vacia. "Sin movimientos que coincidan"
+  // (dentro de la tabla) sigue siendo el aviso para cuando SI hay
+  // movimientos pero la busqueda/filtro activos no encuentran ninguno.
+  const isEmptyGroupView = scoped.length === 0;
 
   return (
     <div style={{ height: "100vh", background: T.bg, color: T.text, fontFamily: "Inter, sans-serif", overflow: "hidden" }}>

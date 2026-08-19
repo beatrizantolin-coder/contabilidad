@@ -295,7 +295,9 @@ export function TransactionsView({
       )}
 
       {isEmptyGroupView ? (
-        <div style={{ flex: 1, padding: "28px 20px", color: T.textMuted, fontSize: 13 }}>No hay movimientos que mostrar.</div>
+        <div style={{ flex: 1, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 40 }}>
+          <span style={{ fontSize: 13, color: T.textFaint }}>No hay movimientos que mostrar</span>
+        </div>
       ) : (
       <div style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: gridColumns, minWidth: GRID_MIN_WIDTH, padding: "7px 20px", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>

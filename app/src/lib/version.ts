@@ -3,4 +3,4 @@
  * Cada vez que se compila una version nueva de la app, la cifra VV sube una
  * unidad respecto a la anterior.
  */
-export const APP_VERSION = "1.05.1708";
+export const APP_VERSION = "1.06.1708";
