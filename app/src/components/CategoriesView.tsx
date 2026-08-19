@@ -5,6 +5,7 @@ import { T, dot, inputStyle, smallBtn } from "../theme";
 import { fmt } from "../lib/format";
 import { subcategoryColor } from "../lib/color";
 import { COL_MARGIN, HEADER_FONT, CONTENT_FONT, longestWord, measureTextWidth, useAutoColumnWidths, type ColDef } from "../lib/columnWidths";
+import { ColResizeHandle } from "./ColResizeHandle";
 import { Field } from "./Field";
 import { KindBadge } from "./KindBadge";
 
@@ -90,6 +91,9 @@ export function CategoriesView({
   const [catShowMode, setCatShowMode] = useState<CatShowMode>("categories");
   const [catSort, setCatSort] = useState<CatSort>({ field: null, dir: "asc" });
   const [expandedCategories, setExpandedCategories] = useState<Set<ID>>(new Set());
+  // Anchos de columna fijados a mano: prevalecen sobre el calculo automatico
+  // hasta "Limpiar" o reiniciar la app (no se guardan en disco).
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (newCategoryTrigger > 0) onNewCategory(catTypeFilter !== "all" ? catTypeFilter : "expense");
@@ -112,6 +116,7 @@ export function CategoriesView({
     setCatTypeFilter("all");
     setCatShowMode("categories");
     setCatSort({ field: null, dir: "asc" });
+    setColWidths({});
   }
 
   function matchesSearch(name: string): boolean {
@@ -224,7 +229,7 @@ export function CategoriesView({
       { key: "presupuesto", label: "Presupuesto", natural: () => Math.max(measureTextWidth("Presupuesto", HEADER_FONT), presupuestoWidest) + COL_MARGIN },
     ];
   }, [visibleCategories, flatSubcats, catShowMode]);
-  const catAutoCols = useAutoColumnWidths(catColDefs, tableRef, {}, [visibleCategories, flatSubcats, catShowMode]);
+  const catAutoCols = useAutoColumnWidths(catColDefs, tableRef, colWidths, [visibleCategories, flatSubcats, catShowMode, colWidths]);
   function catColWidth(key: string): number {
     return Math.round(catAutoCols.widths[key] ?? 0);
   }
@@ -409,15 +414,18 @@ export function CategoriesView({
       <div ref={tableRef} style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <div style={{ minWidth: tableMinWidth }}>
         <div style={{ display: "grid", gridTemplateColumns: gridColumns, padding: "7px 0", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
-          <span style={{ padding: "0 16px" }}>
+          <span style={{ padding: "0 16px", position: "relative" }}>
             <SortHead field="tipo" label="Tipo" sort={catSort} onSort={handleSort} />
+            <ColResizeHandle colKey="tipo" defaultWidth={catAutoCols.widths.tipo ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
           </span>
           <span />
-          <span style={{ padding: "0 16px" }}>
+          <span style={{ padding: "0 16px", position: "relative" }}>
             <SortHead field="categoria" label="Categoria" sort={catSort} onSort={handleSort} />
+            <ColResizeHandle colKey="categoria" defaultWidth={catAutoCols.widths.categoria ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
           </span>
-          <span style={{ padding: "0 16px" }}>
+          <span style={{ padding: "0 16px", position: "relative" }}>
             <SortHead field="progreso" label="Progreso" sort={catSort} onSort={handleSort} />
+            <ColResizeHandle colKey="progreso" defaultWidth={catAutoCols.widths.progreso ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
           </span>
           <span style={{ textAlign: "right", padding: "0 16px" }}>
             <SortHead field="presupuesto" label="Presupuesto" sort={catSort} onSort={handleSort} />

@@ -5,6 +5,7 @@ import { T, dot, inputStyle, smallBtn, statusInfo } from "../theme";
 import { endOfCurrentMonthISO, fmt, shortDate, startOfCurrentMonthISO, todayISO } from "../lib/format";
 import { catInfo } from "../lib/categories";
 import { COL_MARGIN, HEADER_FONT, longestWord, measureTextWidth, useAutoColumnWidths, widestTextWidth, type ColDef } from "../lib/columnWidths";
+import { ColResizeHandle } from "./ColResizeHandle";
 import { FiltersBar } from "./FiltersBar";
 import { MovementsRangeBar } from "./MovementsRangeBar";
 import { KindBadge } from "./KindBadge";
@@ -117,6 +118,10 @@ export function TransactionsView({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [visibleCols, setVisibleCols] = useState<VisibleCols>({ cuenta: false, tipo: false, estado: true, comentario: true });
   const [showColMenu, setShowColMenu] = useState(false);
+  // Anchos de columna fijados a mano arrastrando su tirador: prevalecen
+  // sobre el calculo automatico hasta que se pulse "Limpiar" o se
+  // reinicie la app (no se guardan en disco).
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
 
   const tableRef = useRef<HTMLDivElement>(null);
   const txColDefs = useMemo((): ColDef[] => {
@@ -159,7 +164,7 @@ export function TransactionsView({
     () => txColDefs.filter((c) => ALWAYS_TX_COLS.has(c.key) || visibleCols[c.key as keyof VisibleCols]),
     [txColDefs, visibleCols],
   );
-  const txAutoCols = useAutoColumnWidths(activeTxCols, tableRef, {}, [filteredTx, rowZoom, visibleCols]);
+  const txAutoCols = useAutoColumnWidths(activeTxCols, tableRef, colWidths, [filteredTx, rowZoom, visibleCols, colWidths]);
   function txColWidth(key: string): number {
     return Math.round(txAutoCols.widths[key] ?? 0);
   }
@@ -256,7 +261,7 @@ export function TransactionsView({
                   style={{ ...inputStyle, paddingLeft: 28, width: 170, height: 30, boxSizing: "border-box" }}
                 />
               </div>
-              <button onClick={onClearAll} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
+              <button onClick={() => { onClearAll(); setColWidths({}); }} style={smallBtn(false)} aria-label="Limpiar" title="Limpiar">
                 <Eraser size={13} />
               </button>
               <div style={{ position: "relative" }}>
@@ -354,26 +359,41 @@ export function TransactionsView({
       <div ref={tableRef} style={{ flex: 1, overflow: "auto" }}>
         <div style={{ display: "grid", gridTemplateColumns: gridColumns, minWidth: tableMinWidth, padding: "7px 0", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0 }}>
           <span />
-          <span style={{ padding: "0 16px" }}>
+          <span style={{ padding: "0 16px", position: "relative" }}>
             <SortableHeader label="Fecha" column="date" sortBy={sortBy} onSort={onSort} />
+            <ColResizeHandle colKey="fecha" defaultWidth={txAutoCols.widths.fecha ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
           </span>
-          {visibleCols.cuenta && <span style={{ padding: "0 16px" }}>Cuenta</span>}
-          {visibleCols.tipo && <span style={{ textAlign: "center", padding: "0 16px" }}>Tipo</span>}
-          {visibleCols.estado && (
-            <span style={{ padding: "0 16px" }}>
-              <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />
+          {visibleCols.cuenta && (
+            <span style={{ padding: "0 16px", position: "relative" }}>
+              Cuenta
+              <ColResizeHandle colKey="cuenta" defaultWidth={txAutoCols.widths.cuenta ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
             </span>
           )}
-          <span style={{ padding: "0 16px" }}>
+          {visibleCols.tipo && (
+            <span style={{ textAlign: "center", padding: "0 16px", position: "relative" }}>
+              Tipo
+              <ColResizeHandle colKey="tipo" defaultWidth={txAutoCols.widths.tipo ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+            </span>
+          )}
+          {visibleCols.estado && (
+            <span style={{ padding: "0 16px", position: "relative" }}>
+              <SortableHeader label="Estado" column="status" sortBy={sortBy} onSort={onSort} align="center" />
+              <ColResizeHandle colKey="estado" defaultWidth={txAutoCols.widths.estado ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+            </span>
+          )}
+          <span style={{ padding: "0 16px", position: "relative" }}>
             <SortableHeader label="Descripcion" column="name" sortBy={sortBy} onSort={onSort} />
+            <ColResizeHandle colKey="descripcion" defaultWidth={txAutoCols.widths.descripcion ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
           </span>
           {visibleCols.comentario && (
-            <span style={{ padding: "0 16px" }}>
+            <span style={{ padding: "0 16px", position: "relative" }}>
               <SortableHeader label="Comentario" column="comment" sortBy={sortBy} onSort={onSort} />
+              <ColResizeHandle colKey="comentario" defaultWidth={txAutoCols.widths.comentario ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
             </span>
           )}
-          <span style={{ padding: "0 16px" }}>
+          <span style={{ padding: "0 16px", position: "relative" }}>
             <SortableHeader label="Importe" column="amount" sortBy={sortBy} onSort={onSort} align="right" />
+            <ColResizeHandle colKey="importe" defaultWidth={txAutoCols.widths.importe ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
           </span>
           <span />
           <span style={{ textAlign: "right", padding: "0 16px" }}>Saldo</span>

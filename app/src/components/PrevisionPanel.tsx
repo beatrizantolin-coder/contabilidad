@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from "react";
-import { ArrowDownCircle, ArrowUpCircle, Ban, LineChart } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Ban, Eraser, LineChart } from "lucide-react";
 import { T, dot, tinyBtn } from "../theme";
 import { fmt, quickRange, shortDate, todayISO, endOfYearISO, type QuickRangeKey } from "../lib/format";
 import type { EvoPoint, EvoRange, EvoTick, PrevisionMovement } from "../lib/evolution";
 import type { Category, ID } from "../types";
 import { catInfo } from "../lib/categories";
 import { COL_MARGIN, HEADER_FONT, CONTENT_FONT, MONO_FONT, longestWord, measureTextWidth, useAutoColumnWidths, widestTextWidth, type ColDef } from "../lib/columnWidths";
+import { ColResizeHandle } from "./ColResizeHandle";
 import { KindBadge } from "./KindBadge";
 import { DateField } from "./DateField";
 
@@ -56,6 +57,10 @@ export function PrevisionPanel({
   const [marker, setMarker] = useState<EvoMarker | null>(null);
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [chartHeight, setChartHeight] = useState(150);
+  // Anchos de columna fijados a mano: prevalecen sobre el calculo automatico
+  // hasta pulsar el boton "Limpiar columnas" o reiniciar la app (no se
+  // guardan en disco).
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
 
   function toggleExcluded(m: PrevisionMovement) {
     setExcludedIds((prev) => {
@@ -104,7 +109,7 @@ export function PrevisionPanel({
       { key: "saldo", label: "Saldo", natural: () => Math.max(measureTextWidth("Saldo", HEADER_FONT), widestTextWidth(saldoTexts, MONO_FONT)) + COL_MARGIN },
     ];
   }, [movements, movementsWithBalance, accountName]);
-  const prevAutoCols = useAutoColumnWidths(prevColDefs, tableRef, {}, [movements, movementsWithBalance]);
+  const prevAutoCols = useAutoColumnWidths(prevColDefs, tableRef, colWidths, [movements, movementsWithBalance, colWidths]);
   function prevColWidth(key: string): number {
     return Math.round(prevAutoCols.widths[key] ?? 0);
   }
@@ -175,6 +180,9 @@ export function PrevisionPanel({
           <button onClick={showCustomRange} style={tinyBtn(false)}>
             Mostrar
           </button>
+          <button onClick={() => setColWidths({})} style={tinyBtn(false)} aria-label="Limpiar columnas" title="Limpiar columnas">
+            <Eraser size={12} />
+          </button>
         </div>
       </div>
 
@@ -184,11 +192,26 @@ export function PrevisionPanel({
         ) : (
           <div style={{ minWidth: tableMinWidth }}>
             <div style={{ display: "grid", gridTemplateColumns: gridColumns, padding: "6px 0", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.borderSoft, background: T.bgElevated, position: "sticky", top: 0 }}>
-              <span style={{ padding: "0 16px" }}>Fecha</span>
-              <span style={{ textAlign: "center", padding: "0 16px" }}>Tipo</span>
-              <span style={{ padding: "0 16px" }}>Cuenta</span>
-              <span style={{ padding: "0 16px" }}>Descripcion</span>
-              <span style={{ textAlign: "right", padding: "0 16px" }}>Importe</span>
+              <span style={{ padding: "0 16px", position: "relative" }}>
+                Fecha
+                <ColResizeHandle colKey="fecha" defaultWidth={prevAutoCols.widths.fecha ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+              </span>
+              <span style={{ textAlign: "center", padding: "0 16px", position: "relative" }}>
+                Tipo
+                <ColResizeHandle colKey="tipo" defaultWidth={prevAutoCols.widths.tipo ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+              </span>
+              <span style={{ padding: "0 16px", position: "relative" }}>
+                Cuenta
+                <ColResizeHandle colKey="cuenta" defaultWidth={prevAutoCols.widths.cuenta ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+              </span>
+              <span style={{ padding: "0 16px", position: "relative" }}>
+                Descripcion
+                <ColResizeHandle colKey="descripcion" defaultWidth={prevAutoCols.widths.descripcion ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+              </span>
+              <span style={{ textAlign: "right", padding: "0 16px", position: "relative" }}>
+                Importe
+                <ColResizeHandle colKey="importe" defaultWidth={prevAutoCols.widths.importe ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+              </span>
               <span style={{ textAlign: "right", padding: "0 16px" }}>Saldo</span>
               <span />
             </div>

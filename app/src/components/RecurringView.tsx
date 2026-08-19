@@ -7,6 +7,7 @@ import { fmt, freqLabel, freqPerMonth, monthYearLabel, shortDate } from "../lib/
 import { catInfo } from "../lib/categories";
 import { exportProgramadorCsv } from "../lib/csv";
 import { COL_MARGIN, HEADER_FONT, CONTENT_FONT, MONO_FONT, longestWord, measureTextWidth, useAutoColumnWidths, widestTextWidth, type ColDef } from "../lib/columnWidths";
+import { ColResizeHandle } from "./ColResizeHandle";
 import { Field } from "./Field";
 import { KindBadge } from "./KindBadge";
 
@@ -72,6 +73,9 @@ export function RecurringView({
   const [progGroupBy, setProgGroupBy] = useState<ProgGroupBy>("none");
   const [progSort, setProgSort] = useState<ProgSort>({ field: null, dir: "desc" });
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Anchos de columna fijados a mano: prevalecen sobre el calculo automatico
+  // hasta "Limpiar" o reiniciar la app (no se guardan en disco).
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
 
   function handleSort(field: ProgSortField) {
     setProgSort((s) => (s.field === field ? { field, dir: s.dir === "desc" ? "asc" : "desc" } : { field, dir: "desc" }));
@@ -83,6 +87,7 @@ export function RecurringView({
     setProgGroupBy("none");
     setProgSort({ field: null, dir: "desc" });
     setCollapsedGroups(new Set());
+    setColWidths({});
   }
 
   function matchesSearch(name: string): boolean {
@@ -125,7 +130,7 @@ export function RecurringView({
       { key: "importe", label: "Importe", natural: () => Math.max(measureTextWidth("Importe", HEADER_FONT), widestTextWidth(importeTexts, MONO_FONT)) + COL_MARGIN },
     ];
   }, [programadorRows, accountName]);
-  const progAutoCols = useAutoColumnWidths(progColDefs, tableRef, {}, [programadorRows]);
+  const progAutoCols = useAutoColumnWidths(progColDefs, tableRef, colWidths, [programadorRows, colWidths]);
   function progColWidth(key: string): number {
     return Math.round(progAutoCols.widths[key] ?? 0);
   }
@@ -279,21 +284,29 @@ export function RecurringView({
         <div ref={tableRef} style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
           <div style={{ minWidth: tableMinWidth }}>
           <div style={{ display: "grid", gridTemplateColumns: gridColumns, padding: "7px 0", fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.04em", color: T.textMuted, fontWeight: 600, borderBottom: "1px solid " + T.border, background: T.bgElevated, position: "sticky", top: 0, zIndex: 1 }}>
-            <span style={{ padding: "0 16px" }}>
+            <span style={{ padding: "0 16px", position: "relative" }}>
               <SortHead field="fecha" label="Fecha" sort={progSort} onSort={handleSort} />
+              <ColResizeHandle colKey="fecha" defaultWidth={progAutoCols.widths.fecha ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
             </span>
-            <span style={{ padding: "0 16px" }}>
+            <span style={{ padding: "0 16px", position: "relative" }}>
               <SortHead field="cuenta" label="Cuenta" sort={progSort} onSort={handleSort} />
+              <ColResizeHandle colKey="cuenta" defaultWidth={progAutoCols.widths.cuenta ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
             </span>
-            <span style={{ textAlign: "center", padding: "0 16px" }}>Tipo</span>
-            <span style={{ padding: "0 16px" }}>
+            <span style={{ textAlign: "center", padding: "0 16px", position: "relative" }}>
+              Tipo
+              <ColResizeHandle colKey="tipo" defaultWidth={progAutoCols.widths.tipo ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
+            </span>
+            <span style={{ padding: "0 16px", position: "relative" }}>
               <SortHead field="periodicidad" label="Periodicidad" sort={progSort} onSort={handleSort} />
+              <ColResizeHandle colKey="periodicidad" defaultWidth={progAutoCols.widths.periodicidad ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
             </span>
-            <span style={{ padding: "0 16px" }}>
+            <span style={{ padding: "0 16px", position: "relative" }}>
               <SortHead field="descripcion" label="Descripcion" sort={progSort} onSort={handleSort} />
+              <ColResizeHandle colKey="descripcion" defaultWidth={progAutoCols.widths.descripcion ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
             </span>
-            <span style={{ textAlign: "center", padding: "0 16px" }}>
+            <span style={{ textAlign: "center", padding: "0 16px", position: "relative" }}>
               <SortHead field="recurrencia" label="Recurrencia" sort={progSort} onSort={handleSort} />
+              <ColResizeHandle colKey="recurrencia" defaultWidth={progAutoCols.widths.recurrencia ?? 0} colWidths={colWidths} setColWidths={setColWidths} />
             </span>
             <span style={{ textAlign: "right", padding: "0 16px" }}>
               <SortHead field="importe" label="Importe" align="right" sort={progSort} onSort={handleSort} />
