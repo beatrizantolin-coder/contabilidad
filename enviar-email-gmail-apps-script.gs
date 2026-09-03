@@ -142,7 +142,7 @@ function enviarCorreosHTML() {
     <tr>
       <td align="center" valign="middle" style="padding:0;">
 
-        <img src="URL_DE_TU_IMAGEN_AQUI.jpg"
+        <img src="https://www.b-nice.es/images/vacaciones_v.jpg"
              alt="Descripcion de la imagen"
              class="hero-img"
              width="480"
