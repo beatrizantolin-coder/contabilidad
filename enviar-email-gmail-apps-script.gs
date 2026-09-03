@@ -98,7 +98,7 @@ function enviarCorreosHTML() {
     width: 100% !important;
   }
 
-  .bg-color { background-color: #F5F0E6; }
+  .bg-color { background-color: #e8e1e1; }
 
   .hero-img {
     width: 100%;
@@ -124,21 +124,21 @@ function enviarCorreosHTML() {
 </style>
 </head>
 
-<body class="bg-color" style="margin:0; padding:0; background-color:#F5F0E6;">
+<body class="bg-color" style="margin:0; padding:0; background-color:#e8e1e1;">
 
 <div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
   &nbsp;
 </div>
 
-<center class="bg-color" style="width:100%; background-color:#F5F0E6;">
+<center class="bg-color" style="width:100%; background-color:#e8e1e1;">
 
   <!--[if mso]>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F5F0E6">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#e8e1e1">
   <tr>
   <td align="center">
   <![endif]-->
 
-  <table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F5F0E6" style="background-color:#F5F0E6;">
+  <table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" bgcolor="#e8e1e1" style="background-color:#e8e1e1;">
     <tr>
       <td align="center" valign="middle" style="padding:0;">
 
