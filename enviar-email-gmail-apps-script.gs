@@ -146,7 +146,7 @@ function enviarCorreosHTML() {
              alt="Descripcion de la imagen"
              class="hero-img"
              width="480"
-             height="853"
+             height="753"
              style="width:100%; max-width:480px; height:auto; display:block; margin:0 auto; border:0;" />
 
       </td>

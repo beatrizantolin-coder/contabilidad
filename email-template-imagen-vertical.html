@@ -121,18 +121,19 @@
 
         <!-- ==================================================================
              IMAGEN PRINCIPAL
-             1) Sustituye "URL_DE_TU_IMAGEN_AQUI.jpg" por la URL publica
-                y accesible por HTTPS de tu imagen.
-             2) Recomendado: proporcion vertical 9:16 (ej. 1080 x 1920 px).
-             3) Ajusta los atributos width/height de abajo a las dimensiones
-                reales de tu imagen (mismo ratio) — Outlook de escritorio
-                los usa como referencia fija, ya que ignora el CSS fluido.
+             Imagen real: vacaciones_v.jpg, dimensiones nativas 831 x 1303 px.
+             Los atributos width/height de abajo (480 x 753) mantienen ese
+             mismo ratio pero escalados al ancho maximo de la plantilla
+             (480px), porque Outlook de escritorio ignora el CSS fluido y
+             usa estos atributos como tamano fijo — si se pusieran los
+             831 x 1303 nativos, Outlook mostraria la imagen demasiado
+             ancha y provocaria scroll horizontal.
              ================================================================== -->
         <img src="https://www.b-nice.es/images/vacaciones_v.jpg"
              alt="Descripcion de la imagen"
              class="hero-img"
              width="480"
-             height="853"
+             height="753"
              style="width:100%; max-width:480px; height:auto; display:block; margin:0 auto; border:0;" />
 
       </td>
