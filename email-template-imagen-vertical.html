@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="color-scheme" content="light" />
+<meta name="supported-color-schemes" content="light" />
+<title>Plantilla email - imagen vertical a pantalla completa</title>
+
+<!--[if mso]>
+<noscript>
+<xml>
+<o:OfficeDocumentSettings>
+<o:PixelsPerInch>96</o:PixelsPerInch>
+<o:AllowPNG/>
+</o:OfficeDocumentSettings>
+</xml>
+</noscript>
+<![endif]-->
+
+<style>
+  /* ------------------------------------------------------------------
+     RESETS BASICOS (necesarios para consistencia entre clientes)
+     ------------------------------------------------------------------ */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100% !important;
+    width: 100% !important;
+  }
+  * {
+    -ms-text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+  table, td {
+    border-collapse: collapse !important;
+    mso-table-lspace: 0pt;
+    mso-table-rspace: 0pt;
+  }
+  img {
+    -ms-interpolation-mode: bicubic;
+    border: 0;
+    line-height: 100%;
+    outline: none;
+    text-decoration: none;
+    display: block;
+  }
+  a[x-apple-data-detectors] {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+  #MessageViewBody, #MessageWebViewDiv {
+    width: 100% !important;
+  }
+
+  /* ------------------------------------------------------------------
+     COLOR DE FONDO
+     Cambia estos DOS valores (deben ser iguales) para personalizar
+     el color que rellena el espacio alrededor de la imagen.
+     1) aqui en la clase .bg-color
+     2) en los atributos bgcolor="#F5F0E6" de las tablas mas abajo
+        (los atributos bgcolor son el respaldo para Outlook de escritorio,
+        que ignora bastante CSS)
+     ------------------------------------------------------------------ */
+  .bg-color { background-color: #F5F0E6; }
+
+  /* Imagen: mobile-first, ocupa el maximo ancho disponible manteniendo
+     su proporcion vertical (usa width/height del <img> para el ratio) */
+  .hero-img {
+    width: 100%;
+    max-width: 480px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* ------------------------------------------------------------------
+     INTENTO DE "PANTALLA COMPLETA SIN SCROLL" EN DESKTOP
+     Ver aviso de compatibilidad en la respuesta / en el comentario HTML
+     mas abajo: 100vh solo se aplica en los clientes que soportan
+     unidades de viewport y que además exponen el alto real del
+     dispositivo dentro del email (principalmente Apple Mail). En el
+     resto de clientes esta regla se ignora sin romper el diseño: la
+     imagen simplemente conserva el tamaño fijo definido arriba.
+     ------------------------------------------------------------------ */
+  @media screen and (min-width: 600px) {
+    .email-wrapper { height: 100vh !important; }
+    .hero-img {
+      width: auto !important;
+      max-width: none !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
+    }
+  }
+
+  @media screen and (max-width: 599px) {
+    .hero-img { width: 100% !important; max-width: 100% !important; height: auto !important; }
+  }
+</style>
+</head>
+
+<body class="bg-color" style="margin:0; padding:0; background-color:#F5F0E6;">
+
+<!-- Preheader oculto (opcional, personaliza o borra este bloque) -->
+<div style="display:none; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; mso-hide:all;">
+  &nbsp;
+</div>
+
+<center class="bg-color" style="width:100%; background-color:#F5F0E6;">
+
+  <!--[if mso]>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F5F0E6">
+  <tr>
+  <td align="center">
+  <![endif]-->
+
+  <table role="presentation" class="email-wrapper" width="100%" cellpadding="0" cellspacing="0" bgcolor="#F5F0E6" style="background-color:#F5F0E6;">
+    <tr>
+      <td align="center" valign="middle" style="padding:0;">
+
+        <!-- ==================================================================
+             IMAGEN PRINCIPAL
+             1) Sustituye "URL_DE_TU_IMAGEN_AQUI.jpg" por la URL publica
+                y accesible por HTTPS de tu imagen.
+             2) Recomendado: proporcion vertical 9:16 (ej. 1080 x 1920 px).
+             3) Ajusta los atributos width/height de abajo a las dimensiones
+                reales de tu imagen (mismo ratio) — Outlook de escritorio
+                los usa como referencia fija, ya que ignora el CSS fluido.
+             ================================================================== -->
+        <img src="URL_DE_TU_IMAGEN_AQUI.jpg"
+             alt="Descripcion de la imagen"
+             class="hero-img"
+             width="480"
+             height="853"
+             style="width:100%; max-width:480px; height:auto; display:block; margin:0 auto; border:0;" />
+
+      </td>
+    </tr>
+  </table>
+
+  <!--[if mso]>
+  </td>
+  </tr>
+  </table>
+  <![endif]-->
+
+</center>
+
+</body>
+</html>
