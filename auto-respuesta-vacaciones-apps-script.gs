@@ -16,7 +16,8 @@
  * Google). Por eso esta funcion se ejecuta de forma PERIODICA mediante un
  * disparador basado en tiempo (cada X minutos), no de forma instantanea.
  * Hay por tanto un retraso de hasta el intervalo que configures (por
- * defecto 15 minutos) entre que llega el correo y se envia la respuesta.
+ * defecto 1 minuto, el minimo que permite Apps Script) entre que llega
+ * el correo y se envia la respuesta.
  *
  * COMO USARLO:
  * 1) Ve a https://script.google.com -> "Nuevo proyecto".
@@ -27,7 +28,7 @@
  *    en el desplegable de arriba y pulsa "Ejecutar"). Esto instala el
  *    disparador periodico. La primera vez pedira autorizacion -> acepta.
  * 5) Listo. A partir de ahi, "autoResponderVacaciones" se ejecutara sola
- *    cada 15 minutos sin que tengas que hacer nada mas ni tener el
+ *    cada 1 minuto sin que tengas que hacer nada mas ni tener el
  *    ordenador encendido (se ejecuta en los servidores de Google).
  * 6) Cuando quieras DESACTIVARLA (p.ej. al volver de vacaciones), ejecuta
  *    UNA VEZ la funcion "eliminarDisparadores".
@@ -228,16 +229,16 @@ function autoResponderVacaciones() {
 
 /**
  * Ejecuta esta funcion UNA SOLA VEZ para instalar el disparador periodico.
- * Cambia "everyMinutes(15)" si quieres otra frecuencia (valores tipicos:
- * 1, 5, 10, 15 o 30 minutos).
+ * Cambia "everyMinutes(1)" si quieres otra frecuencia (valores permitidos
+ * por Apps Script: 1, 5, 10, 15 o 30 minutos; no admite segundos).
  */
 function crearDisparador() {
   eliminarDisparadores(); // evita duplicar el disparador si ya existia uno
   ScriptApp.newTrigger("autoResponderVacaciones")
     .timeBased()
-    .everyMinutes(15)
+    .everyMinutes(1)
     .create();
-  Logger.log("Disparador creado: autoResponderVacaciones se ejecutara cada 15 minutos.");
+  Logger.log("Disparador creado: autoResponderVacaciones se ejecutara cada 1 minuto.");
 }
 
 /**
