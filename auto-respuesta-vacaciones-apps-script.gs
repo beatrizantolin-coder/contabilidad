@@ -23,14 +23,22 @@
  * 1) Ve a https://script.google.com -> "Nuevo proyecto".
  * 2) Pega TODO este archivo.
  * 3) Rellena la seccion "PERSONALIZA AQUI" (las 3 direcciones, asunto,
- *    y verifica la URL de la imagen dentro del HTML).
- * 4) Ejecuta UNA VEZ la funcion "crearDisparador" (selecciona esa funcion
+ *    y verifica la URL de la imagen dentro del HTML). Solo hay que
+ *    editarlo en un sitio: las constantes al principio del archivo.
+ * 4) IMPORTANTE, ANTES de activar el disparador: ejecuta UNA VEZ la
+ *    funcion "marcarHistoricoComoRespondido". Esto evita que el script
+ *    intente responder de golpe a correos antiguos que esas direcciones
+ *    ya te hubieran mandado antes (eso es justo lo que causa el error
+ *    "User-rate limit exceeded (Mail sending)" si te llegara a pasar).
+ * 5) Ejecuta UNA VEZ la funcion "crearDisparador" (selecciona esa funcion
  *    en el desplegable de arriba y pulsa "Ejecutar"). Esto instala el
  *    disparador periodico. La primera vez pedira autorizacion -> acepta.
- * 5) Listo. A partir de ahi, "autoResponderVacaciones" se ejecutara sola
+ * 6) Listo. A partir de ahi, "autoResponderVacaciones" se ejecutara sola
  *    cada 1 minuto sin que tengas que hacer nada mas ni tener el
- *    ordenador encendido (se ejecuta en los servidores de Google).
- * 6) Cuando quieras DESACTIVARLA (p.ej. al volver de vacaciones), ejecuta
+ *    ordenador encendido (se ejecuta en los servidores de Google). Solo
+ *    responde a correos de las ultimas 24 horas (ver "newer_than:1d" en
+ *    el codigo), y a lo sumo 5 hilos por ejecucion, para evitar rafagas.
+ * 7) Cuando quieras DESACTIVARLA (p.ej. al volver de vacaciones), ejecuta
  *    UNA VEZ la funcion "eliminarDisparadores".
  *
  * LIMITES QUE NO PUEDO CONFIRMARTE CON CERTEZA:
@@ -48,20 +56,25 @@
  * ============================================================================
  */
 
+// ============================================================
+// PERSONALIZA AQUI (un unico sitio: lo usan todas las funciones)
+// ============================================================
+var DIRECCIONES_PERMITIDAS = [
+  "correo1@ejemplo.com",
+  "correo2@ejemplo.com",
+  "correo3@ejemplo.com"
+];
+
+var ASUNTO_RESPUESTA = "Respuesta automatica";
+
+var NOMBRE_ETIQUETA = "Auto-respondido-vacaciones";
+
+
 function autoResponderVacaciones() {
 
-  // ============================================================
-  // PERSONALIZA AQUI
-  // ============================================================
-  var direccionesPermitidas = [
-    "correo1@ejemplo.com",
-    "correo2@ejemplo.com",
-    "correo3@ejemplo.com"
-  ];
-
-  var asunto = "Respuesta automatica";
-
-  var nombreEtiqueta = "Auto-respondido-vacaciones";
+  var direccionesPermitidas = DIRECCIONES_PERMITIDAS;
+  var asunto = ASUNTO_RESPUESTA;
+  var nombreEtiqueta = NOMBRE_ETIQUETA;
 
   // Texto plano de respaldo: lo ven los clientes que no muestran HTML.
   var cuerpoTextoPlano = "Este correo requiere un cliente compatible con HTML para verse correctamente.";
@@ -200,9 +213,18 @@ function autoResponderVacaciones() {
     .map(function (d) { return "from:" + d; })
     .join(" OR ");
 
-  var query = "(" + consultaRemitentes + ") -label:" + nombreEtiqueta.replace(/\s+/g, "-");
+  // IMPORTANTE: "newer_than:1d" limita la busqueda a las ultimas 24 horas.
+  // Sin este limite, GmailApp.search() revisa TODO tu historial de correo,
+  // y si alguna de las 3 direcciones ya te habia escrito antes, la primera
+  // ejecucion intentaria responder a todos esos hilos antiguos de golpe,
+  // lo que dispara el limite de envio de Gmail ("User-rate limit exceeded").
+  // Antes de activar esto, ejecuta UNA VEZ "marcarHistoricoComoRespondido"
+  // (mas abajo) para que el historial antiguo no se procese nunca.
+  var query = "(" + consultaRemitentes + ") -label:" + nombreEtiqueta.replace(/\s+/g, "-") + " newer_than:1d";
 
-  var hilos = GmailApp.search(query, 0, 50);
+  // Limite de hilos a procesar por ejecucion (evita ráfagas de envio).
+  var maximoPorEjecucion = 5;
+  var hilos = GmailApp.search(query, 0, maximoPorEjecucion);
   var respondidos = 0;
 
   hilos.forEach(function (hilo) {
@@ -221,10 +243,40 @@ function autoResponderVacaciones() {
       });
       hilo.addLabel(etiqueta);
       respondidos++;
+      Utilities.sleep(1000); // pequeña pausa entre envios, por seguridad
     }
   });
 
   Logger.log("Hilos respondidos en esta ejecucion: " + respondidos);
+}
+
+/**
+ * EJECUTA ESTA FUNCION UNA SOLA VEZ, ANTES de fiarte del disparador
+ * automatico, si alguna de las 3 direcciones ya te habia escrito antes
+ * hoy (o en cualquier momento). Pone la etiqueta a TODOS los hilos
+ * antiguos que coincidan, SIN enviar ningun correo, para que
+ * "autoResponderVacaciones" nunca intente responderlos.
+ */
+function marcarHistoricoComoRespondido() {
+  var direccionesPermitidas = DIRECCIONES_PERMITIDAS;
+  var nombreEtiqueta = NOMBRE_ETIQUETA;
+
+  var etiqueta = GmailApp.getUserLabelByName(nombreEtiqueta);
+  if (!etiqueta) {
+    etiqueta = GmailApp.createLabel(nombreEtiqueta);
+  }
+
+  var consultaRemitentes = direccionesPermitidas
+    .map(function (d) { return "from:" + d; })
+    .join(" OR ");
+  var query = "(" + consultaRemitentes + ") -label:" + nombreEtiqueta.replace(/\s+/g, "-");
+
+  var hilos = GmailApp.search(query, 0, 500);
+  hilos.forEach(function (hilo) {
+    hilo.addLabel(etiqueta);
+  });
+
+  Logger.log("Hilos marcados como ya respondidos (sin enviar nada): " + hilos.length);
 }
 
 /**
